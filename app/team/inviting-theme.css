@@ -1,0 +1,124 @@
+/* JayMax bird palette. Supplied artwork is preserved in a CSS sprite sheet. */
+.shared-ui.jmax-combined{--ink:#142943;--paper:#f6f9fe;--line:#dce5f1;--orange:#1258b9;--jmax-accent:#1258b9;--jmax-soft:#e9f2ff;--jmax-muted:#5a6b83;--jmax-navy:#071e46;--jmax-gradient:linear-gradient(112deg,#0871c9 0%,#1258b9 46%,#071e46 100%);background:#edf3fb;color:var(--ink)}
+.shared-ui.jmax-combined[data-location-theme]{--jmax-accent:#1258b9;--jmax-soft:#e9f2ff}
+.shared-ui.shared-flow.jmax-combined .shared-shell>header{position:relative;background:#fff;color:var(--ink);border-bottom:0;box-shadow:0 3px 18px #07275b0a;padding-bottom:17px}
+.shared-ui.jmax-combined .shared-shell>header::after{content:'';position:absolute;bottom:0;left:0;right:0;height:5px;background:linear-gradient(90deg,#00a6ff 0%,#0761cf 45%,#071e46 100%)}
+.shared-ui.jmax-combined .shared-brand{color:var(--jmax-navy);min-width:183px;gap:10px}
+.jmax-combined .jmax-brand-icon{display:block;flex-shrink:0;width:39px;height:39px;border-radius:9px;background-image:url('/brand/jaymax-logo-sheet.png');background-size:137.74px 103.31px;background-position:-92.56px -26.64px;background-repeat:no-repeat}
+.jmax-combined .jmax-brand-compact{display:block;width:132px;height:44px;background-image:url('/brand/jaymax-logo-sheet.png');background-size:455.09px 341.31px;background-position:-161.86px -259.6px;background-repeat:no-repeat;mix-blend-mode:multiply}
+.shared-ui.jmax-combined .shared-brand>.jmax-wordmark{color:var(--jmax-navy);gap:0}
+.jmax-combined .jmax-wordmark small{color:#63768f;margin:0 0 0 2px;font-size:8px;letter-spacing:.21em}
+.jmax-combined .jmax-header-context>span,.jmax-combined .jmax-location-context>small{color:#64758b}
+.jmax-combined .jmax-header-context strong{color:var(--jmax-navy)}
+.shared-ui.jmax-combined .jmax-location-context select{background:#f4f8ff;color:#173554;border-color:#d4e0ef}
+.shared-ui.jmax-combined .shared-toolbar>button{color:#24466c;background:transparent}
+.shared-ui.jmax-combined .account-avatar{background:#edf4ff;color:#17457d;box-shadow:0 0 0 1px #d4e0f0}
+.shared-ui.jmax-combined .shared-shell>main{background:var(--paper)}
+.shared-ui.jmax-combined button{border-color:#d5e0ef}
+.shared-ui.jmax-combined button:hover{background:#eaf3ff;border-color:var(--jmax-accent)}
+.shared-ui.jmax-combined .shared-primary{background:var(--jmax-gradient);border-color:#1258b9;color:#fff;box-shadow:0 3px 9px #1258b91a}
+.shared-ui.jmax-combined button:focus-visible,.shared-ui.jmax-combined select:focus-visible,.shared-ui.jmax-combined a:focus-visible{outline:3px solid #2468cf;outline-offset:3px}
+.shared-ui.jmax-combined .jmax-eyebrow{color:#506d91}
+.shared-ui.jmax-combined .jmax-home-heading{position:relative;overflow:hidden;background:var(--jmax-gradient);border-radius:18px;padding:24px 26px;box-shadow:0 8px 24px #1258b919;color:#fff;isolation:isolate}
+.shared-ui.jmax-combined .jmax-home-heading::after{content:'';position:absolute;pointer-events:none;right:-30px;top:-75px;width:270px;height:270px;border-radius:50%;border:32px solid #ffffff08;z-index:-1}
+.shared-ui.jmax-combined .jmax-home-heading h1{color:#fff}
+.shared-ui.jmax-combined .jmax-home-heading p,.shared-ui.jmax-combined .jmax-home-heading .jmax-eyebrow{color:#f0f7ff}
+.shared-ui.jmax-combined .jmax-home-heading>button{background:#fff;color:#11478e;border:1px solid #fff;box-shadow:0 2px 8px #061c4612}
+.shared-ui.jmax-combined .jmax-home-heading>button:hover{background:#eaf3ff;color:#071e46}
+.shared-ui.jmax-combined .jmax-schedule-description{color:var(--jmax-muted)}
+.shared-ui.jmax-combined .jmax-metrics>button{border-color:#dce5f1;border-radius:15px;background:linear-gradient(135deg,#fff 70%,#eef5ff);box-shadow:0 5px 18px #07275b06}
+.jmax-combined .jmax-panel{border-color:#dce5f1;border-radius:15px;box-shadow:0 4px 16px #07275b05}
+.shared-ui.jmax-combined .jmax-panel h2{color:#18365c}
+.shared-ui.jmax-combined .jmax-panel-heading button{color:var(--jmax-accent)}
+.shared-ui.jmax-combined .schedule-week-nav>button,.shared-ui.jmax-combined .schedule-view-toggle{border-color:#d5e0ef;border-radius:9px}
+.shared-ui.jmax-combined .schedule-view-toggle>button[aria-pressed=true]{background:var(--jmax-accent);color:#fff}
+.shared-ui.jmax-combined .schedule-roster-summary strong{color:var(--jmax-accent)}
+.jmax-combined .schedule-week-scroll{border-color:#d5e0ef;border-radius:14px;box-shadow:0 6px 22px #07275b08}
+.jmax-combined .schedule-week-grid thead th{background:#eaf2ff;color:#18365c}
+.jmax-combined .schedule-week-grid thead th>span,.jmax-combined .schedule-week-grid th small{color:#5a6b83}
+.jmax-combined .schedule-week-grid tbody th{background:#fcfdff}
+.jmax-combined .schedule-person-identity strong{color:#18365c}
+.jmax-combined .schedule-person-initials{background:#e6efff;color:#235597}
+.jmax-combined .schedule-week-grid th[data-today=true]{background:#dceaff}
+.jmax-combined .schedule-week-grid td[data-today=true]{background:#f0f6ff}
+.shared-ui.jmax-combined .personal-date{background:#e9f2ff;color:#235597}
+.shared-ui.jmax-combined .personal-next{color:var(--jmax-accent)}
+.shared-ui.jmax-combined .personal-agenda .schedule-shift{border-radius:14px;box-shadow:0 4px 14px #07275b07}
+.shared-ui.jmax-combined .schedule-empty-state{background:#fcfdff;border-color:#d5e0ef;color:#5a6b83}
+.shared-ui.jmax-combined .shared-shell>nav{background:#fff;border-color:#dce5f1}
+.shared-ui.jmax-combined .shared-shell>nav>button{background:transparent;color:#5a6b83}
+.shared-ui.jmax-combined .shared-shell>nav>button[aria-current]{background:#e9f2ff;color:#1258b9;border-top-color:var(--jmax-accent)}
+@media(min-width:1024px){
+.jmax-combined.jmax-manager .jmax-rail{background:linear-gradient(180deg,#edf4ff,#f8fbff);border-color:#dce5f1}
+.jmax-combined .jmax-rail-heading>span,.jmax-combined .jmax-rail-heading small{color:#5a6b83}
+.shared-ui.jmax-combined .jmax-center-toggle{color:#335579}
+.jmax-combined .jmax-center-mark{background:#f8fbff;border-color:#d5e0ef;color:#527197}
+.shared-ui.jmax-combined .jmax-center-links>button{color:#4c6484}
+.shared-ui.jmax-combined .jmax-center-links>button[aria-current=page]{background:var(--jmax-gradient);color:#fff;box-shadow:0 3px 8px #1258b912}
+.shared-ui.jmax-combined .jmax-center-links>button:hover:not([aria-current=page]){background:#e0edff;color:#124b95}
+.shared-ui.jmax-combined .jmax-rail-footer>button{background:#f8fbff;border-color:#d5e0ef;color:#4c6484}
+.shared-ui.jmax-combined .jmax-rail-footer>button.jmax-ask{background:#e9f2ff;border-color:#c4d8f2;color:#1258b9}
+}
+/* Keep job categories distinguishable; the host tone deliberately excludes teal. */
+.shared-ui.jmax-combined :focus-visible{outline:3px solid #2468cf;outline-offset:3px}
+.shared-ui.jmax-combined input[type=checkbox],.shared-ui.jmax-combined input[type=radio]{accent-color:#1258b9}
+.jmax-combined .shared-muted,.jmax-combined .shared-person span,.jmax-combined .shared-list small,.jmax-combined .shared-empty,.jmax-combined .shared-history small{color:#5a6b83}
+.jmax-combined .shared-kicker,.jmax-combined .shared-list em{color:#1258b9}
+.jmax-combined .jmax-center-links,.jmax-combined .jmax-center[data-active=true] .jmax-center-mark{border-color:#d5e0ef}
+.shared-ui.jmax-combined .food-import{border-color:#1258b9}
+.jmax-combined .rh-review{--rh-ink:#142943;--rh-muted:#5a6b83;--rh-line:#dce5f1;--rh-green:#1258b9;--rh-cream:#f6f9fe;--rh-gold:#3274d0}
+.jmax-combined .rh-connected-locations button{color:#1258b9;border-color:#d5e0ef}
+.jmax-combined .rh-connected-locations button[aria-pressed=true]{background:#1258b9;color:#fff}
+.jmax-combined .module-home-return{background:#edf4ff;border-color:#d5e0ef}
+.jmax-combined .module-home-return>span,.jmax-combined .rh-connected-context{color:#5a6b83}
+.shared-ui.shared-flow.jmax-combined .training-next{background:var(--jmax-gradient);color:#fff}
+.shared-ui.shared-flow.jmax-combined .training-next .day-eyebrow,.shared-ui.shared-flow.jmax-combined .training-next h2,.shared-ui.shared-flow.jmax-combined .training-next p{color:#f0f7ff}
+.shared-ui.shared-flow.jmax-combined .day-shift-focus{background:var(--jmax-gradient);border-color:#1258b9}
+.shared-ui.shared-flow.jmax-combined .day-shift-open,.shared-ui.shared-flow.jmax-combined .day-shift-open h1,.jmax-combined .day-shift-status,.jmax-combined .day-shift-meta{color:#fff}
+.shared-ui.shared-flow.jmax-combined .day-shift-open:hover{background:#ffffff0c}
+.jmax-combined .day-shift-meta>span{color:#f0f7ff}
+.jmax-combined .training-next-label,.jmax-combined .training-next-action small,.jmax-combined .training-next-action>span:last-child{color:#f0f7ff}
+.shared-ui.shared-flow.jmax-combined .day-shift-ask{background:#ffffff0a;color:#fff;border-color:#ffffff24}
+.jmax-combined .shared-dialog.employee-shift-dialog{--employee-ink:#18365c;background:#f6f9fe}
+.jmax-combined .shared-dialog.employee-shift-dialog>.shared-dialog-heading{background:#f6f9fef5;border-color:#dce5f1}
+.jmax-combined .employee-sheet-identity>span{background:#1258b9;color:#fff}
+.jmax-combined .employee-sheet-identity h2,.jmax-combined .employee-week-heading strong,.jmax-combined .shift-work-link strong{color:#18365c}
+.jmax-combined .shared-dialog.employee-shift-dialog .employee-sheet-identity h2,.jmax-combined .shared-ui.employee-shift-dialog .shift-shortcuts h3,.jmax-combined .shared-ui.employee-shift-dialog .shift-work-link strong{color:#18365c}
+.jmax-combined .employee-sheet-identity small,.jmax-combined .employee-week-heading,.jmax-combined .employee-week-days>button{color:#5a6b83}
+.jmax-combined .employee-week-days>button[aria-pressed=true]{background:#1258b9;color:#fff}
+.jmax-combined .employee-week-days>button:hover:not([aria-pressed=true]){background:#e9f2ff}
+.jmax-combined .employee-week-days [aria-pressed=true] i{background:#fff}
+.jmax-combined .employee-split-shifts>button[aria-pressed=true]{border-color:#1258b9;background:#e9f2ff;color:#1258b9}
+.jmax-combined .shared-ui.employee-shift-dialog .shift-detail-summary{background:var(--jmax-gradient);color:#fff}
+.jmax-combined .shift-detail-summary p,.jmax-combined .shift-station-tag,.jmax-combined .shift-clock-pair small,.jmax-combined .shift-clock-pair>span{color:#f0f7ff}
+.jmax-combined .shift-guide-status,.jmax-combined .shared-ui.employee-shift-dialog .shift-work-icon,.jmax-combined .shared-ui.employee-shift-dialog .shift-jmax-help .shift-work-link{background:#e9f2ff;border-color:#d5e0ef;color:#1258b9}
+.jmax-combined .shift-guide-status button,.jmax-combined .shift-guide-status strong,.jmax-combined .shift-shortcuts h3,.jmax-combined .shift-management>summary{color:#1258b9}
+.jmax-combined .shift-guide-status p{color:#5a6b83}
+.shared-ui.jmax-combined .shared-brand{min-height:44px}
+.shared-ui.jmax-combined .shared-toolbar>button,.shared-ui.jmax-combined .shared-toolbar>details>summary{min-height:44px;min-width:44px;display:grid;place-items:center}
+.shared-ui.jmax-combined .schedule-shift[data-job-tone=host]{--job-color:#8e5182;--job-soft:#f5edf5}
+.jmax-combined .schedule-grid-legend i[data-tone=host]{background:#8e5182}
+.shared-ui.jmax-combined .shared-view>.prep-progress{max-width:none;margin:20px 0 0;padding:20px;background:#fff;border:1px solid #dce5f1;border-radius:15px;box-shadow:0 4px 16px #07275b06}
+.shared-ui.jmax-combined .prep-progress h2{margin:0 0 12px;font-size:19px;color:var(--ink)}
+.shared-ui.jmax-combined .prep-progress article{border-top:1px solid var(--line);padding:14px 0;margin-top:14px}
+.shared-ui.jmax-combined .prep-progress h3{font-size:15px;margin:0 0 8px}
+.shared-ui.jmax-combined .prep-progress p{font-size:14px;line-height:1.6}
+@media(max-width:700px){
+.shared-ui.jmax-combined .shared-brand{gap:0;min-width:44px}
+.shared-ui.shared-flow.jmax-combined .shared-brand>.jmax-brand-icon{display:block;margin:0}
+.shared-ui.jmax-combined .shared-brand>.jmax-wordmark{display:none}
+.shared-ui.jmax-combined .shared-shell>header{padding-bottom:16px}
+.shared-ui.jmax-combined .jmax-home-heading{padding:20px;border-radius:15px}
+}
+@media(max-width:600px){
+ .shared-ui.shared-flow.jmax-combined .shared-shell>header{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 10px;padding:8px 14px 13px}
+ .jmax-combined .shared-brand{grid-column:1;grid-row:1;justify-self:start}
+ .shared-ui.jmax-combined .shared-brand>.jmax-wordmark{flex-shrink:0}
+ .shared-ui.jmax-combined .shared-toolbar{grid-column:2;grid-row:1}
+ .jmax-combined .jmax-location-context{grid-column:1/-1;grid-row:2;display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0;min-width:0}
+ .jmax-combined .jmax-location-context>label{flex:1;min-width:0}
+ .shared-ui.jmax-combined .jmax-location-context select{max-width:100%;width:100%;min-height:34px}
+ .jmax-combined .jmax-location-context>strong{max-width:none;text-align:left}
+ .jmax-combined .jmax-location-context>small{flex-shrink:0;font-size:10px}
+}
+

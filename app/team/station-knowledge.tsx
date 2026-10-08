@@ -1,0 +1,30 @@
+'use client';
+import { useState } from 'react';
+import { activeStations } from '../shared/workforce';
+import {guideMatchesStation} from '../shared/shift-learning';
+import {draftGuides,learningGuides,personalLearning} from '../shared/personal-learning';
+import { approvedStationGuides } from '../shared/station-knowledge';
+import { GuidePreview } from './training-overview';
+import { type RecordOf, type StationGuide, type StandardProvenance, type Workspace, type WorkRecord } from '../shared/types';
+
+export function StationGuideContent({guide,provenance}:{guide?:StationGuide;provenance?:StandardProvenance}) {
+  if(!guide)return <p>Step-by-step instructions have not been approved for this standard yet. Ask the responsible manager for guidance.</p>;
+  return <div className="station-guide-content"><h3>Why this matters</h3><p className="shared-message">{guide.purpose}</p>{!!guide.preparation.length&&<><h3>Before you start</h3><ul>{guide.preparation.map((step,i)=><li key={i}>{step}</li>)}</ul></>}<h3>How to do the work</h3><ol>{guide.steps.map((step,i)=><li key={i}>{step}</li>)}</ol>{!!guide.troubleshooting.length&&<><h3>If something goes wrong</h3><ul>{guide.troubleshooting.map((step,i)=><li key={i}>{step}</li>)}</ul></>}<h3>When to get help</h3><p className="shared-message">{guide.escalation}</p>{provenance&&<><h3>Restaurant clarifications</h3><dl>{provenance.questions.filter(q=>provenance.answers[q.id]?.trim()).map(q=><div key={q.id}><dt><strong>{q.prompt}</strong></dt><dd className="shared-message">{provenance.answers[q.id]}</dd></div>)}</dl></>}</div>;
+}
+
+export function StationKnowledge({w,initialStation,onOpen,onHelp,onAskJmax,onPlanGoal,onStart}:{onStart?:(g:RecordOf<'standard'>)=>void;initialStation?:string;onAskJmax:(r:WorkRecord)=>void;onPlanGoal:(r:WorkRecord)=>void;w:Workspace;onOpen:(r:WorkRecord)=>void;onHelp:(r:WorkRecord)=>void}) {
+  const [search,setSearch]=useState(''),[station,setStation]=useState(initialStation??(w.me.capabilities.some(c=>['people.manage','schedule.manage','standards.approve'].includes(c))?'':w.me.position));
+  const pending=draftGuides(w),guides=approvedStationGuides(w),positions=[...new Set([...guides,...pending].map(r=>r.data.position))],query=search.trim().toLowerCase();
+  const configured=activeStations(w).filter(s=>s.area===w.me.area||w.me.capabilities.includes('location.manage')),selected=configured.find(s=>s.id===station);
+  const matchesStation=(r:RecordOf<'standard'>)=>!station||(selected?guideMatchesStation(r,selected):r.data.position.toLowerCase()===station.toLowerCase());
+  const matchesSearch=(r:RecordOf<'standard'>)=>!query||[r.data.title,r.data.zone,r.data.position,r.data.source,r.data.guide?.purpose,...(r.data.guide?.steps??[]),...(r.data.guide?.preparation??[]),...(r.data.guide?.troubleshooting??[]),r.data.guide?.escalation,...Object.values(r.data.provenance?.answers??{}),...r.data.criteria].filter(Boolean).join(' ').toLowerCase().includes(query);
+  const visiblePending=pending.filter(r=>matchesStation(r)&&matchesSearch(r));
+  const learnable=new Set(learningGuides(w,w.me).map(g=>g.id)),path=personalLearning(w,new Date().toISOString());
+  const matches=guides.filter(r=>matchesStation(r)&&matchesSearch(r)),manager=w.me.capabilities.some(c=>['location.manage','people.manage','standards.approve','tasks.manage'].includes(c));
+  if(w.me.position==='Dishwasher')return null;
+  return <section className="compact-guides" aria-label="Approved station knowledge"><div className="shared-grid"><label className="shared-field">Station<select value={station} onChange={e=>setStation(e.target.value)}><option value="">All available stations</option>{station&&!positions.includes(station)&&!selected&&<option value={station}>{station}</option>}{configured.map(s=><option key={s.id} value={s.id}>{s.data.title}</option>)}{positions.filter(p=>!configured.some(s=>s.data.title===p)).map(p=><option key={p}>{p}</option>)}</select></label><label className="shared-field">Find an instruction<input type="search" placeholder="Search instructions…" value={search} onInput={e=>setSearch(e.currentTarget.value)} onChange={e=>setSearch(e.target.value)} maxLength={200}/></label></div>
+    {manager?<><p className="guide-library-count">{matches.length+visiblePending.length} {matches.length+visiblePending.length===1?'guide':'guides'} · {visiblePending.length} to review</p><div className="guide-preview-grid">{[...visiblePending,...matches].map(g=><GuidePreview key={g.id} guide={g} onOpen={onOpen}/>)}</div>{!matches.length&&!visiblePending.length&&<p className="compact-empty">{station||query?'No guides match. Try another station or search.':'No station guides are available yet.'}</p>}</>:<>
+    {!matches.length&&<p>{guides.length?'No approved instructions match this station or search.':'There are no approved station instructions available here yet.'} A manager needs to supply and approve the restaurant source.</p>}
+    {matches.map(r=><details className="compact-station" key={r.id}><summary><span><strong>{r.data.title}</strong><small>{r.data.position} · Approved v{r.data.version}</small></span><span aria-hidden="true">›</span></summary><div><StationGuideContent guide={r.data.guide} provenance={r.data.provenance}/><h3>What done looks like</h3><ul>{r.data.criteria.map((c,i)=><li key={i}>{c}</li>)}</ul><p>Source: {r.data.source}</p><div className="shared-actions"><button className="shared-primary" onClick={()=>onAskJmax(r)}>Ask JMAX about this instruction</button>{onStart&&learnable.has(r.id)&&<button onClick={()=>{const item=path.items.find(i=>i.guide.id===r.id);if(item?.goal)onOpen(item.goal);else if(!item?.completed)onStart(r)}} disabled={path.items.find(i=>i.guide.id===r.id)?.completed}> {path.items.find(i=>i.guide.id===r.id)?.completed?'Learning confirmed':path.items.find(i=>i.guide.id===r.id)?.goal?'Continue learning':'Start practice'}</button>}<button onClick={()=>onHelp(r)}>Message a teammate about this instruction</button><button onClick={()=>onOpen(r)}>View source and approval</button></div></div></details>)}</>}
+  </section>;
+}

@@ -1,0 +1,27 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {Miniflare} from 'miniflare';
+process.env.MINIFLARE_REGISTRY_PATH??=path.resolve('.wrangler/registry');
+test('compiled monthly maintenance flow preserves checked rule, exact retry, missed dates and reasoned correction',async t=>{
+ let outbound=0;const mf=new Miniflare({modules:true,scriptPath:path.resolve('dist/server/index.js'),modulesRoot:path.resolve('dist/server'),modulesRules:[{type:'ESModule',include:['**/*.js']}],compatibilityDate:'2026-05-15',compatibilityFlags:['nodejs_compat'],d1Databases:['DB'],serviceBindings:{ASSETS:()=>new Response('Missing',{status:404})},outboundService:()=>{outbound++;throw Error('No outbound expected')}});t.after(()=>mf.dispose());
+ const db=await mf.getD1Database('DB');for(const f of fs.readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())await db.batch(fs.readFileSync('drizzle/'+f,'utf8').split('--> statement-breakpoint').filter(s=>s.trim()).map(s=>db.prepare(s)));
+ for(const id of ['a','b'])await db.prepare('INSERT INTO locations(id,name,timezone) VALUES(?,?,?)').bind(id,'Fictional '+id,'America/New_York').run();
+ for(const [id,caps,loc='a'] of [['owner',['location.manage']],['manager',['tasks.manage']],['worker',[]],['foreign',['location.manage'],'b']])await db.prepare("INSERT INTO memberships(id,email,auth_user_id,location_id,name,area,position,capabilities,qualifications,active) VALUES(?,?,?,?,?,'BOH','Manager',?,'[]',1)").bind(id,id+'@example.test',id+'-identity',loc,'Fictional '+id,JSON.stringify(caps)).run();
+ const headers=id=>({'oai-authenticated-user-id':id+'-identity','oai-authenticated-user-email':id+'@example.test',Origin:'http://localhost','Content-Type':'application/json'});
+ const call=async(id,action,input={},record,requestId=crypto.randomUUID())=>{const res=await mf.dispatchFetch('http://localhost/api/workspace',{method:'POST',headers:headers(id),body:JSON.stringify({locationId:'a',requestId,action,input,...(record?{recordId:record.recordId,expectedRevision:record.revision}:{})})});return {status:res.status,data:await res.json()}};
+ const ok=r=>{assert.equal(r.status,200,JSON.stringify(r.data));return r.data};
+ const view=async()=>{const res=await mf.dispatchFetch('http://localhost/api/workspace?locationId=a',{headers:headers('owner')});assert.equal(res.status,200);return res.json()};
+ const facts={title:'Fictional monthly inspection',equipment:'Fictional asset A',task:'Fictional checked task',sourceRef:'Fictional agreement',initialDue:'2026-01-30',recurrenceKind:'calendar-month-weekday',calendarEvery:1,calendarWeekday:5,calendarOrdinal:-1,warningDays:7,managerId:'manager',checked:true,note:'Fixture source checked'};
+ assert.equal((await call('owner','maintenance.create',{...facts,initialDue:'2026-01-31'})).status,400);assert.equal((await call('manager','maintenance.create',facts)).status,403);
+ const r=ok(await call('owner','maintenance.create',facts)),service={date:'2026-09-01',scheduledDue:'2026-01-30',performedBy:'Fictional technician',evidence:'Fixture report A',note:'Actual fixture work checked',completed:true};
+ for(const id of ['worker','foreign'])assert.equal((await call(id,'maintenance.service',service,r)).status,403);
+ let next=ok(await call('manager','maintenance.service',service,r,'service-once'));assert.deepEqual(ok(await call('manager','maintenance.service',service,r,'service-once')),next);
+ let saved=(await view()).records.find(x=>x.id===r.recordId);assert.deepEqual(saved.data.services[0].plan.recurrence,{kind:'calendar-month-weekday',every:1,weekday:5,ordinal:-1});assert.equal(saved.data.services.length,1);
+ assert.equal((await call('manager','maintenance.service',{...service,date:'2026-09-02',scheduledDue:'2026-03-27'},next)).status,409);
+ assert.equal((await call('owner','maintenance.revise',{...facts,calendarOrdinal:4,initialDue:'2026-01-23'},next)).status,400);
+ next=ok(await call('owner','maintenance.void',{serviceId:saved.data.services[0].id,note:'Wrong report assigned to occurrence',confirmed:true},next));
+ assert.equal((await call('manager','maintenance.service',{...service,date:'2026-09-02',scheduledDue:'2026-02-27'},next)).status,409);
+ next=ok(await call('manager','maintenance.service',{...service,date:'2026-09-02'},next));saved=(await view()).records.find(x=>x.id===r.recordId);assert.ok(saved.data.services[0].voided);assert.equal(saved.data.services[1].scheduledDue,'2026-01-30');assert.equal(outbound,0);
+});

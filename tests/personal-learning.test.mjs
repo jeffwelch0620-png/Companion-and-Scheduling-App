@@ -1,0 +1,54 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createPersonalWeek} from './personal-week-runtime.mjs';
+import {personalLearning,learningGuides} from '../.sites-runtime/shared/personal-learning.mjs';
+
+test('job learning needs no assigned goals, saves real progress, and survives archive and revised sources',async t=>{
+ const f=await createPersonalWeek({automaticLearning:true});t.after(()=>f.dispose());
+ let w=await f.get('backup');assert.equal(w.records.some(r=>r.kind==='goal'),false);assert.equal(w.records.some(r=>r.kind==='shift'),false);
+ let path=personalLearning(w,f.at);assert.deepEqual(path.items.map(i=>i.guide.data.position).sort(),['Fry','Grill']);assert.equal(path.completed,0);
+ assert.deepEqual(personalLearning(await f.get('dish'),f.at).items,[]);
+ const guide=path.next.guide;const input={standardId:guide.id,standardRevision:guide.revision};
+ const requestId=crypto.randomUUID();let goal=await f.call('backup','goal.start-learning',input,undefined,requestId);
+ const retry=await f.call('backup','goal.start-learning',input,undefined,requestId);assert.equal(goal.recordId,retry.recordId);
+ let saved=await f.fresh('backup',goal);assert.equal(saved.data.phase,'active');assert.equal(saved.data.automaticLearning,true);assert.equal(saved.data.definition,guide.data.criteria.join('\n'));
+ await assert.rejects(()=>f.call('backup','goal.start-learning',input),e=>e.status===409);
+ await assert.rejects(()=>f.call('host','goal.start-learning',input),e=>e.status===409);
+ await assert.rejects(()=>f.call('backup','goal.start-learning',{standardId:f.guides.Pizza.recordId,standardRevision:1}),e=>e.status===409);
+ goal=await f.call('backup','goal.transition',{step:'practice',checks:[0]},goal);assert.deepEqual((await f.fresh('backup',goal)).data.practiceChecks,[0]);
+ await assert.rejects(()=>f.call('backup','goal.transition',{step:'ready',checks:[0]},goal),/each criterion/);
+ goal=await f.call('backup','goal.transition',{step:'ready',checks:[0,1]},goal);assert.equal((await f.fresh('owner',goal)).data.phase,'verification');
+ assert.notEqual(personalLearning(await f.get('backup'),f.at).next.guide.id,guide.id);
+ goal=await f.call('owner','goal.transition',{step:'fix',note:'Fictional practice card needs a recheck.'},goal);assert.deepEqual((await f.fresh('backup',goal)).data.practiceChecks,[]);
+ goal=await f.call('backup','goal.transition',{step:'ready',checks:[0,1]},goal);goal=await f.call('owner','goal.transition',{step:'verify',note:'Observed both fictional criteria.'},goal);
+ path=personalLearning(await f.get('backup'),f.at);assert.equal(path.completed,1);assert.notEqual(path.next.guide.id,guide.id);assert.deepEqual((await f.get('backup')).me.qualifications,[]);
+ await f.db.prepare('UPDATE records SET archived_at=? WHERE id=?').bind(f.at,goal.recordId).run();
+ w=await f.get('backup');assert.equal(w.records.some(r=>r.id===goal.recordId),false);assert.equal(personalLearning(w,f.at).completed,1);assert.equal((await f.get('cook')).learningHistory.length,0);
+ await assert.rejects(()=>f.call('backup','goal.start-learning',input),e=>e.status===409);
+ const base=await f.fresh('owner',{id:guide.id});let revised=await f.call('owner','standard.save',{area:'BOH',basedOnId:base.id,basedOnRevision:base.revision,title:base.data.title,zone:base.data.zone,position:base.data.position,version:2,criteria:['New fictional criterion'],source:'Fictional revised source',verification:'manager'});
+ revised=await f.call('owner','standard.approve',{validated:true,note:'Fictional revision review only'},revised);
+ const current=learningGuides(await f.get('backup'),(await f.get('backup')).me);assert.equal(current.some(g=>g.id===guide.id),false);assert.equal(current.some(g=>g.id===revised.recordId),true);
+ await assert.rejects(()=>f.call('backup','goal.start-learning',input),e=>e.status===409);
+ assert.equal(personalLearning(await f.get('backup'),f.at).completed,0);
+ const cookPath=personalLearning(await f.get('cook'),f.at);assert.equal(cookPath.next.guide.id,revised.recordId);assert.equal(cookPath.next.current,true);
+ let oldActive=await f.call('cook','goal.start-learning',{standardId:revised.recordId,standardRevision:revised.revision});
+ const revisedBase=await f.fresh('owner',revised);let latest=await f.call('owner','standard.save',{area:'BOH',basedOnId:revisedBase.id,basedOnRevision:revisedBase.revision,title:revisedBase.data.title,zone:revisedBase.data.zone,position:revisedBase.data.position,version:3,criteria:['Latest fictional criterion'],source:'Fictional latest source',verification:'manager'});
+ latest=await f.call('owner','standard.approve',{validated:true,note:'Fictional third version only'},latest);
+ const nextGoal=await f.call('cook','goal.start-learning',{standardId:latest.recordId,standardRevision:latest.revision});assert.equal((await f.fresh('cook',nextGoal)).data.phase,'active');assert.equal((await f.fresh('cook',oldActive)).data.phase,'cancelled');
+});
+
+test('formal reviews pull approved job criteria and retain structured, private draft ratings and submissions',async t=>{
+ const f=await createPersonalWeek({automaticLearning:true});t.after(()=>f.dispose());
+ await f.db.prepare('INSERT INTO memberships(id,email,auth_user_id,location_id,name,area,position,capabilities,qualifications,schedule_jobs) VALUES(?,?,?,?,?,?,?,?,?,?)').bind('gm','gm@example.test','gm','week','Independent Approver','Executive','Owner',JSON.stringify(['location.manage','people.approve']),'[]','[]').run();
+ const guide=await f.fresh('owner',f.guides.Fry),input={ownerId:'cook',managerId:'owner',approverId:'gm',hireDate:'2026-09-01',dueDate:'2026-10-01',guideRefs:[{id:guide.id,revision:guide.revision}]};
+ await assert.rejects(()=>f.call('owner','development.create',{...input,guideRefs:[{id:f.guides.Seating.recordId,revision:f.guides.Seating.revision}]}),e=>e.status===409);
+ let review=await f.call('owner','development.create',input),saved=await f.fresh('cook',review);
+ assert.equal(saved.data.stations[0].standardId,guide.id);assert.equal(saved.data.stations[0].standardRevision,guide.revision);assert.equal(saved.data.stations[0].definition,guide.data.criteria.join('\n'));
+ await assert.rejects(()=>f.call('cook','development.assess',{by:'employee',submit:false,ratings:[{score:7,scale:'readiness-v1',note:''}],summary:''},review),e=>e.status===400);
+ review=await f.call('cook','development.assess',{by:'employee',submit:false,ratings:[{score:5,scale:'readiness-v1',note:'Fictional demonstrated steps'}],summary:'Fictional self review'},review);
+ assert.equal((await f.fresh('cook',review)).data.stations[0].selfScore,5);assert.equal((await f.fresh('owner',review)).data.stations[0].selfScore,null);
+ review=await f.call('cook','development.assess',{by:'employee',submit:true,ratings:[{score:5,note:'Fictional demonstrated steps'}],summary:'Fictional self review'},review);
+ review=await f.call('owner','development.assess',{by:'manager',submit:true,ratings:[{score:1,scale:'readiness-v1',note:'Fictional observation: still needs guided practice'}],summary:'Fictional manager review'},review);
+ saved=await f.fresh('cook',review);assert.equal(saved.data.phase,'discussion');assert.deepEqual(saved.data.submissions.map(s=>s.ratings[0].score),[5,1]);assert.equal(saved.data.submissions[1].actorId,'owner');assert.equal(saved.data.submissions[1].ratings[0].scale,'readiness-v1');
+ assert.equal((await f.get('backup')).records.some(r=>r.id===saved.id),false);
+});

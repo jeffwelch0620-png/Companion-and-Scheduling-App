@@ -1,0 +1,2 @@
+export const facts={title:'Fictional event',startDate:'2099-09-30',startTime:'23:00',endDate:'2099-10-01',endTime:'01:00',venue:'Fixture pickup',guests:24,menuRef:'Fixture menu v1',menuNotes:'Approved fixture menu',prepNotes:'Fixture prep requirement',staffingNotes:'Fixture staffing requirement',audience:['BOH'],managerId:'manager',sourceRef:'PRIVATE-SOURCE',bookingRef:'PRIVATE-BOOKING'};
+export const review={note:'PRIVATE-REVIEW',checked:true,confirmed:true};

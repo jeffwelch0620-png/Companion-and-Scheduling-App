@@ -1,0 +1,276 @@
+{
+  "source": "https://drive.google.com/file/d/1en-9SkifC7jdi_haP6vXzkt4DtMC4p3d/view",
+  "sourceDate": "2026-09-28",
+  "groups": [
+    {
+      "name": "Compliance",
+      "items": [
+        {
+          "sourceStatus": "Decided",
+          "title": "Meal breaks",
+          "note": "Flag any straight shift scheduled over six hours. A warning on the schedule, not a policy change."
+        },
+        {
+          "sourceStatus": "Decided",
+          "title": "Minor hours",
+          "note": "TN: no 16/17-year-old works 10 PM to 6 AM on a school night. Warn when a minor is scheduled past ~9 on a school night, and when a minor is still clocked in approaching 10. School calendar drives it. Needs DOBs from Toast (name + DOB only, no SSNs); Jason exports."
+        },
+        {
+          "sourceStatus": "Decided",
+          "title": "Overtime",
+          "note": "Heads-up at 32 hours, hard alert at 38. Goes to the GM only."
+        },
+        {
+          "sourceStatus": "Decided",
+          "title": "Food manager cards",
+          "note": "Rudd, Walt, Tim, Jeff, Drew, Ryan certified Sep 28 2026; Jason May 28. All expire 5 years out. Warn at 90 days."
+        }
+      ]
+    },
+    {
+      "name": "Coverage: Bert's",
+      "items": [
+        {
+          "sourceStatus": "Decided",
+          "title": "Every night",
+          "note": "Pizza, fry, grill, sandwich, float, expo, dish. Never below that."
+        },
+        {
+          "sourceStatus": "Decided",
+          "title": "Flat top",
+          "note": "The only collapsible position. Folds into grill; stands alone Fri, Sat, Sun."
+        },
+        {
+          "sourceStatus": "Decided",
+          "title": "Dish",
+          "note": "1 day / 2 night Mon-Sat, 2 and 2 Sunday. Never collapsible."
+        },
+        {
+          "sourceStatus": "Decided",
+          "title": "Float and pizza catch",
+          "note": "Float is the manager, usually Ryan: salaried, so it doesn't count against the 20% hourly target, but it must show as covered. Pizza catch added on heavy nights. \"Pizza oven\" dropped."
+        }
+      ]
+    },
+    {
+      "name": "Coverage: Rudd's",
+      "items": [
+        {
+          "sourceStatus": "Decided",
+          "title": "Stations",
+          "note": "Fryer; Grill/Flat Top (one station); Pizza Make; Pizza Catch; Salad/Mac; Expo; Dish. High volume adds a line float between grill and fryer and a second pizza make. Count pizza catch once."
+        },
+        {
+          "sourceStatus": "Decided",
+          "title": "Expo",
+          "note": "Drew or Jeff, rotating. Neither is fixed at expo. Whoever stands there counts as covered; salaried time stays out of the 20% hourly target."
+        },
+        {
+          "sourceStatus": "Decided",
+          "title": "Dish",
+          "note": "PM only, one dedicated person ~4 to 9:30. Sunday gets AM and PM. Daytime dish duties shared."
+        },
+        {
+          "sourceStatus": "Decided",
+          "title": "FOH tiers",
+          "note": "Quiet lunch: servers + FOH manager, no host/phone/runner. Slower dinner: combined host/phone-to-go, runner, 3-4 servers. Busy: host and phone split, ~4 servers, runner, no separate busser."
+        },
+        {
+          "sourceStatus": "Decided",
+          "title": "Line checks",
+          "note": "Morning by 11, alert 11:30. Afternoon by 3:30, alert 4. Owned by Drew or Jeff, then GM; GM is vacant, so Jason or Rudd. Overdue goes to both owners. No Tuesday service checks. Commissary production still runs Tuesday."
+        },
+        {
+          "sourceStatus": "Decided",
+          "title": "Timing",
+          "note": "Rudd's prep and turn times are shorter than Bert's. Do not copy Bert's timing assumptions."
+        }
+      ]
+    },
+    {
+      "name": "Coverage: shared",
+      "items": [
+        {
+          "sourceStatus": "Decided",
+          "title": "Single-deep alerts",
+          "note": "Free once both station floors are loaded into Companion's coverage engine."
+        },
+        {
+          "sourceStatus": "Decided",
+          "title": "Operations calendar",
+          "note": "One shared Google Calendar for now: hood cleaning, Taste of Monroe (Oct, all-hands), homecoming, games, holidays, school days off, in-service. Both owners add; managers see it while writing the schedule. JMAX pulls it in later."
+        },
+        {
+          "sourceStatus": "Built",
+          "title": "Shift swaps and pickups",
+          "note": "Built in Companion's scheduling engine."
+        },
+        {
+          "sourceStatus": "Built",
+          "title": "Station clearance and trainers",
+          "note": "Built in Companion."
+        }
+      ]
+    },
+    {
+      "name": "Money",
+      "items": [
+        {
+          "sourceStatus": "Built",
+          "title": "Targets",
+          "note": "Hourly labor 20% (hourly wages only, salaried managers excluded), food 37%, prime 57%. Wired into the scorecards."
+        },
+        {
+          "sourceStatus": "Decided",
+          "title": "Toast hourly sales",
+          "note": "While the schedule is written, plain warnings: \"last four Fridays averaged $1,800 from 6-7 PM, you have three cooks on.\" A warning, not a report."
+        },
+        {
+          "sourceStatus": "Decided",
+          "title": "Voids and comps",
+          "note": "Nobody checks them today. Weekly list per store by person, flagged above store average. GM sees it first. Same name two weeks running goes to Jason and Rudd."
+        },
+        {
+          "sourceStatus": "Decided",
+          "title": "Tips",
+          "note": "Pooled and paid inside Toast at all three stores. JMAX only reads the result."
+        },
+        {
+          "sourceStatus": "Decided",
+          "title": "Cash and deposits",
+          "note": "Toast expected, counted at close, deposit slip; breaks surface next morning. Fixed deposit days: two a week at Bert's and Rudd's, one at Papa's. The reminder follows the deposit day even when the store is closed; Tuesday closure does NOT silence it."
+        },
+        {
+          "sourceStatus": "Open",
+          "title": "Which deposit days",
+          "note": "Each GM picks. Rudd's first; Bert's and Papa's after."
+        }
+      ]
+    },
+    {
+      "name": "People",
+      "items": [
+        {
+          "sourceStatus": "Decided",
+          "title": "Staff profiles",
+          "note": "Station ratings, trainer status, carrot, allergies. Birth date and leader/follower dropped. Carrot is GM-only."
+        },
+        {
+          "sourceStatus": "Decided",
+          "title": "AI-drafted schedules",
+          "note": "Start from what the volume calls for, staffed with who's strong for those hours. Not a copy of last week. Prove it at Bert's and Rudd's first."
+        },
+        {
+          "sourceStatus": "Decided",
+          "title": "End-of-shift check-in",
+          "note": "Three rough faces out of five raises a flag to the GM. GM sees the count first and can open it."
+        },
+        {
+          "sourceStatus": "Decided",
+          "title": "Onboarding vs training",
+          "note": "Onboarding = paperwork + into Toast. Training is separate: paired with a trainer until the GM signs off, which turns on station clearance. Trainees add coverage, not a required slot. Rudd's trainers: +$1/hr for the training shift, premium parking, free meal except steak."
+        },
+        {
+          "sourceStatus": "Open",
+          "title": "Rudd's new-hire handoff",
+          "note": "Lacey writes FOH, Drew writes BOH, so they own getting a hire on the schedule. The step from hired to scheduled is still undefined."
+        }
+      ]
+    },
+    {
+      "name": "Data hygiene",
+      "items": [
+        {
+          "sourceStatus": "Decided",
+          "title": "System accounts",
+          "note": "\"Server One\" is the to-go/DoorDash account at Bert's and Rudd's. Flag on the person: system account yes/no. Flagged accounts drop out of labor, scheduling and profiles; sales still count. Papa's online default: name to confirm with Will."
+        },
+        {
+          "sourceStatus": "Decided",
+          "title": "Clock-in without a shift",
+          "note": "Friendly one-tap flag: \"Bella worked Tuesday with no scheduled shift. Add it?\""
+        },
+        {
+          "sourceStatus": "Decided",
+          "title": "Training hours",
+          "note": "Two new Toast job codes, trainee and trainer. Year one measures, year two budgets. Stays inside the 20%; scorecard shows labor with and without it."
+        },
+        {
+          "sourceStatus": "Decided",
+          "title": "Schedule source",
+          "note": "Rudd's = Sling, Bert's = HotSchedules, Papa's = Excel (JMAX reads a photo for now). Both apps stay for now; JMAX owns the schedule data and grows into Companion's engine to replace them."
+        }
+      ]
+    },
+    {
+      "name": "Not built, not yet decided",
+      "items": [
+        {
+          "sourceStatus": "Open",
+          "title": "Safety and compliance",
+          "note": "Temp logs, inspections, permit renewals, incidents. Temps outside limit trigger a corrective action and write the health inspection log."
+        },
+        {
+          "sourceStatus": "Open",
+          "title": "Guests and listings",
+          "note": "Reviews, complaints, Google and Facebook listings."
+        },
+        {
+          "sourceStatus": "Built",
+          "title": "Bert's prep sheet",
+          "note": "34 real items with owner-set pars. Shredded lettuce and Philly pucks still need pars from Tim."
+        },
+        {
+          "sourceStatus": "Partial",
+          "title": "Manager log",
+          "note": "Screen built from the Red Book. Saving version live in the Rudd's pilot."
+        },
+        {
+          "sourceStatus": "Partial",
+          "title": "Prime cost scorecard",
+          "note": "Bert's and Papa's real numbers loaded (different periods). Rudd's not pulled yet."
+        },
+        {
+          "sourceStatus": "Open",
+          "title": "Build card photos",
+          "note": "Missing pepperoni count/weight per size; illustration doesn't match the finished photo."
+        },
+        {
+          "sourceStatus": "Open",
+          "title": "Catering menu and BEO",
+          "note": "Papa's BEO works; rebuild so every calendar event prints its own."
+        }
+      ]
+    },
+    {
+      "name": "Plumbing",
+      "items": [
+        {
+          "sourceStatus": "Built",
+          "title": "Database spine",
+          "note": "Supabase (jaymaxcorp), 16 tables, RLS on, service role only. Script 01 run live."
+        },
+        {
+          "sourceStatus": "Open",
+          "title": "Access policies (Script 02)",
+          "note": "Codex and Claude read-only; Jeff's app writes only counts, invoices, items. Staff logins after hosting."
+        },
+        {
+          "sourceStatus": "Open",
+          "title": "Scheduled export to Drive",
+          "note": "The step everyone skips. Must be set up."
+        },
+        {
+          "sourceStatus": "Open",
+          "title": "Jeff's real data",
+          "note": "His live data is in his own MongoDB. Needs a read-only export before anything loads."
+        },
+        {
+          "sourceStatus": "Open",
+          "title": "Sling/Toast connection, payroll export",
+          "note": "Read roster and time clock instead of retyping; match whatever payroll uses."
+        }
+      ]
+    }
+  ]
+}

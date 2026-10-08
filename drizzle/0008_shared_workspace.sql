@@ -1,0 +1,1 @@
+ALTER TABLE `companion_turns` ADD `focus` text;

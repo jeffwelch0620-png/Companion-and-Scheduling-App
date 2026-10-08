@@ -1,0 +1,195 @@
+/* One working list per screen; details open only when a person asks for them. */
+.shared-ui.shared-flow .shared-shell>header{min-height:60px;padding:8px 16px;gap:10px;flex-shrink:0;border-bottom:1px solid #e4e9ef}
+.shared-ui.shared-flow .shared-brand{font-size:20px;min-width:0;white-space:nowrap}
+.shared-ui.shared-flow .shared-brand>span{max-width:340px;overflow:hidden;text-overflow:ellipsis;font-size:13px;font-weight:400;color:#637083}
+.shared-ui.shared-flow .shared-toolbar{padding:0;min-height:44px;gap:2px;border:0;margin-left:auto;flex-shrink:0}
+.shared-ui.shared-flow .shared-toolbar>button,.shared-ui.shared-flow .shared-toolbar>details>summary{display:flex;align-items:center;justify-content:center;width:44px;height:44px;padding:8px;border:0;background:transparent;list-style:none}
+.shared-ui.shared-flow summary::-webkit-details-marker{display:none}
+.shared-ui.shared-flow .shared-toolbar details>div{top:46px;width:280px;max-width:calc(100vw - 24px);gap:2px;border-radius:12px}
+.shared-ui.shared-flow .shared-toolbar details>div>button{border:0;text-align:left;background:transparent}
+.shared-ui.shared-flow .account-identity{display:grid;gap:3px;padding:10px;border-bottom:1px solid #e4e9ef;margin-bottom:6px}
+.shared-ui.shared-flow .account-identity>span{font-size:14px;color:#617084}
+.shared-ui.shared-flow .shared-shell>main{padding:16px 20px}
+.shared-ui.shared-flow .compact-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px}
+.shared-ui.shared-flow .compact-heading h1{font-size:26px;margin:0;line-height:1.25;overflow-wrap:anywhere}
+.shared-ui.shared-flow .compact-heading h2{font-size:18px;margin:12px 0}
+.shared-ui.shared-flow .compact-heading p{margin:5px 0;color:#637083;font-size:14px}
+.shared-ui.shared-flow .compact-actions{position:relative;flex-shrink:0}
+.shared-ui.shared-flow .compact-actions>summary{list-style:none;display:grid;place-items:center;width:44px;height:44px;border-radius:8px}
+.shared-ui.shared-flow .compact-actions>div{position:absolute;z-index:20;right:0;top:46px;width:250px;max-width:calc(100vw - 32px);padding:6px;background:#fff;border:1px solid #dce3eb;border-radius:12px;box-shadow:0 10px 30px #23395420}
+.shared-ui.shared-flow .compact-actions>div>button{display:block;width:100%;text-align:left;border:0;background:transparent;border-radius:6px;font-weight:500}
+.shared-ui.shared-flow .compact-tabs{display:flex;gap:12px;border-bottom:1px solid #dce3eb;margin-bottom:12px}
+.shared-ui.shared-flow .compact-tabs>button{flex:1;min-width:0;border:0;border-radius:0;background:transparent;padding:10px 3px;font-size:14px;color:#677487;font-weight:500}
+.shared-ui.shared-flow .compact-tabs>button[aria-pressed=true]{color:#255c96;box-shadow:inset 0 -2px #255c96;font-weight:600}
+.shared-ui.shared-flow .compact-tabs>button>span{margin-left:4px;font-size:13px;color:#6d7c90}
+.shared-ui.shared-flow .compact-search{display:block;margin:8px 0 10px}
+.shared-ui.shared-flow .compact-search input{font-size:16px;padding:9px 12px;border-radius:9px;border-color:#dce3eb;min-height:44px;background:#fff}
+.shared-ui.shared-flow .compact-list{border-top:1px solid #e0e6ed}
+.shared-ui.shared-flow .compact-row,.shared-ui.shared-flow .compact-station>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:68px;text-align:left;padding:12px 2px;border:0;border-bottom:1px solid #e0e6ed;border-radius:0;background:transparent;list-style:none;font-weight:400}
+.shared-ui.shared-flow .compact-row>span:first-child,.shared-ui.shared-flow .compact-station>summary>span:first-child{min-width:0;flex:1}
+.shared-ui.shared-flow .compact-row strong,.shared-ui.shared-flow .compact-station>summary strong{display:block;font-size:16px;font-weight:600;line-height:1.4;overflow-wrap:anywhere}
+.shared-ui.shared-flow .compact-row small,.shared-ui.shared-flow .compact-station>summary small{display:block;font-size:14px;font-weight:400;color:#637083;line-height:1.4;margin-top:3px}
+.shared-ui.shared-flow .compact-row-meta{display:flex;align-items:center;gap:9px;font-size:13px;max-width:98px;color:#67778a;text-align:right;flex-shrink:0}
+.shared-ui.shared-flow .compact-row-meta>span,.shared-ui.shared-flow .compact-row>span:last-child:not(:first-child):not(.compact-row-meta),.shared-ui.shared-flow .compact-station>summary>span:last-child{font-size:22px;color:#8998aa}
+.shared-ui.shared-flow .compact-row-meta[data-overdue=true]{color:#a04824}
+.shared-ui.shared-flow .compact-station>div{padding:4px 12px 18px;background:white;border-bottom:1px solid #e0e6ed}
+.shared-ui.shared-flow .compact-station[open]>summary{color:#255c96}
+.shared-ui.shared-flow .compact-station[open]>summary>span:last-child{transform:rotate(90deg)}
+.shared-ui.shared-flow .compact-note{margin:20px 0 8px;padding:12px 0;border-top:1px solid #e0e6ed;font-size:14px;color:#5b6b7f}
+.shared-ui.shared-flow .compact-note summary{font-weight:500}
+.shared-ui.shared-flow .compact-back,.shared-ui.shared-flow .inline-action{border:0;padding:8px 0;background:transparent;color:#255c96;font-weight:500;font-size:14px}
+.shared-ui.shared-flow .compact-back{margin-bottom:10px}
+.shared-ui.shared-flow .person-facts{display:grid;gap:12px;border-block:1px solid #e0e6ed;padding:16px 0;margin:16px 0}
+.shared-ui.shared-flow .person-facts dt{font-size:14px;color:#637083;margin-bottom:4px}
+.shared-ui.shared-flow .person-facts dd{margin:0;font-size:16px;overflow-wrap:anywhere}
+.shared-ui.shared-flow .person-station-list>div{display:grid;gap:3px;padding:12px 0;border-bottom:1px solid #e0e6ed}
+.shared-ui.shared-flow .person-station-list strong{font-size:16px}
+.shared-ui.shared-flow .person-station-list span,.shared-ui.shared-flow .person-station-list p{font-size:14px;color:#637083;margin:0}
+.shared-ui.shared-flow .learning-filter-line{display:flex;justify-content:space-between;gap:10px;align-items:center;margin:4px 0 8px}
+.shared-ui.shared-flow .learning-filter-line select{font-size:14px;border:0;background:transparent;min-width:170px;padding-left:0}
+.shared-ui.shared-flow .learning-row{min-height:82px}
+.shared-ui.shared-flow .compact-empty{padding:22px 0;color:#637083}
+.shared-ui.shared-flow .compact-empty h2{font-size:18px;margin:0;color:#30445d}
+.shared-ui.shared-flow .compact-empty p{font-size:15px;margin:7px 0;line-height:1.5}
+.shared-ui.shared-flow .compact-guides>.shared-grid{gap:10px;margin-bottom:10px}
+.shared-ui.shared-flow .compact-guides>.shared-grid label{margin:0;font-size:14px}
+.shared-ui.shared-flow .my-day{max-width:680px}
+.shared-ui.shared-flow .day-eyebrow{font-size:14px;color:#637083;margin:3px 0 8px}
+.shared-ui.shared-flow .my-day h1{font-size:29px;line-height:1.2;margin:0 0 7px;letter-spacing:-.6px}
+.shared-ui.shared-flow .my-day h2{font-size:18px;margin:24px 0 10px}
+.shared-ui.shared-flow .day-shift-line{display:flex;justify-content:space-between;gap:12px;padding:7px 0;width:100%;text-align:left;border:0;background:transparent;font-size:14px;font-weight:400;color:#5b6d83}
+.shared-ui.shared-flow .day-ask{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:12px 15px;margin:15px 0 22px;background:#e9f0f8;color:#25537f;border:0;border-radius:10px;font-size:16px;font-weight:500}
+.shared-ui.shared-flow .my-day>.shared-muted{font-size:15px;line-height:1.5}
+.shared-ui.shared-flow .shared-shell>main:has(.chat-pane:not([hidden])){display:flex;overflow:hidden}
+.shared-ui.shared-flow .shared-view:has(>.chat-pane:not([hidden])){display:flex;flex:1;min-height:0;flex-direction:column;width:100%}
+.shared-ui.shared-flow .chat-pane:not([hidden]){display:flex;flex:1;min-height:0;width:100%;max-width:780px;margin:auto}
+.shared-ui.shared-flow .jmax-chat{display:flex;flex-direction:column;width:100%;max-width:none;min-height:0;flex:1;padding:0;margin:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+.shared-ui.shared-flow .jmax-chat-heading{flex-direction:row;gap:10px;flex-shrink:0}
+.shared-ui.shared-flow .jmax-chat-heading h1{font-size:26px;margin:0}
+.shared-ui.shared-flow .jmax-chat-heading p{margin:5px 0 12px;font-size:14px;color:#637083}
+.shared-ui.shared-flow .jmax-chat-turns{flex:1;min-height:70px;max-height:none;overflow-y:auto;padding-right:5px}
+.shared-ui.shared-flow .jmax-chat-starters{gap:6px;margin:10px 0;flex-shrink:0}
+.shared-ui.shared-flow .jmax-chat-starters button{font-size:14px;padding:8px 11px;border-radius:18px;font-weight:400;background:#fff}
+.shared-ui.shared-flow .jmax-chat-composer{margin-top:10px;flex-shrink:0}
+.shared-ui.shared-flow .jmax-chat-composer textarea{min-height:75px;max-height:25dvh;margin-top:4px;padding:10px 12px;resize:vertical;background:white}
+.shared-ui.shared-flow .jmax-chat-composer>div{margin-top:6px;gap:10px}
+.shared-ui.shared-flow .jmax-chat-composer>div>span{font-size:13px}
+.shared-ui.shared-flow .jmax-chat-focus{flex-shrink:0;margin:8px 0;padding:8px 12px;max-height:35dvh;overflow:auto;background:#edf3f9;border-color:#d4e0ed;border-radius:8px;font-size:14px}
+.shared-ui.shared-flow .jmax-chat-focus>summary{min-height:30px;font-size:14px;font-weight:500;padding:4px 0;overflow-wrap:anywhere}
+.shared-ui.shared-flow .jmax-settings{flex-shrink:0;max-height:45dvh;overflow:auto;margin-top:8px;font-size:14px}
+.shared-ui.shared-flow .jmax-settings>summary{font-size:14px;font-weight:400;min-height:34px;color:#637083;padding:6px 0}
+.shared-ui.shared-flow .jmax-settings>div{padding:12px;background:#fff;border:1px solid #e0e6ed;border-radius:10px}
+.shared-ui.shared-flow .schedule-shift>button{min-height:78px;padding-top:9px;padding-bottom:9px}
+.shared-ui.shared-flow .schedule-shift-main{gap:2px}
+.shared-ui.shared-flow .schedule-shift-main>strong{font-size:16px}
+.shared-ui.shared-flow .personal-agenda .schedule-shift>button{min-height:80px;padding:11px 10px}
+.shared-ui.shared-flow .personal-agenda-day{margin-bottom:9px!important}
+@media(max-width:600px){
+ .shared-ui.shared-flow .shared-shell>header{padding:7px 12px;min-height:58px}
+ .shared-ui.shared-flow .shared-brand>span{display:none}
+ .shared-ui.shared-flow .shared-shell>main{padding:14px}
+ .shared-ui.shared-flow .shared-shell>main:has(.schedule-week){padding:10px 14px 16px}
+ .shared-ui.shared-flow .compact-guides>.shared-grid{grid-template-columns:1fr}
+ .shared-ui.shared-flow .compact-row-meta{max-width:83px}
+ .shared-ui.shared-flow .schedule-agenda-heading{margin-bottom:6px}
+ .shared-ui.shared-flow .my-day h1{font-size:28px}
+}
+@media(prefers-reduced-motion:reduce){.shared-ui.shared-flow *{scroll-behavior:auto}}
+
+/* Keep a person and shift visible while their related work unfolds. */
+.shared-dialog:has(.shift-detail-summary)>.shared-dialog-heading{position:sticky;top:-22px;z-index:6;background:#f8fafc;padding-top:18px;margin-top:-18px;box-shadow:0 4px 12px #24374b08}
+.shift-context-tabs{display:flex;gap:6px;background:#eaf0f5;border-radius:12px;padding:5px}
+.shared-ui .shift-context-tabs>button{flex:1;min-width:0;min-height:44px;border:0;background:transparent;border-radius:9px;color:#4b5d70}
+.shared-ui .shift-context-tabs>button[aria-expanded=true]{background:white;color:#183d5b;box-shadow:0 2px 6px #1c385114}
+.shift-context-panel{padding:12px 0;animation:shift-help-enter .18s ease-out}
+.shift-context-person{font-size:14px;font-weight:600;color:#50667c;border-left:3px solid #7faccd;padding-left:10px}
+.shift-context-panel .jmax-chat{padding:0;border:0;background:transparent;box-shadow:none}
+.shift-context-panel .jmax-chat-turns{max-height:360px;min-height:0}
+.shift-context-panel .jmax-chat-heading h3{margin:6px 0;font-size:18px}
+.shift-context-panel .jmax-chat-turn p{font-size:15px;line-height:1.55}
+.shift-context-panel .compact-row{width:100%;text-align:left}
+.shared-ui .account-avatar{display:grid;place-items:center;min-width:36px;min-height:36px;border-radius:50%;background:#e5edf4;color:#2b4860;font-size:13px;letter-spacing:.5px;font-weight:700}
+.restaurant-tools h2{font-size:15px;color:#627489;margin:28px 0 8px}
+.restaurant-tools .compact-row{padding:16px 8px}
+.restaurant-tools .compact-row small{max-width:55ch;line-height:1.45}
+@keyframes shift-help-enter{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){.shift-context-panel{animation:none}}
+
+/* Upcoming work leads; reference material stays available without competing. */
+.shared-ui.shared-flow .day-greeting{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.shared-ui.shared-flow .day-greeting p{margin:0}.day-greeting>span{font-size:13px;color:#61748a}
+.shared-ui.shared-flow .day-home-tabs{display:flex;gap:4px;padding:4px;margin:0 0 22px;border-radius:12px;background:#e7eff9}
+.shared-ui.shared-flow .day-home-tabs>button{flex:1;min-width:0;min-height:44px;padding:9px 6px;border:0;border-radius:9px;background:transparent;color:#526a81;font-size:14px;font-weight:600}
+.shared-ui.shared-flow .day-home-tabs>button[aria-pressed=true]{background:white;color:#084891;box-shadow:0 2px 7px #07275b12}
+.shared-ui.shared-flow .day-home-tabs>button:focus-visible{outline:2px solid #1269c5;outline-offset:2px}
+/* Keep prep mounted so switching home views preserves an unfinished report. */
+.shared-ui.shared-flow main:has(.my-day[data-home-tab=learning]) #assigned-prep,.shared-ui.shared-flow main:has(.my-day[data-home-tab=progress]) #assigned-prep{display:none}
+.shared-ui.shared-flow .day-shift-focus{border:1px solid #d5e3ef;border-radius:18px;overflow:hidden;background:linear-gradient(135deg,#edf5fc,#fff 85%);margin-bottom:22px}
+.shared-ui.shared-flow .day-shift-open{display:block;width:100%;border:0;background:transparent;text-align:left;padding:20px 20px 16px;color:#1f3952;border-radius:0}
+.shared-ui.shared-flow .day-shift-open:hover{background:#e9f3fb}
+.day-shift-status{font-size:12px;font-weight:650;letter-spacing:.035em;text-transform:uppercase;color:#3c6c91}
+.shared-ui.shared-flow .day-shift-open h1{font-size:32px;line-height:1.15;letter-spacing:-.6px;margin:8px 0 10px;overflow-wrap:anywhere}
+.day-shift-time{display:block;font-size:22px;line-height:1.4;letter-spacing:-.4px;font-weight:600;font-variant-numeric:tabular-nums}
+.day-shift-meta{display:flex;justify-content:space-between;gap:10px;margin-top:14px;color:#62798e;font-size:13px;font-weight:400;flex-wrap:wrap}
+.day-shift-meta>span{color:#2b587c;font-weight:600}.day-shift-meta b{font-size:19px;margin-left:6px}
+.shared-ui.shared-flow .day-shift-ask{display:flex;justify-content:space-between;gap:12px;width:100%;border:0;border-top:1px solid #d9e6f0;padding:13px 20px;border-radius:0;background:#e5eff8;color:#234f71;text-align:left;font-size:14px}
+.shared-ui.shared-flow .day-coming{margin:22px 0 18px}.day-coming .compact-heading{margin-bottom:2px!important}
+.shared-ui.shared-flow .my-day .personal-learning>.compact-heading h2,.shared-ui.shared-flow .day-coming>.compact-heading h2{margin:0}
+.shared-ui.shared-flow .my-day .personal-learning>.compact-heading{margin-bottom:10px}
+.shared-ui.shared-flow .my-day .learning-focus{margin:0;padding:15px;background:#fff;border-radius:13px}
+.shared-ui.shared-flow .my-day .learning-focus p{font-size:15px;line-height:1.5;margin:8px 0 12px}
+.shared-ui.shared-flow .my-day .learning-focus h3{font-size:17px;margin:7px 0}
+.shared-ui.shared-flow .my-day .learning-focus .day-eyebrow{font-size:12px}
+.shared-ui.shared-flow .day-coming-row{display:flex;align-items:center;gap:12px;width:100%;min-height:74px;padding:10px 0;border:0;border-bottom:1px solid #e2e8ef;border-radius:0;background:transparent;text-align:left}
+.day-coming-row>span:nth-child(2){display:grid;gap:4px;min-width:0;flex:1}.day-coming-row>span:nth-child(2)>strong{font-size:15px;color:#2c435b}.day-coming-row>span:nth-child(2)>small{font-size:13px;line-height:1.45;font-weight:400;color:#657589}.day-coming-row>span:last-child{color:#788a9e;font-size:21px}
+.day-coming-date{display:grid;text-align:center;width:42px;flex:0 0 42px;background:#eaf0f6;border-radius:9px;padding:6px 0;color:#4b647c}.day-coming-date small{font-size:11px;font-weight:500}.day-coming-date strong{font-size:20px;line-height:1.2}
+.shared-ui.shared-flow .day-reference{margin-top:18px;border-top:1px solid #dfe7ef;padding-top:10px}.day-reference>summary{display:flex;justify-content:space-between;gap:12px;min-height:44px;align-items:center;font-size:14px;font-weight:600;color:#526a81;cursor:pointer}.day-reference>summary>span{background:#e8eef4;padding:3px 8px;border-radius:10px}.day-reference>summary::after{content:'⌄'}.day-reference[open]>summary::after{content:'⌃'}
+.shared-ui.shared-flow .schedule-shift>button{position:relative;padding-bottom:17px}
+.schedule-timeband{position:absolute;left:4px;right:14px;bottom:6px;height:4px;border-radius:4px;background:#edf1f5;overflow:hidden;pointer-events:none}.schedule-timeband>i{position:absolute;top:0;bottom:0;border-radius:4px;background:var(--job-color);opacity:.65}
+.schedule-timeband-key{display:flex;justify-content:space-between;gap:12px;font-size:11px;color:#718197;margin:-3px 0 10px;grid-column:1/-1}
+@media(max-width:350px){.shared-ui.shared-flow .day-shift-open{padding:17px}.day-shift-time{font-size:19px}.day-greeting>span{display:none}}
+
+/* A practice session keeps the learner, progress and help in one place. */
+.shared-dialog:has(.practice-identity)>.shared-dialog-heading{position:sticky;top:-22px;z-index:6;background:#f9fafc;padding-top:18px;margin-top:-18px;box-shadow:0 4px 12px #24374b08}
+.shared-dialog:has(.practice-identity)>.shared-dialog-heading h2{font-size:18px;line-height:1.4;letter-spacing:-.2px}
+.practice-identity{padding:4px 0 18px}
+.learning-detail .practice-identity h3{font-size:25px;line-height:1.25;letter-spacing:-.5px;margin:14px 0 8px;color:#223d54}
+.practice-identity p{font-size:15px;margin:4px 0;color:#425b70}.practice-identity small{display:block;font-size:13px;color:#62778a;line-height:1.5}
+.practice-state{display:inline-block;border-radius:20px;background:#edf1f6;color:#546b80;padding:5px 10px;font-size:12px;font-weight:600}
+.practice-state[data-phase=verification]{background:#fff0d0;color:#735516}.practice-state[data-phase=closed]{background:#e0f4ec;color:#256b51}
+.learning-progress{margin:12px 0 16px}.learning-progress>div{display:flex;align-items:baseline;justify-content:space-between;gap:12px;font-size:12px;color:#607488;margin-bottom:7px}.learning-progress strong{font-size:18px;font-variant-numeric:tabular-nums;color:#25465e}.learning-progress strong span{font-size:14px;font-weight:400;color:#738293}
+.learning-progress progress{display:block;width:100%;height:6px;border:0;border-radius:6px;overflow:hidden;appearance:none;background:#e6edf2}.learning-progress progress::-webkit-progress-bar{background:#e6edf2;border-radius:6px}.learning-progress progress::-webkit-progress-value{background:#3b8a78;border-radius:6px}.learning-progress progress::-moz-progress-bar{background:#3b8a78;border-radius:6px}
+.practice-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:20px}.learning-detail .practice-heading h3{margin:0;font-size:18px}.practice-heading>span{font-size:12px;color:#62778a}
+.learning-detail .practice-hint{font-size:13px;line-height:1.5;color:#617386;margin:0 0 8px}
+.practice-session .learning-criteria{gap:0;margin:8px 0 16px;border-block:1px solid #dfe7ed}
+.shared-ui .practice-session .learning-criteria label{border:0;border-bottom:1px solid #e3e9ee;border-radius:0;padding:15px 6px;margin:0;font-size:15px;line-height:1.5;cursor:pointer;background:transparent;transition:background .15s ease}
+.practice-session .learning-criteria label:last-child{border-bottom:0}.shared-ui .practice-session .learning-criteria label[data-checked=true]{background:#edf7f2;color:#2c5f50}
+.practice-session .learning-criteria input{width:22px;height:22px;accent-color:#358370;flex-shrink:0;margin:1px 0}
+.practice-note>summary{font-size:14px;color:#597084;min-height:44px;display:flex;align-items:center;cursor:pointer}.practice-note>summary::after{content:'+';margin-left:auto}.practice-note[open]>summary::after{content:'−'}
+.shared-ui .practice-actions{display:grid;gap:6px;margin-top:16px}.shared-ui .practice-actions .shared-primary{width:100%;min-height:48px;border-radius:12px}.shared-ui .practice-actions .inline-action{border:0;background:transparent;font-size:14px;color:#506e85}
+.practice-review-criteria{list-style:none;padding:0;margin:0 0 18px}.practice-review-criteria li{display:flex;gap:12px;border-bottom:1px solid #e2e8ee;padding:12px 2px;font-size:15px;line-height:1.5}.practice-review-criteria li>span:first-child{color:#337864}
+.learning-help{border-top:1px solid #dde6ed;margin-top:18px;padding-top:4px}.shared-ui .learning-help-toggle{display:flex;align-items:center;justify-content:space-between;gap:14px;text-align:left;width:100%;border:0;background:transparent;padding:13px 2px;border-radius:0}.learning-help-toggle strong{font-size:16px;color:#315773}.learning-help-toggle small{display:block;font-size:13px;color:#708092;font-weight:400;margin-top:3px}.learning-help-toggle>span:last-child{font-size:22px;color:#52768e}
+.shared-ui.shared-flow .learning-focus .shared-actions>.shared-primary{width:100%;min-height:46px;border-radius:10px}.shared-ui.shared-flow .learning-focus .learning-progress{margin:8px 0 14px}.shared-ui.shared-flow .learning-row small+small{font-size:12px;color:#536f86;margin-top:6px}
+@media(max-width:600px){.shared-dialog:has(.practice-identity)>.shared-dialog-heading{top:-22px}.learning-detail .practice-identity h3{font-size:24px}}
+@media(prefers-reduced-motion:reduce){.practice-session .learning-criteria label{transition:none}}
+
+/* Training opens with useful content, even before the first person practices. */
+.shared-ui.shared-flow .training-hub{max-width:960px;margin-inline:auto;padding-bottom:18px}
+.shared-ui.shared-flow .training-page-heading{margin:4px 0 20px;align-items:center}.shared-ui.shared-flow .training-page-heading p{font-size:12px;font-weight:600;color:#687b8b;margin:0 0 5px;letter-spacing:.3px}.shared-ui.shared-flow .training-page-heading h1{font-size:32px;font-weight:650;letter-spacing:-1px}
+.shared-ui.shared-flow .training-hub>.compact-tabs{display:flex;gap:4px;border:1px solid #e2e8ee;border-radius:14px;padding:4px;background:#edf1f5;margin:0 0 22px}.shared-ui.shared-flow .training-hub>.compact-tabs>button{border-radius:10px;min-height:44px;padding:9px 10px;font-size:14px;box-shadow:none}.shared-ui.shared-flow .training-hub>.compact-tabs>button[aria-pressed=true]{background:#fff;color:#173c4c;box-shadow:0 2px 5px #23374b0c}
+.training-next{border-radius:22px;padding:26px;background:linear-gradient(125deg,#173849,#244e58);color:#fff;position:relative;overflow:hidden}
+.training-next-label{display:flex;align-items:center;gap:8px;color:#c6e5d9;font-size:12px;font-weight:600;letter-spacing:.4px}.shared-ui.shared-flow .training-next h2{color:#fff;font-size:29px;line-height:1.14;letter-spacing:-.8px;margin:14px 0 10px;font-weight:650;max-width:23ch}.training-next>p{color:#d2e0e4;font-size:14px;line-height:1.55;max-width:58ch;margin:0 0 22px}
+.shared-ui.shared-flow .training-next-action{display:flex;align-items:center;justify-content:space-between;gap:18px;text-align:left;width:100%;padding:15px 17px;border:1px solid #ffffff38;background:#ffffff0d;border-radius:13px;color:#fff;transition:background .16s ease}.shared-ui.shared-flow .training-next-action:hover{background:#ffffff1b}.training-next-action>span:first-child{min-width:0}.training-next-action strong{display:block;font-size:16px;font-weight:600;line-height:1.4;overflow-wrap:anywhere}.training-next-action small{display:block;color:#c8e4d9;font-size:12px;line-height:1.4;font-weight:400;margin-bottom:4px}.training-next-action>span:last-child{font-size:24px;color:#daf0a5}
+.training-snapshot{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:18px 2px;margin:0 0 18px;border-bottom:1px solid #e0e7ed;gap:10px}.training-snapshot>div{display:flex;flex-direction:column-reverse;gap:5px;padding-left:20px;border-left:1px solid #e0e7ed}.training-snapshot>div:first-child{padding-left:0;border-left:0}.training-snapshot dd{font-size:27px;line-height:1.1;letter-spacing:-.7px;color:#253f50;margin:0;font-weight:600;font-variant-numeric:tabular-nums}.training-snapshot dt{font-size:12px;line-height:1.4;color:#607587}
+.training-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 13px}.shared-ui.shared-flow .training-section-heading h2{font-size:18px;color:#233c4f;margin:0;font-weight:600;letter-spacing:-.3px}.training-section-heading p{font-size:12px;color:#6b7d8b;margin:5px 0 0}.training-section-heading>.inline-action{white-space:nowrap}.training-people{margin:0 0 28px}.training-people .learning-queue{border:0}.training-people .compact-search input{background:white}
+.guide-preview-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.shared-ui.shared-flow .guide-preview{display:flex;align-items:flex-start;gap:12px;min-width:0;width:100%;text-align:left;padding:17px 14px;border:1px solid #e0e7ed;border-radius:16px;background:white;transition:border-color .16s ease,box-shadow .16s ease;box-shadow:0 2px 4px #20374c03}.shared-ui.shared-flow .guide-preview:hover{border-color:#a9c2cc;box-shadow:0 5px 14px #20374c08}.guide-preview-icon{display:grid;place-items:center;width:37px;height:40px;border-radius:10px;background:#eef4f6;color:#486c7b;flex-shrink:0}.guide-preview-copy{min-width:0;flex:1}.guide-preview-copy strong{display:block;font-size:15px;font-weight:600;line-height:1.45;color:#283e4c;overflow-wrap:anywhere;margin:7px 0}.guide-preview-copy>small{display:block;font-size:12px;font-weight:400;line-height:1.4;color:#6c7c88}.guide-preview-meta{display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:11px;color:#657c8a;font-weight:500}.guide-preview-meta>[data-status]{border-radius:5px;background:#edf5f0;color:#39725d;padding:3px 6px;font-size:10px}.guide-preview-meta>[data-status=draft]{background:#fff3d7;color:#896328}.guide-preview-arrow{align-self:center;font-size:22px;color:#8699a5}.guide-library-count{font-size:13px;color:#677d8d;margin:15px 0}
+.shared-ui.shared-flow .training-individual-tools{border-top:1px solid #e0e7ed;margin:26px 0 0;padding-top:9px;color:#556b7d}.training-individual-tools>summary{min-height:44px;cursor:pointer;font-size:14px;font-weight:500;display:flex;align-items:center;justify-content:space-between}.training-individual-tools>summary::after{content:'+'}.training-individual-tools[open]>summary::after{content:'−'}.training-individual-tools p{font-size:13px;line-height:1.5;margin:4px 0 12px}.training-individual-tools>div{display:flex;flex-wrap:wrap;gap:8px}.shared-ui.shared-flow .training-individual-tools button{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;min-height:44px;background:white;border-color:#dae3e9}
+.training-panel{animation:shift-help-enter .2s ease-out}
+
+/* The shift sheet shows this person's instructions and practice without tabs. */
+.shared-ui .shift-detail-summary{background:linear-gradient(120deg,#eaf2f5,#f3f7f9);padding:18px;border:1px solid #dee8ed;border-radius:16px;margin:4px 0 15px}.shared-ui .shift-detail-summary p{font-size:13px;color:#567182;margin:14px 0 5px}.shared-ui .shift-detail-summary p:last-child{margin:7px 0 0}.shared-ui .shift-detail-time{font-size:27px;color:#213f52}.shift-station-tag{display:inline-block;font-size:12px;font-weight:600;color:#36576a;margin-left:8px}.shared-ui .shift-status{font-size:11px;border-radius:6px;background:#fff;padding:5px 8px;color:#4d6473}
+.shared-ui .shift-shortcuts{margin:18px 0}.shared-ui .shift-shortcuts>.compact-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}.shared-ui .shift-shortcuts>.compact-heading h3{font-size:16px;margin:0}.shift-shortcuts>.compact-heading>span{font-size:12px}
+.shared-ui .shift-work-link{display:flex;align-items:center;gap:12px;width:100%;min-width:0;text-align:left;border:0;border-bottom:1px solid #e3eaee;border-radius:0;padding:14px 2px;background:transparent}.shift-work-link>span:nth-child(2){flex:1;min-width:0}.shift-work-link strong{display:block;font-size:15px;font-weight:600;line-height:1.4;color:#304e60;overflow-wrap:anywhere}.shift-work-link small{display:block;font-size:12px;line-height:1.4;color:#70818f;font-weight:400;margin:3px 0}.shift-work-link>span:last-child{font-size:21px;color:#74919f}.shift-work-icon{display:grid;place-items:center;width:36px;height:38px;border-radius:9px;background:#edf3f6;color:#527787;flex-shrink:0}.shift-practice-list .shift-work-icon{background:#e5f3eb;color:#368164}.shift-jmax-help{margin-top:12px;background:#edf4f6;border-radius:13px;padding:0 12px}.shift-jmax-help>.shift-work-link{border-bottom:0}.shift-jmax-help .shift-work-icon{background:transparent}.shift-instructions-missing{font-size:13px;line-height:1.5;color:#6c7e8c;padding:11px 0;margin:0}.shared-ui .shift-attendance h3{font-size:14px}.shared-ui .shift-attendance>.shared-heading>button{font-size:12px;min-height:40px;padding:7px 12px;border-color:#dbe4ea}
+@media(max-width:600px){.shared-ui.shared-flow .training-page-heading{margin:2px 0 16px}.shared-ui.shared-flow .training-page-heading h1{font-size:29px}.shared-ui.shared-flow .training-hub>.compact-tabs{margin-bottom:16px}.training-next{border-radius:18px;padding:20px}.shared-ui.shared-flow .training-next h2{font-size:25px}.training-next>p{font-size:13px;margin-bottom:17px}.shared-ui.shared-flow .training-next-action{padding:12px}.training-next-action strong{font-size:14px}.training-snapshot>div{padding-left:12px}.training-snapshot dd{font-size:24px}.training-snapshot dt{font-size:11px}.guide-preview-grid{grid-template-columns:1fr;gap:10px}.shared-ui.shared-flow .guide-preview{padding:14px 12px}.shared-ui .shift-detail-time{font-size:24px}.shared-ui .shift-detail-summary{padding:15px}}
+@media(prefers-reduced-motion:reduce){.training-panel{animation:none}.shared-ui.shared-flow .training-next-action,.shared-ui.shared-flow .guide-preview{transition:none}}

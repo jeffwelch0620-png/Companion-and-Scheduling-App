@@ -1,0 +1,110 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import {openPositionDatabase} from './all-position-week-fixture.mjs';
+import {handleWorkspace} from '../.sites-runtime/shared/service.mjs';
+import {trialSourceRevision} from './ai-task-trial-fixture.mjs';
+
+const receipts=[],sourceRevision=trialSourceRevision();
+async function fixture(t,location){
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'jmax-interposition-')),file=path.join(dir,'saved.sqlite');let store=openPositionDatabase(file);
+ t.after(()=>{store.close();fs.rmSync(dir,{recursive:true,force:true});});
+ for(const f of fs.readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())store.sqlite.exec(fs.readFileSync('drizzle/'+f,'utf8').replaceAll('--> statement-breakpoint',''));
+ for(const id of ['berts','rudds','papa'])store.sqlite.prepare('INSERT INTO locations(id,name,timezone) VALUES(?,?,?)').run(id,'Fictional '+id,'America/New_York');
+ const managerCaps=['tasks.manage','schedule.publish','schedule.change','close.confirm'];
+ for(const [id,area,position,caps,loc=location] of [['front','FOH',location==='papa'?'Counter':'Host',[]],['front-lead','FOH','FOH Manager',managerCaps],['oven','BOH',location==='berts'?'Oven':'Pizza Make',[]],['catch','BOH',location==='berts'?'Sandwich/Pasta':'Pizza Catch',[]],['kitchen-lead','BOH','BOH Manager',managerCaps],['opening-lead','BOH','BOH Manager',managerCaps],['gm','BOH','General manager',[...managerCaps,'location.manage','operations.escalation']],['stranger','BOH','Cook',[],location==='berts'?'rudds':'berts']])store.sqlite.prepare('INSERT INTO memberships(id,email,auth_user_id,location_id,name,area,position,capabilities,qualifications) VALUES(?,?,?,?,?,?,?,?,?)').run(id,id+'@example.test',id+'-identity',loc,'Fictional '+id,area,position,JSON.stringify(caps),JSON.stringify([position]));
+ const req=(actor,body,loc=location)=>new Request(`https://interposition.example/api/workspace?locationId=${loc}`,{headers:{'oai-authenticated-user-id':actor+'-identity','oai-authenticated-user-email':actor+'@example.test',Origin:'https://interposition.example','Content-Type':'application/json'},...(body?{method:'POST',body:JSON.stringify(body)}:{})});
+ const snapshot=()=>JSON.stringify(Object.fromEntries(['records','command_receipts','audit_events'].map(table=>[table,store.sqlite.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()])));
+ const call=async(actor,action,input={},record,expected=200,requestId=crypto.randomUUID())=>{const before=snapshot(),response=await handleWorkspace(req(actor,{locationId:location,requestId,action,input,...(record?{recordId:record.recordId??record.id,expectedRevision:record.revision}:{})}),store.db);const data=await response.json();assert.equal(response.status,expected,JSON.stringify(data));if(expected!==200)assert.equal(snapshot(),before,'Rejected request must not mutate work or receipts');return data;};
+ const view=async actor=>{const response=await handleWorkspace(req(actor),store.db);assert.equal(response.status,200);return response.json();};
+ const reopen=()=>{const before=snapshot();store.close();store=openPositionDatabase(file);assert.equal(snapshot(),before);};
+ return {call,view,reopen,req,store:()=>store};
+}
+
+for(const location of ['berts','rudds','papa']){
+ test(`${location}: front-to-manager conversation reaches named people without granting other departments access`,async t=>{
+  const f=await fixture(t,location);
+  let notice=await f.call('front','message.send',{recipients:['front-lead'],title:'Fictional guest-flow issue',body:'Service needs direction; physical seating/order handling remains with staff.'});
+  assert.ok((await f.view('front-lead')).records.some(r=>r.id===notice.recordId));
+  assert.ok(!(await f.view('kitchen-lead')).records.some(r=>r.id===notice.recordId));
+  await f.call('kitchen-lead','message.reply',{text:'Cannot read a private conversation'},notice,404);
+  notice=await f.call('front-lead','message.reply',{text:'Coordinate coverage with me; preserve unresolved work until checked.'},notice);
+  f.reopen();assert.ok((await f.view('front')).records.find(r=>r.id===notice.recordId).data.replies.length===1);
+  await f.call('front','message.send',{recipients:['stranger'],title:'Denied cross-restaurant message',body:'Private work'},undefined,400);
+  const kitchen=await f.call('kitchen-lead','task.create',{ownerId:'oven',kind:'task',title:'Fictional oven follow-through',detail:'A specific unresolved service concern, not an invented equipment method.',due:'2026-10-20T23:00:00Z'});
+  await f.call('front-lead','task.transition',{step:'fix',note:'No kitchen authority'},kitchen,404);
+  receipts.push({location,case:'named conversation and department boundary',status:'passed',physicalWorkClaimed:false});
+ });
+ test(`${location}: actual position handoff survives a disputed receipt, reinspection and stale retries`,async t=>{
+  const f=await fixture(t,location);
+  let work=await f.call('kitchen-lead','task.create',{ownerId:'oven',incomingId:'catch',kind:'handoff',title:'Fictional remaining station work',detail:'Incoming worker needs a complete inventory of unfinished work.',due:'2026-10-20T23:00:00Z'});
+  await f.call('oven','task.transition',{step:'verify',note:'Self inspection forbidden'},work,403);
+  const initial=work;work=await f.call('oven','task.transition',{step:'ready',note:'Fictional ready assertion'},work);
+  await f.call('oven','task.transition',{step:'ready',note:'Stale repeated change'},initial,409);
+  work=await f.call('kitchen-lead','task.transition',{step:'verify',note:'Fictional independent inspector assertion'},work);
+  work=await f.call('catch','task.transition',{step:'dispute',note:'The remaining work is incomplete'},work);
+  f.reopen();assert.equal((await f.view('oven')).records.find(r=>r.id===work.recordId).data.phase,'correction');
+  work=await f.call('oven','task.transition',{step:'ready',note:'Correction reported'},work);
+  work=await f.call('kitchen-lead','task.transition',{step:'verify',note:'Correction independently inspected in fixture'},work);
+  const pending=work;work=await f.call('catch','task.transition',{step:'accept',note:'Named receiver accepts the checked handoff'},work);
+  await f.call('catch','task.transition',{step:'accept',note:'Old acceptance request cannot overwrite'},pending,409);
+  assert.equal((await f.view('catch')).records.find(r=>r.id===work.recordId).data.phase,'closed');
+  const unfinished=await f.call('kitchen-lead','task.create',{ownerId:'oven',kind:'task',title:'Different unfinished work',detail:'Retain history when reassigned to another BOH position.',due:'2026-10-21T23:00:00Z'});
+  const reassigned=await f.call('kitchen-lead','task.reassign',{ownerId:'catch',note:'Named BOH coverage replacement'},unfinished);
+  await f.call('oven','task.transition',{step:'ready',note:'Former owner cannot submit'},reassigned,404);
+  assert.equal((await f.view('catch')).records.find(r=>r.id===unfinished.recordId).ownerId,'catch');
+  receipts.push({location,case:'interposition handoff dispute, correction, acceptance and reassignment',status:'passed',physicalWorkClaimed:false});
+ });
+ test(`${location}: urgent overnight escalation retains ownership until acceptance and revocation blocks the receiver`,async t=>{
+  const f=await fixture(t,location);
+  const outgoing=await f.call('gm','leadership.assign',{personId:'kitchen-lead',area:'BOH',start:'2026-10-20T14:00:00-04:00',end:'2026-10-20T23:00:00-04:00',note:'Fictional closing leadership'});
+  let incoming=await f.call('gm','leadership.assign',{personId:'opening-lead',area:'BOH',start:'2026-10-21T08:00:00-04:00',end:'2026-10-21T16:00:00-04:00',note:'Fictional next opening leadership'});
+  const input={outgoingLeadershipId:outgoing.recordId,incomingId:'opening-lead',incomingLeadershipId:incoming.recordId,title:'Fictional safely deferred concern',detail:'A manager has assessed temporary action; specific safety methods are not invented by this fixture.',priority:'urgent',safeToDefer:true};
+  await f.call('kitchen-lead','handoff.create',{...input,safeToDefer:false},undefined,400);
+  let handoff=await f.call('kitchen-lead','handoff.create',input);
+  assert.ok((await f.view('gm')).records.some(r=>r.kind==='message'&&r.data.recordId===handoff.recordId));
+  f.reopen();assert.equal((await f.view('opening-lead')).records.find(r=>r.id===handoff.recordId).ownerId,'kitchen-lead');
+  await f.call('kitchen-lead','handoff.transition',{step:'resolve',note:'Unaccepted work cannot be closed'},handoff,400);
+  await f.call('kitchen-lead','handoff.transition',{step:'accept',note:'Outgoing manager cannot accept for receiver'},handoff,403);
+  incoming=await f.call('gm','leadership.revoke',{note:'Receiving leadership was revoked'},incoming);
+  await f.call('opening-lead','handoff.transition',{step:'accept',note:'Revoked receiver cannot accept'},handoff,400);
+  incoming=await f.call('gm','leadership.assign',{personId:'opening-lead',area:'BOH',start:'2026-10-21T08:00:00-04:00',end:'2026-10-21T16:00:00-04:00',note:'Explicitly restored fixture leadership'},incoming);
+  handoff=await f.call('opening-lead','handoff.transition',{step:'dispute',note:'Need clarification of the saved next action'},handoff);
+  handoff=await f.call('kitchen-lead','handoff.transition',{step:'offer',incomingId:'opening-lead',incomingLeadershipId:incoming.recordId,note:'Clarified deferral with current named leader'},handoff);
+  handoff=await f.call('opening-lead','handoff.transition',{step:'accept',note:'Current named opening manager accepts responsibility'},handoff);
+  await f.call('kitchen-lead','handoff.transition',{step:'resolve',note:'Former owner cannot resolve'},handoff,403);
+  f.reopen();handoff=await f.call('opening-lead','handoff.transition',{step:'resolve',note:'Resolution recorded by accepted owner'},handoff);
+  assert.equal((await f.view('gm')).records.find(r=>r.id===handoff.recordId).data.phase,'resolved');
+  receipts.push({location,case:'urgent overnight ownership, GM notification and mid-handoff leadership revocation',status:'passed',physicalWorkClaimed:false});
+ });
+ test(`${location}: GM recovers accepted work after receiver leadership is revoked; old ownership and stale recovery cannot return`,async t=>{
+  const f=await fixture(t,location);
+  const outgoing=await f.call('gm','leadership.assign',{personId:'kitchen-lead',area:'BOH',start:'2026-10-20T14:00:00-04:00',end:'2026-10-20T23:00:00-04:00',note:'Fictional closing leadership'});
+  const incoming=await f.call('gm','leadership.assign',{personId:'opening-lead',area:'BOH',start:'2026-10-21T08:00:00-04:00',end:'2026-10-21T16:00:00-04:00',note:'Fictional next opening leadership'});
+  let work=await f.call('kitchen-lead','handoff.create',{outgoingLeadershipId:outgoing.recordId,incomingId:'opening-lead',incomingLeadershipId:incoming.recordId,title:'Fictional accepted work whose manager becomes unavailable',detail:'The unresolved reported condition remains urgent; recovery changes responsibility, not completion or safety.',priority:'urgent',safeToDefer:true});
+  work=await f.call('opening-lead','handoff.transition',{step:'accept',note:'Incoming manager explicitly accepts unresolved work'},work);
+  await f.call('gm','leadership.revoke',{note:'Accepted receiver is no longer assigned to this shift'},incoming);
+  const replacement=await f.call('gm','leadership.assign',{personId:'kitchen-lead',area:'BOH',start:'2026-10-21T08:00:00-04:00',end:'2026-10-21T16:00:00-04:00',note:'Explicit available replacement leadership, not inferred from the old closing assignment'});
+  const recovery={step:'recover',incomingId:'kitchen-lead',incomingLeadershipId:replacement.recordId,note:'GM retains unresolved responsibility until the available named replacement accepts'};
+  await f.call('front-lead','handoff.transition',recovery,work,404);
+  await f.call('stranger','handoff.transition',recovery,work,403);
+  await f.call('gm','handoff.transition',{...recovery,incomingId:'stranger'},work,400);
+  const original=work,requestId=crypto.randomUUID();work=await f.call('gm','handoff.transition',recovery,original,200,requestId);
+  let saved=(await f.view('gm')).records.find(r=>r.id===work.recordId);
+  assert.equal(saved.ownerId,'gm');assert.equal(saved.data.phase,'offered');assert.equal(saved.data.priority,'urgent');assert.equal(saved.data.outgoingId,'kitchen-lead');assert.equal(saved.data.history.at(-1).action,'recover');
+  const records=()=>JSON.stringify(Object.fromEntries(['records','command_receipts','audit_events'].map(table=>[table,f.store().sqlite.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()])));
+  f.reopen();const state=records();assert.deepEqual(await f.call('gm','handoff.transition',recovery,original,200,requestId),work);assert.equal(records(),state,'Reopened recovery retry must not duplicate work, notices or history');
+  await f.call('gm','handoff.transition',{...recovery,note:'Different request text must not reuse the saved retry'},original,409,requestId);
+  await f.call('gm','handoff.transition',recovery,original,409);
+  await f.call('opening-lead','handoff.transition',{step:'resolve',note:'Former accepted owner cannot close work after recovery'},work,403);
+  await f.call('gm','handoff.transition',{step:'resolve',note:'Recovery is not receiver acceptance'},work,400);
+  work=await f.call('kitchen-lead','handoff.transition',{step:'accept',note:'Available named replacement accepts the still-unresolved condition'},work);
+  await f.call('gm','handoff.transition',{step:'resolve',note:'Former acting owner cannot resolve after acceptance'},work,403);
+  f.reopen();work=await f.call('kitchen-lead','handoff.transition',{step:'resolve',note:'Current accepted owner records the fictional reported remedy'},work);
+  saved=(await f.view('gm')).records.find(r=>r.id===work.recordId);assert.equal(saved.data.phase,'resolved');assert.equal(saved.data.history.filter(h=>h.action==='accept').length,2);
+  receipts.push({location,case:'accepted receiver leadership revocation, GM recovery, durable idempotent retry and explicit replacement acceptance',status:'passed',physicalWorkClaimed:false});
+ });
+}
+test.after(()=>{fs.mkdirSync('evidence/hour-trial',{recursive:true});fs.writeFileSync('evidence/hour-trial/interposition-lifecycle.json',JSON.stringify({createdAt:new Date().toISOString(),sourceRevision,finalSourceRevision:trialSourceRevision(),providerCalls:0,hostedMutations:0,layer:'Actual authenticated workspace handlers and file-backed SQLite',cases:receipts,limits:['Fictional identities and assigned permissions; not hosted account verification.','No physical work, safety assessment, guest transaction, actual bank or POS change is claimed.','Urgent overnight deferral requires explicit fixture manager safety confirmation; this test does not certify the safety of a restaurant condition.']},null,2));});

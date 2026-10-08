@@ -1,0 +1,107 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {openPositionDatabase} from './all-position-week-fixture.mjs';
+import {handleWorkspace} from '../.sites-runtime/shared/service.mjs';
+import {handleAccess} from '../.sites-runtime/shared/access-service.mjs';
+import {handleEmployeeLogin} from '../.sites-runtime/shared/employee-login.mjs';
+import {handleCompanionChat} from '../.sites-runtime/shared/companion-chat.mjs';
+import {handleFoodWorkflows} from '../.sites-runtime/shared/food-workflow-service.mjs';
+import {localDate} from '../.sites-runtime/shared/local-time.mjs';
+
+test('Rudd restaurant scope survives manager replacement, departures, old phones and pending handoffs',async()=>{
+ const dir=path.resolve('evidence/hour-trial/rudds-boundary');fs.mkdirSync(dir,{recursive:true});
+ const file=path.join(dir,'continuity-'+Date.now()+'.sqlite');let store=openPositionDatabase(file);
+ const checks=[],gaps=[],config={JMAX_LOGIN_SECRET:'c'.repeat(64),OPENAI_API_KEY:'sk-fictional-local-only',JMAX_OPENAI_MODEL:'gpt-5.4-mini'};
+ const caps=['location.manage','schedule.manage','schedule.publish','schedule.change','tasks.manage','close.confirm','people.manage','operations.escalation'];
+ const cookies={};let calls=0;const captures=[];
+ const request=(route,who,body,loc='rudds',phone=false)=>new Request('https://boundary-rudds.example/api/'+route+(loc?'?locationId='+loc:''),{headers:{...(phone?{Cookie:cookies[who]}:{'oai-authenticated-user-id':who+'-identity','oai-authenticated-user-email':who+'@example.test'}),Origin:'https://boundary-rudds.example','Content-Type':'application/json'},...(body?{method:'POST',body:JSON.stringify(body)}:{})});
+ const response=async(r,status=200)=>{const data=await r.json();assert.equal(r.status,status,JSON.stringify(data));return data;};
+ const cmd=(who,action,input={},record,status=200)=>handleWorkspace(request('workspace',who,{locationId:'rudds',requestId:crypto.randomUUID(),action,input,...(record?{recordId:record.recordId??record.id,expectedRevision:record.revision}:{})}),store.db).then(r=>response(r,status));
+ const view=(who,loc='rudds',phone=false)=>handleWorkspace(request('workspace',who,undefined,loc,phone),store.db).then(response);
+ const find=id=>{const row=store.sqlite.prepare('SELECT * FROM records WHERE id=?').get(id);return row&&{...row,ownerId:row.owner_id,data:JSON.parse(row.data)};};
+ const recordState=()=>JSON.stringify(store.sqlite.prepare('SELECT * FROM records ORDER BY rowid').all());
+ const accounts=()=>handleAccess(request('access','admin'),store.db).then(response);
+ const access=async(who,action,input,status=200)=>{const a=(await accounts()).accounts.find(a=>a.id===who);return response(await handleAccess(request('access','admin',{locationId:'rudds',requestId:crypto.randomUUID(),action,recordId:who,expectedRevision:a.revision,input}),store.db),status);};
+ const provider=async(_url,init)=>{calls++;const input=JSON.parse(init.body).input,context=JSON.parse(input[1].content.split('\n').slice(1).join('\n'));captures.push(context);return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({answer:'Consult the current authorized record and assigned leader. This chat does not transfer or complete the work.',sourceIds:context.evidence.map(e=>e.source.id).slice(0,15)})}]}]});};
+ const chat=(who,body,phone=false,loc='rudds',status=200)=>handleCompanionChat(request('companion',who,body,loc,phone),store.db,config,provider,()=>Date.now(),'workforce').then(r=>response(r,status));
+ const signIn=async who=>{const a=(await accounts()).accounts.find(a=>a.id===who);const issuer=a.capabilities.includes('location.manage')?who:'admin';const issue=await handleEmployeeLogin(request('employee-login',issuer,{action:'issue',locationId:'rudds',memberId:who,expectedRevision:a.revision}),store.db,config).then(response);const signed=await handleEmployeeLogin(request('employee-login',who,{action:'verify',code:issue.code}),store.db,config);await response(signed);cookies[who]=signed.headers.get('Set-Cookie').split(';')[0];};
+ const mark=detail=>checks.push({status:'passed',detail});
+ const depart=who=>access(who,'account.archive',{confirmed:true,departureReason:'quit',endedDate:localDate(new Date().toISOString(),'America/New_York'),note:'Fictional employment departure, private personnel detail.'});
+ try{
+  for(const f of fs.readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())store.sqlite.exec(fs.readFileSync('drizzle/'+f,'utf8').replaceAll('--> statement-breakpoint',''));
+  for(const loc of ['rudds','berts','papa','comm']){store.sqlite.prepare('INSERT INTO locations(id,name,timezone) VALUES(?,?,?)').run(loc,'Fictional '+loc,'America/New_York');store.sqlite.prepare('INSERT INTO food_state(location_id) VALUES(?)').run(loc);}
+  for(const [who,position,permissions] of [['admin','General manager',caps],['old-gm','General manager',caps],['new-gm','General manager',caps],['outgoing','BOH Manager',['tasks.manage','schedule.change','close.confirm']],['incoming','BOH Manager',['tasks.manage','schedule.change','close.confirm']],['replacement','BOH Manager',['tasks.manage','schedule.change','close.confirm']],['cook','Pizza Make',[]]])store.sqlite.prepare('INSERT INTO memberships(id,email,auth_user_id,location_id,name,area,position,capabilities,qualifications) VALUES(?,?,?,?,?,?,?,?,?)').run(who,who+'@example.test',who+'-identity','rudds','Fictional '+who,'BOH',position,JSON.stringify(permissions),JSON.stringify([position]));
+  for(const loc of ['comm','berts','rudds'])store.sqlite.prepare('INSERT INTO memberships(id,email,auth_user_id,location_id,name,area,position,capabilities,qualifications) VALUES(?,?,?,?,?,?,?,?,?)').run('production-'+loc,'production@example.test','production-identity',loc,'Fictional production','BOH','General manager',JSON.stringify(caps),'[]');
+  for(const [who,permissions] of [['berts-admin',caps],['berts-cook',[]]])store.sqlite.prepare('INSERT INTO memberships(id,email,auth_user_id,location_id,name,area,position,capabilities,qualifications) VALUES(?,?,?,?,?,?,?,?,?)').run(who,who+'@example.test',who+'-identity','berts','Fictional '+who,'BOH',who==='berts-admin'?'General manager':'Pizza Make',JSON.stringify(permissions),'[]');
+  store.sqlite.prepare('INSERT INTO restaurant_access(auth_user_id,kind,home_location_id) VALUES(?,?,?)').run('production-identity','commissary','comm');
+  await signIn('old-gm');await signIn('incoming');await signIn('outgoing');
+  const now=Date.now(),iso=h=>new Date(now+h*3600000).toISOString();
+  let closing=await cmd('admin','leadership.assign',{personId:'outgoing',area:'BOH',start:iso(-1),end:iso(7),note:'Fictional closing department lead.'});
+  let opening=await cmd('admin','leadership.assign',{personId:'incoming',area:'BOH',start:iso(24),end:iso(32),note:'Fictional next-day opening lead.'});
+  const makeHandoff=title=>cmd('outgoing','handoff.create',{title,detail:'LOCAL_RUDDS_PRIVATE_TASK_BODY: saved unfinished stock issue remains assigned until accepted and resolved.',outgoingLeadershipId:closing.recordId,incomingId:'incoming',incomingLeadershipId:opening.recordId,safeToDefer:true,priority:'routine'});
+  let replaceable=await makeHandoff('Recover offered handoff after incoming employee leaves');
+  let accepted=await makeHandoff('Accepted responsibility must survive receiver suspension');
+  accepted=await cmd('incoming','handoff.transition',{step:'accept',note:'Incoming manager accepts the still-unresolved issue.'},accepted);
+  const privateTask=await cmd('outgoing','task.create',{ownerId:'cook',kind:'issue',title:'LOCAL_RUDDS_PRIVATE_STAFF_TASK',detail:'LOCAL_RUDDS_PRIVATE_TASK_BODY: recipe and shortage follow-through for Fictional cook.',due:iso(30)});
+  let oldChat=await chat('old-gm');oldChat=await chat('old-gm',{locationId:'rudds',action:'ask',conversationId:oldChat.conversationId,expectedRevision:oldChat.revision,requestId:crypto.randomUUID(),question:'What is the next action for this attached unfinished kitchen issue?',focus:{id:privateTask.recordId,revision:privateTask.revision}});
+  assert.ok(captures[0].evidence.some(e=>e.source.id===privateTask.recordId));assert.ok(oldChat.turns.length);
+  const formerConversation=oldChat.conversationId;
+  oldChat=await chat('old-gm',{locationId:'rudds',action:'start-new',conversationId:oldChat.conversationId,expectedRevision:oldChat.revision});
+  const historicalRequest=(who,archive)=>new Request('https://boundary-rudds.example/api/companion?locationId=rudds&archived='+archive,{headers:{'oai-authenticated-user-id':who+'-identity','oai-authenticated-user-email':who+'@example.test'}});
+  assert.equal((await response(await handleCompanionChat(historicalRequest('old-gm',formerConversation),store.db,config,provider,()=>Date.now(),'workforce'))).turns.length,1);
+  const oldProfile=(await accounts()).accounts.find(a=>a.id==='old-gm');
+  await access('old-gm','account.save',{identityConfirmed:true,profile:{name:oldProfile.name,email:oldProfile.email,area:oldProfile.area,position:oldProfile.position,qualifications:oldProfile.qualifications,capabilities:[]},note:'Manager authority revoked while restaurant employment remains active.'});
+  const beforeCalls=calls;assert.equal((await handleWorkspace(request('workspace','old-gm',undefined,'rudds',true),store.db)).status,401);
+  await chat('old-gm',undefined,true,'rudds',401);assert.equal(calls,beforeCalls);
+  const revised=await chat('old-gm');assert.equal(revised.accessChanged,true);assert.deepEqual(revised.turns,[]);assert.ok(!(await view('old-gm')).records.some(r=>r.id===privateTask.recordId));
+  const formerArchive=await response(await handleCompanionChat(historicalRequest('old-gm',formerConversation),store.db,config,provider,()=>Date.now(),'workforce'));assert.equal(formerArchive.accessChanged,true);assert.deepEqual(formerArchive.turns,[]);
+  await response(await handleCompanionChat(historicalRequest('new-gm',formerConversation),store.db,config,provider,()=>Date.now(),'workforce'),404);
+  const newChat=await chat('new-gm');await chat('new-gm',{locationId:'rudds',action:'ask',conversationId:oldChat.conversationId,expectedRevision:oldChat.revision,requestId:crypto.randomUUID(),question:'Recover the former manager private chat.'},false,'rudds',409);assert.notEqual(newChat.conversationId,oldChat.conversationId);
+  mark('Revoked GM authority invalidates the old phone; fresh restaurant sign-in hides former private work and old current/archived AI turns. Replacement GM cannot reuse another person’s conversation or archive identifier.');
+  opening=await cmd('admin','leadership.revoke',{note:'Incoming lead no longer covers this opening.'},opening);
+  const beforeRevoked=recordState();await cmd('incoming','handoff.transition',{step:'accept',note:'Revoked opening assignment must not permit acceptance.'},replaceable,400);assert.equal(recordState(),beforeRevoked);
+  await depart('incoming');assert.equal((await handleWorkspace(request('workspace','incoming',undefined,'rudds',true),store.db)).status,401);await chat('incoming',undefined,true,'rudds',401);
+  assert.equal(find(replaceable.recordId).data.phase,'offered');assert.equal(find(replaceable.recordId).ownerId,'outgoing');assert.equal(find(accepted.recordId).data.phase,'accepted');assert.equal(find(accepted.recordId).ownerId,'incoming');
+  mark('Revoked lead assignment blocks acceptance immediately; employment departure invalidates old phone/chat while offered and accepted responsibility records remain intact.');
+  const replacement=await cmd('new-gm','leadership.assign',{personId:'replacement',area:'BOH',start:iso(24),end:iso(32),note:'Current manager explicitly names qualified replacement opening lead.'});
+  replaceable=await cmd('outgoing','handoff.transition',{step:'offer',incomingId:'replacement',incomingLeadershipId:replacement.recordId,note:'Named replacement receives remaining overnight issue.'},replaceable);
+  assert.equal(find(replaceable.recordId).data.phase,'offered');replaceable=await cmd('replacement','handoff.transition',{step:'accept',note:'Replacement accepts unresolved responsibility.'},replaceable);assert.equal(find(replaceable.recordId).data.phase,'accepted');replaceable=await cmd('replacement','handoff.transition',{step:'resolve',note:'Fictional independent operational follow-through documented by current owner.'},replaceable);
+  assert.equal(find(replaceable.recordId).data.phase,'resolved');mark('Still-authorized outgoing leader can re-offer an unaccepted handoff to explicitly assigned current leader; replacement accepts before resolving.');
+  await access('outgoing','account.suspend',{note:'Immediate former closing-manager access suspension.'});
+  assert.equal((await handleWorkspace(request('workspace','outgoing',undefined,'rudds',true),store.db)).status,401);await chat('outgoing',undefined,true,'rudds',401);
+  const unresolved=find(accepted.recordId);const beforeBlocked=recordState();const attempts=[];
+  for(const who of ['new-gm','replacement'])for(const step of ['offer','accept','resolve','cancel']){const r=await handleWorkspace(request('workspace',who,{locationId:'rudds',requestId:crypto.randomUUID(),action:'handoff.transition',recordId:accepted.recordId,expectedRevision:unresolved.revision,input:{step,incomingId:'replacement',incomingLeadershipId:replacement.recordId,note:'Current authorized leader attempts recovery of departed owner responsibility.'}}),store.db);const data=await r.json();assert.equal(r.status,403,JSON.stringify(data));attempts.push({who,step,status:r.status,error:data.error});}
+  assert.equal(recordState(),beforeBlocked);assert.ok((await view('new-gm')).records.some(r=>r.id===accepted.recordId));assert.equal(find(accepted.recordId).data.phase,'accepted');
+  gaps.push({severity:'blocking-workflow',title:'Accepted overnight handoff cannot be reassigned after its owner leaves',recordId:accepted.recordId,currentPhase:'accepted',ownerId:'incoming',ownerActive:false,outgoingActive:false,visibleTo:'new-gm',attempts,source:'app/shared/followthrough.ts handoff.transition: accept/dispute require named incoming; offer requires original outgoing and offered/disputed; resolve/cancel require current owner. No handoff.reassign recovery action exists.',candidateAuthority:'Reuse existing current restaurant-scoped tasks.manage and named active leadership validation, preserving history and old owner; GM capability must not grant other-restaurant access. A new explicit reviewed recovery action is required, not silent resolution.'});
+  mark('Recovery defect reproduced: current GM can see accepted unresolved responsibility but all replacement transitions deny; saved issue is not lost or falsely resolved.');
+  const recover=await cmd('new-gm','handoff.transition',{step:'recover',incomingId:'replacement',incomingLeadershipId:replacement.recordId,note:'Former owner has left and former outgoing lead is suspended; current restaurant GM retains pending responsibility while explicitly offering to the current named replacement.'},accepted);
+  assert.equal(find(recover.recordId).data.phase,'offered');assert.equal(find(recover.recordId).ownerId,'new-gm');assert.equal(find(recover.recordId).data.incomingId,'replacement');assert.ok(find(recover.recordId).data.history.some(h=>h.action==='recover'));
+  const afterRecovery=recordState();
+  for(const who of ['incoming','outgoing'])await cmd(who,'handoff.transition',{step:'accept',note:'Former inactive identity cannot reclaim the recovered issue.'},recover,403);
+  await cmd('new-gm','handoff.transition',{step:'recover',incomingId:'replacement',incomingLeadershipId:replacement.recordId,note:'Old revision cannot recover the same issue a second time.'},accepted,409);assert.equal(recordState(),afterRecovery);
+  await cmd('new-gm','handoff.transition',{step:'accept',note:'Acting GM cannot accept on behalf of the named replacement.'},recover,403);
+  let recovered=await cmd('replacement','handoff.transition',{step:'accept',note:'Named active replacement explicitly accepts the existing unresolved responsibility.'},recover);assert.equal(find(recovered.recordId).ownerId,'replacement');assert.equal(find(recovered.recordId).data.phase,'accepted');
+  recovered=await cmd('replacement','handoff.transition',{step:'resolve',note:'Replacement documents actual fictional follow-through after acceptance; no silent completion during recovery.'},recovered);assert.equal(find(recovered.recordId).data.phase,'resolved');
+  const recoveredGap=gaps.pop();mark('Explicit recovery keeps current GM responsible until different named active replacement accepts; only then can replacement resolve, preserving former ownership and recovery history.');
+  await cmd('new-gm','message.send',{recipients:['cook'],title:'LOCAL_RUDDS_PRIVATE_NOTIFICATION',body:'LOCAL_RUDDS_PRIVATE_TASK_BODY: current manager directs named cook on outstanding work.'});
+  const bertTask=await response(await handleWorkspace(request('workspace','berts-admin',{locationId:'berts',requestId:crypto.randomUUID(),action:'task.create',input:{ownerId:'berts-cook',kind:'issue',title:'LOCAL_BERTS_PRIVATE_TASK',detail:'LOCAL_BERTS_PRIVATE_TASK_BODY: private Bert’s station work for Fictional berts-cook.',due:iso(30)}},'berts'),store.db));assert.ok(bertTask.recordId);
+  await response(await handleWorkspace(request('workspace','berts-admin',{locationId:'berts',requestId:crypto.randomUUID(),action:'message.send',input:{recipients:['berts-cook'],title:'LOCAL_BERTS_PRIVATE_NOTIFICATION',body:'LOCAL_BERTS_PRIVATE_TASK_BODY: private current-manager instruction.'}},'berts'),store.db));
+  const comm=await view('production','comm');const index=await view('production','');
+  const privateMarkers=['LOCAL_RUDDS_PRIVATE','LOCAL_BERTS_PRIVATE','Fictional cook','Fictional berts-cook','Accepted responsibility'];
+  for(const marker of privateMarkers)assert.ok(!JSON.stringify({comm,index}).includes(marker));
+  assert.deepEqual(index.memberships.map(m=>m.locationId),['comm']);
+  for(const loc of ['rudds','berts']){assert.equal((await handleWorkspace(request('workspace','production',undefined,loc),store.db)).status,403);const food=await handleFoodWorkflows(request('food-workflows','production',undefined,loc),store.db).then(response);for(const marker of privateMarkers)assert.ok(!JSON.stringify(food).includes(marker));}
+  assert.equal((await handleFoodWorkflows(request('food-workflows','production',undefined,'papa'),store.db)).status,403);
+  const productionCode=await response(await handleEmployeeLogin(request('employee-login','production',{action:'issue',locationId:'comm',memberId:'production-comm',expectedRevision:1},'comm'),store.db,config));
+  const productionSigned=await handleEmployeeLogin(request('employee-login','production',{action:'verify',code:productionCode.code},'comm'),store.db,config);await response(productionSigned);cookies.production=productionSigned.headers.get('Set-Cookie').split(';')[0];
+  const commPhone=await view('production','comm',true);for(const marker of privateMarkers)assert.ok(!JSON.stringify(commPhone).includes(marker));
+  for(const loc of ['rudds','berts']){assert.equal((await handleWorkspace(request('workspace','production',undefined,loc,true),store.db)).status,403);const food=await response(await handleFoodWorkflows(request('food-workflows','production',undefined,loc,true),store.db));for(const marker of privateMarkers)assert.ok(!JSON.stringify(food).includes(marker));}
+  mark('Commissary can read approved Bert’s/Rudd’s Food destinations without receiving their staff, task, handoff or notification bodies; Papa’s and general destination workspaces remain denied.');
+  for(const who of ['new-gm','replacement'])for(const loc of ['berts','papa']){assert.equal((await handleWorkspace(request('workspace',who,undefined,loc),store.db)).status,403);await chat(who,undefined,false,loc,403);}
+  const snapshot=recordState();store.close();store=openPositionDatabase(file);assert.equal(recordState(),snapshot);assert.equal(find(accepted.recordId).data.phase,'resolved');assert.equal(find(replaceable.recordId).data.phase,'resolved');assert.ok(find(accepted.recordId).data.history.some(h=>h.action==='recover'));
+  mark('Disk reopen preserves explicit recovery, historical departed identities, and final resolution; replacement authority remains restaurant-scoped.');
+  fs.writeFileSync(path.join(dir,'results.json'),JSON.stringify({status:'passed-after-explicit-recovery-fix',checks,gaps,recoveredGap,mockedProviderCalls:calls,externalCalls:0,database:file,operationalReseeds:0,beforeFixReceipt:'before-recovery-fix.json',limits:['Local fictional actual-handler trial; no physical repair, guest message, live Toast or Jeff recipe connection is established.','AI provider mocked: current authorized context and stored-history visibility are tested, answer helpfulness is not assessed.']},null,2));
+ }catch(error){fs.writeFileSync(path.join(dir,'results.json'),JSON.stringify({status:'trial-failed',checks,gaps,error:String(error.stack??error),database:file,externalCalls:0},null,2));throw error;}finally{store.close();}
+});

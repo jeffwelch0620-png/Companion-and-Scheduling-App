@@ -1,0 +1,1 @@
+ALTER TABLE `companion_turns` ADD `memory_refs` text DEFAULT '[]' NOT NULL;

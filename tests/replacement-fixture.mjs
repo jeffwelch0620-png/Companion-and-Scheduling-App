@@ -1,0 +1,6 @@
+// Fictional local preview only; real compiled Food route, no operating data.
+export async function seedReplacementFixture(dispatch){
+ let revision=1;const call=async(action,input)=>{const response=await dispatch('https://test.example/api/food',{method:'POST',headers:{'oai-authenticated-user-id':'admin-fixture','oai-authenticated-user-email':'admin@example.test',Origin:'https://test.example','Content-Type':'application/json'},body:JSON.stringify({requestId:crypto.randomUUID(),locationId:'berts',recordId:'demo-food-WI-001',expectedRevision:revision,action,input})});const result=await response.json();if(!response.ok)throw Error('Fictional replacement seed failed: '+JSON.stringify(result));revision=result.revision;return revision;};
+ const invoiceRevision=await call('fooditem.invoice',{skuId:'vs_demo1',invoiceNumber:'DEMO-REPLACEMENT-SOURCE',lineReference:'1',invoiceDate:'2026-09-28',sourceNote:'Fictional preview invoice, not restaurant operations',quantity:2,unitBasis:'supplier-pack',invoiceUnit:'case',lineTotal:'200.00',confirmed:true});
+ await call('fooditem.receive',{invoiceRevision,deliveryReference:'DEMO-REJECTED',receivedDate:'2026-09-28',accepted:1,rejected:1,rejectionReason:'Fictional damaged case',confirmed:true});
+}

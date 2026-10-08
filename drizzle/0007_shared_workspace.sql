@@ -1,0 +1,1 @@
+ALTER TABLE `companion_conversations` ADD `explanation_style` text DEFAULT 'balanced' NOT NULL;

@@ -1,0 +1,167 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1788736742719,
+      "tag": "0000_shared_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1788738555033,
+      "tag": "0001_shared_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788745057192,
+      "tag": "0002_shared_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1788746905808,
+      "tag": "0003_shared_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1788749698578,
+      "tag": "0004_shared_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1788760939241,
+      "tag": "0005_shared_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788815732372,
+      "tag": "0006_shared_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788830513423,
+      "tag": "0007_shared_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788896374629,
+      "tag": "0008_shared_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1788918264723,
+      "tag": "0009_shared_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1789073983823,
+      "tag": "0010_shared_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1789075860181,
+      "tag": "0011_shared_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1789078733319,
+      "tag": "0012_shared_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1789147045169,
+      "tag": "0013_shared_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1789423214163,
+      "tag": "0014_shared_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1789697060037,
+      "tag": "0015_shared_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1789699439914,
+      "tag": "0016_shared_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1790639835417,
+      "tag": "0017_shared_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1790673273818,
+      "tag": "0018_food_transfers",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1790725028009,
+      "tag": "0019_shared_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1790769600000,
+      "tag": "0020_food_workflows",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1791331200000,
+      "tag": "0021_restaurant_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1791434691816,
+      "tag": "0022_shared_workspace",
+      "breakpoints": true
+    }
+  ]
+}

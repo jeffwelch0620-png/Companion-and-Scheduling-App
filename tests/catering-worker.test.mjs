@@ -1,0 +1,10 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {fixture,ok} from './maintenance-meter-fixture.mjs';import {facts,review} from './catering-fixture.mjs';
+process.env.JMAX_METER_COMPILED='1';
+test('built catering worker isolates all three restaurants and enforces exact publication and staff read notices',async t=>{
+ const f=await fixture(t);assert.equal(f.compiled,true);
+ for(const [loc,actor]of [['a','owner'],['b','foreign'],['c','third']]){let r=ok(await f.call(actor,'catering.create',{...facts,title:'Fixture '+loc,managerId:actor},undefined,{locationId:loc}));r=ok(await f.call(actor,'catering.submit',review,r,{locationId:loc}));r=ok(await f.call(actor,'catering.publish',review,r,{locationId:loc}));const rows=(await f.view(actor,loc)).records.filter(x=>x.kind==='catering');assert.equal(rows.length,1);assert.equal(rows[0].locationId,loc);}
+ const r=(await f.view('worker')).records.find(x=>x.kind==='catering');assert.equal(r.data.internal,undefined);ok(await f.call('worker','catering.acknowledge',{read:true,noticeKey:'1:1:published'},r));assert.equal((await f.call('worker','catering.cancel',{...review,summary:'Denied'},await f.saved(r))).status,403);assert.equal((await f.request('worker','/api/workspace?locationId=c')).status,403);
+});
+test('built worker hides pending event changes and denies stale review after current owner capability is revoked',async t=>{
+ const f=await fixture(t);let r=ok(await f.call('manager','catering.create',facts));r=ok(await f.call('manager','catering.submit',review,r));r=ok(await f.call('owner','catering.publish',review,r));r=ok(await f.call('manager','catering.revise',{...facts,menuNotes:'PRIVATE-UNREVIEWED',note:'PRIVATE-CHANGE'},r));const d=(await f.view('worker')).records.find(x=>x.id===r.recordId).data;assert.equal(d.status,'draft');assert.equal(d.menuNotes,facts.menuNotes);assert.doesNotMatch(JSON.stringify(d),/PRIVATE-/);r=ok(await f.call('manager','catering.submit',review,r));await f.db.prepare("UPDATE memberships SET capabilities='[]',revision=revision+1 WHERE id='owner'").run();assert.equal((await f.call('owner','catering.publish',review,r)).status,403);
+});

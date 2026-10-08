@@ -1,0 +1,14 @@
+'use client';
+import {has,type Workspace} from '../shared/types';
+import {hireCoordinator,hireScheduler} from '../shared/hire-handoff';
+import {operationsManager} from '../shared/operations';
+export function RestaurantTools({w,onNavigate,onLeadership,onBack}:{w:Workspace;onNavigate:(tab:string)=>void;onLeadership:()=>void;onBack:()=>void}) {
+ const owner=has(w.me,'location.manage'),training=has(w.me,'tasks.manage')||has(w.me,'standards.approve');
+ const item=(title:string,detail:string,action:()=>void)=><button className="compact-row" onClick={action}><span><strong>{title}</strong><small>{detail}</small></span><span aria-hidden="true">›</span></button>;
+ return <section className="restaurant-tools"><button className="compact-back" onClick={onBack}>‹ Back</button><h1>Manage restaurant</h1><p className="shared-muted">Set up the things your team uses every day.</p>
+ <h2>Run the day</h2><div className="compact-list">{operationsManager(w.me)&&item('Manager Log / Red Book','Unfinished issues, handoffs and resolution history',()=>onNavigate('Manager Log'))}{(operationsManager(w.me)||w.records.some(r=>r.kind==='meeting'))&&item('Manager one-on-ones','Private conversations and carried-forward follow-ups',()=>onNavigate('Manager one-on-ones'))}{owner&&item('Build progress','Source decisions and remaining connections',()=>onNavigate('Build progress'))}</div>
+ <h2>People & access</h2><div className="compact-list">{item('People and stations','Jobs, station eligibility and development',()=>onNavigate('Team'))}{(hireCoordinator(w.me)||hireScheduler(w.me))&&item('First-shift handoff','Name the scheduler and track the first published shift',()=>onNavigate('First-shift handoff'))}{hireCoordinator(w.me)&&item('Onboarding review','Checklist, sign-in evidence, first shift and station assessments',()=>onNavigate('Onboarding review'))}{hireCoordinator(w.me)&&item('Onboarding checklist','Track entered requirements and checked completion evidence',()=>onNavigate('Onboarding checklist'))}{owner&&item('Employee access','Set up sign-in and review access',()=>onNavigate('Employee access'))}</div>
+ {(training||owner||has(w.me,'schedule.publish'))&&<><h2>Training & responsibilities</h2><div className="compact-list">{training&&item('Restaurant guides','Review sources and prepare approved instructions',()=>onNavigate('Standards'))}{has(w.me,'schedule.publish')&&item('Shift leadership','Choose the leader responsible for each shift',onLeadership)}{owner&&item('Review follow-up','Manage development review reminders',()=>onNavigate('Review follow-up'))}{item('Existing shift duties','Follow through on previously saved work',()=>onNavigate('Legacy duties'))}</div></>}
+ {owner&&<><h2>Connections</h2><div className="compact-list">{item('Toast','Employee connection and roster setup',()=>onNavigate('Toast setup'))}</div></>}
+ </section>;
+}

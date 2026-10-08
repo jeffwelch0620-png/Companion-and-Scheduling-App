@@ -1,0 +1,33 @@
+import fs from 'node:fs';
+import path from 'node:path';
+const dir=path.resolve('evidence/closing-simulation');
+const employee=JSON.parse(fs.readFileSync(path.join(dir,'employee.json'),'utf8'));
+const manager=JSON.parse(fs.readFileSync(path.join(dir,'manager.json'),'utf8'));
+const readRun=file=>{
+ const log=fs.readFileSync(path.join(dir,file),'utf8');
+ const n=key=>Number(log.match(new RegExp('(?:#|ℹ) '+key+' (\\d+)'))?.[1]);
+ const run={tests:n('tests'),pass:n('pass'),fail:n('fail'),file};
+ if(!run.tests||run.tests!==run.pass||run.fail)throw Error('Run not green: '+file);
+ return run;
+};
+const runs=['focused-test.log','regression-test.log','render-test.log'].map(readRun);
+const repaired=[
+ ['Manager closing entry','Daily brief opens Shift duties & checkout; approving a close retains the shift until separate checkout is confirmed.'],
+ ['Required closing work','Explicit shift links prevent release while designated side work is open, ready for review, returned for correction or awaiting handoff completion. Unrelated work stays separate.'],
+ ['Incoming handoff','Acceptance assigns open work to the recipient; completion still needs recipient readiness and independent verification. The original shift remains blocked.'],
+ ['Station closing guides','Cook/Fry, Cook/Pizza Make and Host/Back Window use the approved guide for the exact assigned station.'],
+ ['Employee checkout','Ended, unreleased shifts retain a waiting checkout state, including shifts with no assigned close. The home stops labeling them as the next assignment.'],
+ ['Companion closing help','Authorized closing work, current approved instructions, corrections, named checkers and checkout state are connected to general and attached-shift help.'],
+ ['Reviewed GM closing scope','An optional reviewed setup proposes final confirmation across FOH/BOH. Existing memberships are unchanged; independent named checkers and leadership remain required.']
+];
+const report={schema:'jmax-closing-simulation-review.v1',date:'2026-10-07',status:'Closing wiring implemented and locally verified',execution:{agents:6,employeeRoleDays:employee.totals.roleDays,managerDays:manager.days.length,runs,employeeTotals:employee.totals,managerTotals:manager.summary},repaired,receipts:['employee.json','manager.json'],remaining:['Live restaurant rollout and external service verification remain separate.','Server bank settlement remains manual/external; a checkout note is not reconciliation proof.','No simulation establishes actual cleaning, physical checks or employee attendance.','Food usage recommendations, whole-cup rounding, shelf-life display and shortage-resolution follow-through remain separate findings from the original six-role week audit.']};
+fs.writeFileSync(path.join(dir,'summary.json'),JSON.stringify(report,null,2)+'\n');
+const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const dayDetails=(title,data)=>`<h2>${esc(title)}</h2>${data.days.map(d=>`<details><summary>Day ${d.day}: ${esc(d.scenario)}</summary>${d.actions.map(a=>`<article><strong>${esc(a.role?a.role+' · ':'')}${esc(a.action)}</strong><p>${esc(typeof a.expected==='string'?a.expected:JSON.stringify(a.expected))}</p><pre>${esc(JSON.stringify(a.actual,null,2))}</pre></article>`).join('')}</details>`).join('')}`;
+fs.writeFileSync(path.join(dir,'review.html'),`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>JMAX closing simulation review</title><style>body{margin:0;background:#f3f7fc;color:#102542;font:16px/1.55 system-ui}main{max-width:1080px;margin:auto;padding:28px}header{background:linear-gradient(115deg,#188fef,#124eaf,#081d42);color:white;border-radius:22px;padding:30px}h1{margin:0 0 8px}h2{margin-top:32px}table{border-collapse:collapse;width:100%;background:white;border-radius:12px;overflow:hidden}td,th{text-align:left;padding:15px;border-bottom:1px solid #dce5f0;vertical-align:top}td:first-child{width:25%;font-weight:650}details{background:white;border:1px solid #dce5f0;border-radius:12px;margin:12px 0;padding:16px}summary{cursor:pointer;font-weight:650}article{padding:14px;border-top:1px solid #dce5f0}pre{white-space:pre-wrap;background:#eef4fc;padding:14px;border-radius:8px;font:13px/1.5 monospace}.proof{background:#fff4df;padding:18px;border-radius:12px}a{color:#064dae}</style><main><header><h1>Closing now connects to checkout</h1><p>Seven-day closing exercise · ${employee.totals.roleDays} employee role-days plus ${manager.days.length} manager days · six agents</p><p>Local fictional state; actual application handlers. No live restaurant records changed.</p></header><h2>What was repaired</h2><table><tbody>${repaired.map(([t,d])=>`<tr><td>${esc(t)}</td><td>${esc(d)}</td></tr>`).join('')}</tbody></table><h2>Verification</h2><table><thead><tr><th>Run</th><th>Passed</th><th>Failed</th></tr></thead><tbody>${runs.map(r=>`<tr><td><a href="${r.file}">${r.file}</a></td><td>${r.pass}</td><td>${r.fail}</td></tr>`).join('')}</tbody></table><p>Tests include expected rejections, rollback, exact retries and stale submissions. A green test confirms the expected behavior; it does not prove physical restaurant work.</p><section class="proof"><strong>Remaining boundaries</strong><ul>${report.remaining.map(s=>`<li>${esc(s)}</li>`).join('')}</ul></section>${dayDetails('Employee closing week',employee)}${dayDetails('Manager closing week',manager)}<p><a href="employee.json">Employee receipt</a> · <a href="manager.json">Manager receipt</a> · <a href="summary.json">Summary data</a> · <a href="../week-simulation/review.html">Original full-workweek audit</a></p></main></html>`);
+const browser=JSON.parse(fs.readFileSync(path.join(dir,'browser-receipt.json'),'utf8'));
+report.browser=browser;
+fs.writeFileSync(path.join(dir,'summary.json'),JSON.stringify(report,null,2)+'\n');
+const htmlPath=path.join(dir,'review.html');
+fs.writeFileSync(htmlPath,fs.readFileSync(htmlPath,'utf8').replace('</main>',`<h2>Browser checkout verification</h2><p>${browser.verified.map(esc).join(' · ')}</p><p><a href="browser-receipt.json">Browser receipt</a> · <a href="employee-correction.jpg">Employee correction</a> · <a href="manager-checkout.jpg">Manager checkout controls</a> · <a href="checkout-confirmed.jpg">Confirmed checkout screenshot</a></p><img src="checkout-confirmed.jpg" alt="Fictional manager shift shows operational checkout confirmed" style="width:100%;border-radius:12px"></main>`));
+console.log(JSON.stringify({employeeRoleDays:report.execution.employeeRoleDays,managerDays:report.execution.managerDays,runs}));

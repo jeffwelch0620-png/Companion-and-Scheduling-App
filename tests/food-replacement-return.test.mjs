@@ -1,0 +1,61 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {excessFixture,rawItem,importInput,invoiceInput,receivingInput} from './food-excess-fixture.mjs';
+import {parseReplacementReturn} from '../.sites-runtime/shared/food-replacement-return.mjs';
+import {handleFood} from '../.sites-runtime/shared/food-service.mjs';
+import {handleWorkspace} from '../.sites-runtime/shared/service.mjs';
+const ok=r=>{assert.equal(r.status,200,JSON.stringify(r.data));return r.data};
+export const pickup=(extra={})=>({replacementRevision:4,returnReference:'PICKUP-1',returnDate:'2026-09-29',quantity:2,invoiceUnit:'lb',reason:'Fictional later defect',evidence:'Fictional completed supplier pickup ticket',confirmed:true,...extra});
+const arrival=(extra={})=>({receivingRevision:3,deliveryReference:'REPLACEMENT-1',receivedDate:'2026-09-28',quantity:10,invoiceUnit:'lb',evidence:'Fictional checked replacement',confirmed:true,...extra});
+async function setup(t,quantity=10){const f=await excessFixture(t),base=ok(await f.call('owner','fooditem.import',importInput([rawItem]))),invoice=ok(await f.call('buyer','fooditem.invoice',invoiceInput,base)),receipt=ok(await f.call('manager','fooditem.receive',{...receivingInput(2),accepted:80-quantity,rejected:quantity},invoice)),replacement=ok(await f.call('manager','fooditem.replacement',arrival({quantity}),receipt));return {...f,base,invoice,receipt,replacement}}
+const history=async f=>ok(await f.get('owner',{view:'history',recordId:f.base.recordId})).entries;
+test('replacement pickup validation requires actual local dates, exact source units, bounded positive quantities and immutable evidence',()=>{
+ const source={receivedDate:'2026-09-28',quantity:10,receiving:{invoice:{quantity:80,supplierPackQuantity:2,invoiceUnit:'lb',sku:{packCount:8}}}},empty={entries:0,quantity:0},at='2026-09-30T01:00:00Z';
+ const saved=parseReplacementReturn({...pickup(),by:'forged',replacement:{},supplierPacks:999},source,empty,at,'manager','America/New_York');assert.equal(saved.by,'manager');assert.equal(saved.supplierPacks,.05);source.receiving.invoice.sku.packCount=9;assert.equal(saved.replacement.receiving.invoice.sku.packCount,8);
+ for(const change of [{replacementRevision:0},{quantity:0},{quantity:-1},{quantity:''},{quantity:true},{quantity:null},{quantity:Infinity},{quantity:1000001},{quantity:11},{invoiceUnit:'case'},{reason:''},{evidence:''},{returnReference:''},{confirmed:false},{returnDate:'2026-09-27'},{returnDate:'2026-09-30'},{returnDate:'2026-02-30'}])assert.throws(()=>parseReplacementReturn(pickup(change),source,empty,at,'manager','America/New_York'));
+ assert.throws(()=>parseReplacementReturn(pickup({quantity:1e-16}),{...source,quantity:1e-18},empty,at,'manager','America/New_York'));
+ assert.equal(parseReplacementReturn(pickup({quantity:.1}),{...source,quantity:.3},{entries:1,quantity:.2},at,'manager','America/New_York').quantity,.1);
+});
+test('later replacement pickups preserve original arrivals, packs, invoice, count, credits and daily payload',async t=>{
+ const f=await setup(t),daily=async()=>await(await handleWorkspace(new Request('https://test.example/api/workspace?locationId=a',{headers:f.headers('owner')}),f.db)).text(),beforeDaily=await daily();
+ const changed=ok(await f.call('buyer','fooditem.configure',{item:{...rawItem,vendorSkus:rawItem.vendorSkus.map(s=>({...s,packCount:4}))},reason:'Current pack changed'},f.replacement)),before=ok(await f.view('owner')).records[0].data;
+ const saved=ok(await f.call('manager','fooditem.replacement-return',{...pickup(),replacement:{},by:'owner'},changed));assert.deepEqual(ok(await f.view('owner')).records[0].data,before);assert.equal(await daily(),beforeDaily);
+ const entries=await history(f),event=entries.at(-1).event.replacementReturn;assert.equal(event.by,'manager');assert.equal(event.replacement.receiving.invoice.sku.packCount,8);assert.deepEqual(entries.find(e=>e.revision===4).replacementReturned,{entries:1,quantity:2});assert.deepEqual(entries.find(e=>e.revision===3).receivingReplacements,{entries:1,quantity:10});assert.deepEqual(entries.find(e=>e.revision===3).receivingReturns,{entries:0,accepted:0,rejected:0});assert.deepEqual(entries.find(e=>e.revision===2).invoiceCredits,{entries:0,quantity:0,amountCents:0});
+ const q=ok(await f.get('owner',{view:'receiving',filter:'replacements'}));assert.equal(q.entries[0].replacementReturned,2);assert.equal(q.entries[0].replacementReturnEntries,1);assert.equal(q.entries[0].replacementQuantity,10);assert.equal(q.entries[0].replacementRemaining,0);assert.equal(q.entries[0].rejected,10);assert.equal((await f.call('manager','fooditem.replacement',arrival({deliveryReference:'No automatic second replacement',quantity:1}),saved)).status,409);
+ assert.equal((await f.call('owner','fooditem.return-credit',{returnRevision:saved.revision,creditRevision:2,quantity:1,note:'Wrong type',confirmed:true},saved)).status,404);
+});
+test('pickup duplicates and cumulative limits are scoped to one arrival, with retained corrections and protected source chain',async t=>{
+ const f=await setup(t),first=ok(await f.call('buyer','fooditem.replacement-return',pickup({returnReference:' Ticket  One '}),f.replacement));
+ assert.equal((await f.call('manager','fooditem.replacement-return',pickup({returnReference:'ticket one',quantity:1}),first)).status,409);assert.equal((await f.call('manager','fooditem.replacement-return',pickup({quantity:9}),first)).status,409);
+ const all=ok(await f.call('manager','fooditem.replacement-return',pickup({quantity:8}),first));assert.equal((await f.call('owner','fooditem.replacement-return',pickup({returnReference:'Over',quantity:.001}),all)).status,409);
+ for(const [action,key,rev] of [['fooditem.replacement-void','replacementRevision',4],['fooditem.receive-void','receivingRevision',3],['fooditem.invoice-void','invoiceRevision',2]])assert.equal((await f.call('owner',action,{[key]:rev,reason:'Wrong source'},all)).status,409);
+ assert.equal((await f.call('manager','fooditem.replacement-return-void',{returnRevision:first.revision,reason:'Not mine'},all)).status,403);
+ let current=ok(await f.call('owner','fooditem.replacement-return-void',{returnRevision:first.revision,reason:'Wrong ticket'},all));assert.equal((await f.call('owner','fooditem.replacement-return-void',{returnRevision:first.revision,reason:'Twice'},current)).status,409);
+ current=ok(await f.call('manager','fooditem.replacement-return-void',{returnRevision:all.revision,reason:'Wrong amount'},current));const entries=await history(f);assert.equal(entries.find(e=>e.revision===first.revision).event.replacementReturn.quantity,2);assert.equal(entries.find(e=>e.revision===first.revision).replacementReturnVoided.reason,'Wrong ticket');assert.deepEqual(entries.find(e=>e.revision===4).replacementReturned,{entries:0,quantity:0});
+ current=ok(await f.call('manager','fooditem.replacement-void',{replacementRevision:4,reason:'Incorrect arrival'},current));assert.equal((await f.call('owner','fooditem.replacement-return',pickup(),current)).status,409);current=ok(await f.call('owner','fooditem.receive-void',{receivingRevision:3,reason:'Incorrect delivery'},current));ok(await f.call('owner','fooditem.invoice-void',{invoiceRevision:2,reason:'Incorrect invoice'},current));
+});
+test('replacement pickups enforce role, restaurant, item, source-event, dataset and revoked access boundaries',async t=>{
+ const f=await setup(t);for(const actor of ['foreign','worker','foh'])assert.equal((await f.call(actor,'fooditem.replacement-return',pickup(),f.replacement)).status,403);
+ for(const rev of [1,2,3,999])assert.equal((await f.call('manager','fooditem.replacement-return',pickup({replacementRevision:rev}),f.replacement)).status,404);
+ const other=ok(await f.call('owner','fooditem.import',importInput([{...rawItem,controlNumber:'OTHER'}])));assert.equal((await f.call('manager','fooditem.replacement-return',pickup(),other)).status,404);
+ assert.equal((await f.get('owner',{view:'history',recordId:f.base.recordId,dataset:'operating'})).status,404);assert.equal(ok(await f.get('owner',{view:'receiving',filter:'replacements',dataset:'operating'})).total,0);
+ await f.db.prepare("UPDATE memberships SET active=0,revision=revision+1 WHERE id='manager'").run();assert.equal((await f.call('manager','fooditem.replacement-return',pickup(),f.replacement)).status,403);
+});
+test('whole-history pickup totals and off-page corrections stay accurate while arrival allowance remains unchanged',async t=>{
+ const f=await setup(t,30);let current=f.replacement;for(let n=0;n<24;n++)current=ok(await f.call('manager','fooditem.replacement-return',pickup({returnReference:'P-'+n,quantity:1}),current));
+ let entries=await history(f);assert.equal(entries.length,20);assert.deepEqual(entries.find(e=>e.revision===4).replacementReturned,{entries:24,quantity:24});current=ok(await f.call('owner','fooditem.replacement-return-void',{returnRevision:5,reason:'Off-page correction'},current));entries=await history(f);assert.deepEqual(entries.find(e=>e.revision===4).replacementReturned,{entries:23,quantity:23});assert.equal(entries.find(e=>e.revision===5).replacementReturnVoided.revision,current.revision);
+ const q=ok(await f.get('owner',{view:'receiving',filter:'replacements'}));assert.equal(q.entries[0].replacementReturned,23);assert.equal(q.entries[0].replacementQuantity,30);assert.equal(q.entries[0].replacementRemaining,0);assert.equal((await f.call('manager','fooditem.replacement-return',pickup({returnReference:'Overflow',quantity:8}),current)).status,409);
+});
+test('pickup and correction are transactional, retries are exact and concurrent pickup/source changes cannot overrun',async t=>{
+ const f=await setup(t);let current=f.replacement;
+ for(const [action,input] of [['fooditem.replacement-return',pickup()],['fooditem.replacement-return-void',{returnRevision:5,reason:'Wrong pickup'}]]){
+  const requestId=crypto.randomUUID(),before=ok(await f.view('owner')).records[0],revision=ok(await f.get('owner')).revision;
+  await f.db.prepare("CREATE TRIGGER reject_pickup BEFORE INSERT ON food_history BEGIN SELECT RAISE(ABORT,'fixture failure'); END").run();assert.equal((await f.call('manager',action,input,current,{requestId})).status,503);assert.deepEqual(ok(await f.view('owner')).records[0],before);assert.equal(ok(await f.get('owner')).revision,revision);assert.equal((await f.db.prepare('SELECT count(*) n FROM food_receipts WHERE request_id=?').bind(requestId).first()).n,0);
+  await f.db.prepare('DROP TRIGGER reject_pickup').run();const saved=ok(await f.call('manager',action,input,current,{requestId}));assert.deepEqual(ok(await f.call('manager',action,input,current,{requestId})),saved);assert.equal((await f.call('manager',action,{...input,evidence:'Changed'},current,{requestId})).status,409);current=saved;
+ }
+ const race=await Promise.all(['manager','buyer'].map((actor,n)=>f.call(actor,'fooditem.replacement-return',pickup({returnReference:'RACE-'+n,quantity:7}),current)));assert.deepEqual(race.map(r=>r.status).sort(),[200,409]);
+ const g=await setup(t),sourceRace=await Promise.all([g.call('manager','fooditem.replacement-return',pickup(),g.replacement),g.call('owner','fooditem.replacement-void',{replacementRevision:4,reason:'Incorrect source'},g.replacement)]);assert.deepEqual(sourceRace.map(r=>r.status).sort(),[200,409]);
+});
+test('current authorization is checked again at pickup commit',async t=>{
+ const f=await setup(t);let revoked=false;const wrapper={withSession:()=>wrapper,prepare:sql=>f.db.prepare(sql),batch:async statements=>{if(!revoked&&statements.length>3){revoked=true;await f.db.prepare("UPDATE memberships SET active=0,revision=revision+1 WHERE id='manager'").run()}return f.db.batch(statements)}};
+ const response=await handleFood(new Request('https://test.example/api/food',{method:'POST',headers:{...f.headers('manager'),Origin:'https://test.example','Content-Type':'application/json'},body:JSON.stringify({requestId:crypto.randomUUID(),locationId:'a',recordId:f.base.recordId,expectedRevision:f.replacement.revision,action:'fooditem.replacement-return',input:pickup()})}),wrapper);assert.equal(revoked,true);assert.notEqual(response.status,200);assert.equal((await history(f)).filter(e=>e.event.replacementReturn).length,0);
+});

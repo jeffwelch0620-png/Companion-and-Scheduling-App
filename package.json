@@ -1,0 +1,54 @@
+{
+  "name": "jmax-operations-companion",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "install:ci": "bash scripts/install-ci.sh",
+    "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vite",
+    "build": "bash scripts/build-verified.sh",
+    "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/toast-worker.test.mjs tests/employee-login-worker.test.mjs",
+    "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
+    "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate",
+    "check:types": "tsc --noEmit --incremental false",
+    "test:workflows": "node scripts/prepare-tests.mjs && node --test tests/workflows.test.mjs",
+    "dev:local": "vite --host 127.0.0.1",
+    "build:local": "vinext build",
+    "test:shared": "node scripts/prepare-shared-tests.mjs && node --test tests/administrator-access.test.mjs tests/toast-auth-cache.test.mjs tests/employee-login.test.mjs tests/shared-workspace.test.mjs tests/schedule-import.test.mjs tests/access-workspace.test.mjs tests/review-reminders.test.mjs tests/owner-review.test.mjs tests/shift-brief.test.mjs tests/coverage.test.mjs tests/mock-week.test.mjs tests/toast-schedule.test.mjs tests/schedule-review.test.mjs tests/week-copy.test.mjs tests/companion-chat.test.mjs tests/companion-retrieval.test.mjs tests/operations.test.mjs tests/operations-home.test.mjs",
+    "db:generate:local": "node scripts/generate-schema.mjs",
+    "test:operations": "node scripts/prepare-shared-tests.mjs && node --test tests/operations.test.mjs tests/operations-home.test.mjs tests/food.test.mjs tests/incidents.test.mjs",
+    "test:food": "node scripts/prepare-shared-tests.mjs && node --test tests/food.test.mjs",
+    "test:context": "node scripts/prepare-shared-tests.mjs && node --test tests/workspace-context.test.mjs",
+    "test:incidents": "node scripts/prepare-shared-tests.mjs && node --test tests/incidents.test.mjs"
+  },
+  "dependencies": {
+    "drizzle-orm": "0.45.2",
+    "next": "16.2.6",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.37.1",
+    "@cloudflare/workers-types": "^4.20260702.1",
+    "@tailwindcss/postcss": "4.2.1",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "@vitejs/plugin-rsc": "0.5.26",
+    "drizzle-kit": "0.31.10",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.2.6",
+    "react-server-dom-webpack": "19.2.6",
+    "tailwindcss": "4.2.1",
+    "typescript": "5.9.3",
+    "vinext": "0.0.50",
+    "vite": "8.0.13",
+    "wrangler": "4.92.0"
+  },
+  "type": "module",
+  "displayName": "JMAX Operations Companion"
+}

@@ -1,0 +1,7 @@
+Product ID,Product,Provider,In stock ,Order,PPU Unit,Provider
+,Fictional cooler,,,,,
+DF-1001,Fictional beef,Demo Foods,99,2,CS,Demo Foods
+DF-2002,Fictional cheese,Demo Foods,,0,EA,Demo Foods
+MISSING,Fictional missing item,Demo Foods,,,CS,Demo Foods
+REPEAT,Fictional repeated SKU,Demo Foods,,1,CS,Demo Foods
+REPEAT,Fictional repeated SKU,Demo Foods,,1,CS,Demo Foods

@@ -1,0 +1,18 @@
+import type {WasteReport} from './food-waste-report';
+import {localDate} from './local-time';
+import {requireThat} from './validation';
+
+export type WasteExport=WasteReport&{kind:'waste-export';complete:true;locationId:string;restaurant:string;dataset:'demo'|'operating';generatedAt:string};
+const columns=['row_type','snapshot_at_utc','restaurant','restaurant_id','dataset','start_date','end_date','timezone','food_revision','entry_sequence','record_id','record_revision','recorded_at_utc','recorded_local_date','item_name','item_name_basis','control_number','reason','quantity','purchase_unit','pack_count','unit_quantity','unit_uom','entry_status','cost_status','original_estimated_cost_usd','included_known_cost_usd','cost_issues','vendor','vendor_sku','price_date','price_per_purchase_unit_usd','price_purchase_unit','price_source_invoice_revision','note','report_entries','report_active_entries','report_voided_entries','report_costed_entries','report_uncosted_entries','report_known_subtotal_usd','boundary'] as const;
+type Row=Partial<Record<typeof columns[number],string|number>>;
+const money=(n:number|null|undefined)=>Number.isSafeInteger(n)&&n!==null&&n!==undefined?(n/100).toFixed(2):'';
+const cell=(v:string|number)=>{let s=String(v);if(typeof v==='string'&&/^[\s]*[=+\-@\t\r\n]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
+export function wasteExportCsv(m:WasteExport){
+ requireThat(m.kind==='waste-export'&&m.complete===true&&m.next===null&&m.entries.length===m.totals.entries&&m.entries.length<=500,'Waste export is incomplete. Refresh and try again.',409);
+ const common:Row={snapshot_at_utc:m.generatedAt,restaurant:m.restaurant,restaurant_id:m.locationId,dataset:m.dataset,start_date:m.from,end_date:m.through,timezone:m.timezone,food_revision:m.revision,boundary:'Recorded ingredient-cost estimates, not booked expenses or proof of all waste. Unknown costs are not zero. Quantities use original units; do not add unlike units.'};
+ const rows:Row[]=[{...common,row_type:'report',report_entries:m.totals.entries,report_active_entries:m.totals.active,report_voided_entries:m.totals.voided,report_costed_entries:m.totals.costed,report_uncosted_entries:m.totals.uncosted,report_known_subtotal_usd:m.totals.costed?money(m.totals.knownEstimatedCents):''}];
+ for(const e of m.entries){const w=e.waste,c=w.cost,s=c?.sku,usable=!e.priceSourceVoided&&c?.estimatedCents!==null&&Number.isSafeInteger(c?.estimatedCents);
+  rows.push({...common,row_type:'entry',entry_sequence:e.sequence,record_id:e.recordId,record_revision:e.revision,recorded_at_utc:w.at,recorded_local_date:localDate(w.at,m.timezone),item_name:w.item?.title??e.currentTitle,item_name_basis:w.item?'entry snapshot':'current catalog fallback',control_number:w.item?.controlNumber??'',reason:w.reason,quantity:w.quantity,purchase_unit:w.pack.purchaseUnit,pack_count:w.pack.packCount??'',unit_quantity:w.pack.unitQty??'',unit_uom:w.pack.unitUOM,entry_status:e.voided?'voided':'active',cost_status:e.priceSourceVoided?'source invoice voided':!c?'no historical cost snapshot':usable?'known estimate':'unpriced',original_estimated_cost_usd:money(c?.estimatedCents),included_known_cost_usd:!e.voided&&usable?money(c?.estimatedCents):'',cost_issues:c?.issues.join(' | ')??'',vendor:s?.vendor??'',vendor_sku:s?.vendorSku??'',price_date:s?.priceUpdatedAt??'',price_per_purchase_unit_usd:s?.price??'',price_purchase_unit:s?.purchaseUnit??'',price_source_invoice_revision:s?.priceSource?.invoiceRevision??'',note:w.note});
+ }
+ return '\uFEFF'+[columns.map(cell).join(','),...rows.map(r=>columns.map(k=>cell(r[k]??'')).join(','))].join('\r\n')+'\r\n';
+}

@@ -1,0 +1,24 @@
+'use client';
+import type {Workspace,RecordOf} from '../shared/types';
+import {personName} from '../shared/types';
+import type {MaintenanceService} from '../shared/maintenance';
+import {maintenanceOwner} from '../shared/maintenance';
+import {maintenanceCosts,maintenanceMoney,serviceCost} from '../shared/maintenance-cost';
+import {displayTime,localDate} from '../shared/local-time';
+import type {Send} from './workspace';
+export function MaintenanceCostSummary({r}:{r:RecordOf<'maintenance'>}){const s=maintenanceCosts(r.data);return <section aria-label="Recorded service costs"><h3>Recorded service costs</h3><p>{maintenanceMoney(s.amountCents)} USD across {s.recorded} service records · {s.missing} without a current cost · {s.voided} voided service records excluded.</p><p>Amounts entered from checked evidence for this plan. Missing costs are unknown. This is not a payment status or an accounting total.</p></section>}
+export function MaintenanceServiceCost({r,entry,w,send,busy,now,readOnly}:{r:RecordOf<'maintenance'>;entry:MaintenanceService;w:Workspace;send:Send;busy:boolean;now:string;readOnly:boolean}){
+ const owner=maintenanceOwner(w.me),events=entry.costHistory??[],current=serviceCost(entry),canEdit=!readOnly&&!entry.voided&&(owner||r.data.status==='active'&&w.me.id===r.data.managerId&&!events.length);
+ return <section aria-label="Service cost evidence"><h5>Service cost</h5>{current?<><p><strong>{maintenanceMoney(current.amountCents)} USD{current.amountCents===0?' · No charge recorded':''}</strong>{entry.voided?' · Excluded because the service was voided':''}</p><p className="ops-preserve">{current.sourceRef}</p><p>Evidence date: {current.documentDate}</p><p className="ops-preserve">Included in this amount: {current.allocation}</p></>:<p>{events.length?'Cost withdrawn; amount unknown.':'Cost not entered; amount unknown.'}</p>}
+ {canEdit&&events.length<20&&<details><summary>{events.length?'Correct service cost':'Record service cost'}</summary><form onSubmit={async e=>{e.preventDefault();const f=new FormData(e.currentTarget);await send('maintenance.cost',{serviceId:entry.id,amount:f.get('amount'),documentDate:f.get('documentDate'),sourceRef:f.get('sourceRef'),allocation:f.get('allocation'),note:f.get('note'),confirmed:f.get('confirmed')==='on'},r)}}><fieldset disabled={busy}>
+ <label className="shared-field">Amount for this service · USD<input name="amount" inputMode="decimal" required pattern="(0|[1-9][0-9]{0,6})(\.[0-9]{1,2})?" defaultValue={current?(current.amountCents/100).toFixed(2):''}/></label>
+ <label className="shared-field">Cost evidence date<input type="date" name="documentDate" max={localDate(now,w.location.timezone)} defaultValue={current?.documentDate} required/></label>
+ <label className="shared-field">Invoice or no-charge evidence reference<textarea name="sourceRef" maxLength={2000} defaultValue={current?.sourceRef} required/></label>
+ <label className="shared-field">Amount allocation and included charges<textarea name="allocation" maxLength={1000} defaultValue={current?.allocation} required placeholder="Identify the part of the invoice for this service, including any allocated tax or fees."/></label>
+ <label className="shared-field">Evidence or correction reason<textarea name="note" maxLength={2000} required/></label>
+ <p>Use the actual amount allocated to this service, not a quote. If one invoice covers several services, record only each service’s share. Use 0 only with checked no-charge evidence. References do not upload files.</p>
+ <label><input type="checkbox" name="confirmed" required/> I checked the evidence and allocated this amount to this service only.</label><p><button>Save service cost</button></p></fieldset></form></details>}
+ {canEdit&&owner&&current&&events.length<20&&<details><summary>Withdraw incorrect cost</summary><form onSubmit={async e=>{e.preventDefault();const f=new FormData(e.currentTarget);await send('maintenance.cost-withdraw',{serviceId:entry.id,note:f.get('note'),confirmed:f.get('confirmed')==='on'},r)}}><fieldset disabled={busy}><label className="shared-field">Withdrawal reason<textarea name="note" maxLength={2000} required/></label><label><input type="checkbox" name="confirmed" required/> Withdraw this cost; retain the original evidence and completed service.</label><p><button>Withdraw cost</button></p></fieldset></form></details>}
+ {!!events.length&&<details><summary>Cost history ({events.length})</summary><ol>{events.map(e=><li key={e.id}>{e.kind==='recorded'?maintenanceMoney(e.amountCents)+' USD · '+e.documentDate:'Cost withdrawn'} · {personName(w,e.by)} · {displayTime(e.at,w.location.timezone)}{e.kind==='recorded'&&<><p className="ops-preserve">{e.sourceRef}</p><p className="ops-preserve">{e.allocation}</p></>}<p className="ops-preserve">{e.note}</p></li>)}</ol></details>}
+ </section>;
+}

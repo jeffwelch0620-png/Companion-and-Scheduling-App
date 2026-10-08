@@ -1,0 +1,27 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {Miniflare} from 'miniflare';
+process.env.MINIFLARE_REGISTRY_PATH??=path.resolve('.wrangler/registry');
+test('compiled onboarding checklist records a private reviewed list without enabling the hire or making external requests',async t=>{
+ let outbound=0;
+ const mf=new Miniflare({modules:true,scriptPath:path.resolve('dist/server/index.js'),modulesRoot:path.resolve('dist/server'),modulesRules:[{type:'ESModule',include:['**/*.js']}],compatibilityDate:'2026-05-15',compatibilityFlags:['nodejs_compat'],d1Databases:['DB'],serviceBindings:{ASSETS:()=>new Response('Not found',{status:404})},outboundService:()=>{outbound++;throw new Error('No external requests expected');}});t.after(()=>mf.dispose());
+ const db=await mf.getD1Database('DB');for(const file of fs.readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())await db.batch(fs.readFileSync('drizzle/'+file,'utf8').split('--> statement-breakpoint').filter(s=>s.trim()).map(s=>db.prepare(s)));
+ for(const loc of ['a','b'])await db.prepare('INSERT INTO locations(id,name,timezone) VALUES(?,?,?)').bind(loc,'Fictional '+loc,'America/New_York').run();
+ for(const [id,loc,caps] of [['owner','a',['location.manage']],['scheduler','a',['schedule.manage']],['foreign','b',['location.manage']]])await db.prepare("INSERT INTO memberships(id,email,auth_user_id,location_id,name,area,position,capabilities,qualifications,active) VALUES(?,?,?,?,?,'BOH','Manager',?,'[]',1)").bind(id,id+'@example.test',id+'-identity',loc,'Fictional '+id,JSON.stringify(caps)).run();
+ const headers=id=>({'oai-authenticated-user-id':id+'-identity','oai-authenticated-user-email':id+'@example.test',Origin:'http://localhost','Content-Type':'application/json'});
+ const post=async(id,route,body)=>{const r=await mf.dispatchFetch('http://localhost/api/'+route,{method:'POST',headers:headers(id),body:JSON.stringify({requestId:crypto.randomUUID(),locationId:'a',...body})});return {status:r.status,data:await r.json()}};
+ const get=async(id)=>{const r=await mf.dispatchFetch('http://localhost/api/workspace?locationId=a',{headers:headers(id)});return {status:r.status,data:await r.json()}};
+ const ok=r=>{assert.equal(r.status,200,JSON.stringify(r.data));return r.data};
+ const hire=ok(await post('owner','access',{action:'hire.save',input:{hireDate:'2026-09-01',note:'Fictional compiled-route fixture',profile:{name:'Fictional hire',email:'hire@example.test',area:'BOH',position:'Line Cook',capabilities:[],qualifications:[]}}}));
+ const before=await db.prepare('SELECT * FROM memberships WHERE id=?').bind(hire.recordId).first(),employee=ok(await get('owner')).hireCandidates.find(c=>c.id===hire.recordId);
+ const command={requestId:'built-checklist',action:'hirechecklist.create',input:{employeeId:employee.id,employeeRevision:employee.revision,sourceReference:'Fictional requirements source',confirmed:true,items:[{label:'Fixture document status',dueDate:''}]}};
+ const created=ok(await post('owner','workspace',command));assert.deepEqual(ok(await post('owner','workspace',command)),created);
+ assert.equal(ok(await get('scheduler')).records.some(r=>r.id===created.recordId),false);assert.equal((await post('scheduler','workspace',{action:'hirechecklist.cancel',recordId:created.recordId,expectedRevision:created.revision,input:{note:'Forbidden'}})).status,404);assert.equal((await get('foreign')).status,403);
+ const item=ok(await get('owner')).records.find(r=>r.id===created.recordId).data.items[0];
+ const checked=ok(await post('owner','workspace',{action:'hirechecklist.check',recordId:created.recordId,expectedRevision:created.revision,input:{itemId:item.id,completedDate:'2026-09-01',note:'Personally checked fixture status.',confirmed:true}}));
+ ok(await post('owner','workspace',{action:'hirechecklist.review',recordId:created.recordId,expectedRevision:checked.revision,input:{note:'Reviewed recorded fixture evidence.',confirmed:true}}));
+ const reloaded=ok(await get('owner')).records.find(r=>r.id===created.recordId);assert.equal(reloaded.data.status,'reviewed');assert.equal(reloaded.data.history.length,3);
+ assert.deepEqual(await db.prepare('SELECT * FROM memberships WHERE id=?').bind(hire.recordId).first(),before);assert.equal(outbound,0);
+});

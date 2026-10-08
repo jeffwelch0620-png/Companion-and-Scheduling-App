@@ -1,0 +1,1 @@
+ALTER TABLE `memberships` ADD `employment` text DEFAULT '{"status":"active","hireDate":null,"endedDate":null,"departureReason":null,"archivedAt":null}' NOT NULL;

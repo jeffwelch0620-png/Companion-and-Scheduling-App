@@ -1,0 +1,125 @@
+/* A compact roster: navigation first, then readable names, hours and stations. */
+.shared-ui .schedule-week{--schedule-accent:#2460a5;--schedule-soft:#eaf2fc}
+.shared-ui .schedule-title{margin-bottom:8px;min-height:44px}
+.shared-ui .schedule-title-actions{display:flex;gap:6px;align-items:center}
+.shared-ui .schedule-options{position:relative}
+.shared-ui .schedule-options>summary{display:flex;align-items:center;justify-content:center;width:44px;height:44px;list-style:none;border-radius:10px;color:#43566d}
+.shared-ui .schedule-options>summary::-webkit-details-marker{display:none}
+.shared-ui .schedule-options[open]>summary{background:var(--schedule-soft)}
+.shared-ui .schedule-options>div{position:absolute;right:0;top:48px;z-index:15;display:grid;padding:8px;gap:4px;width:250px;max-width:calc(100vw - 32px);background:#fff;border:1px solid var(--line);box-shadow:0 12px 32px #1b355b22;border-radius:14px}
+.shared-ui .schedule-options>div>button{text-align:left;border:0;background:transparent;font-size:15px}
+.shared-ui .schedule-board-controls{position:sticky;top:-1px;z-index:5;background:var(--paper);padding-top:1px}
+.shared-ui .schedule-week-nav{margin:0;gap:4px}
+.shared-ui .schedule-date-picker>summary{font-size:16px;font-weight:650}
+.shared-ui .schedule-week-nav>button:last-child{font-size:14px;color:var(--schedule-accent)}
+.shared-ui .schedule-date-picker>.shared-field{z-index:10;top:43px}
+.shared-ui .schedule-view-toggle{padding:0;margin:2px 0 0;gap:0;background:transparent;border-radius:0;border-bottom:1px solid #dce3eb}
+.shared-ui .schedule-view-toggle>button{position:relative;min-height:48px;padding:10px 4px;border:0;border-radius:0;background:transparent;font-size:15px;color:#58667a;white-space:normal;box-shadow:none}
+.shared-ui .schedule-view-toggle>button[aria-pressed=true]{color:var(--schedule-accent);box-shadow:inset 0 -3px var(--schedule-accent);background:transparent}
+.shared-ui .schedule-view-toggle>button:hover{background:#edf2f8}
+.shared-ui .schedule-count{display:inline-flex;justify-content:center;align-items:center;background:#dceaf9;color:#174e8e;min-width:21px;padding:1px 5px;border-radius:12px;font-size:12px;margin-left:5px}
+.shared-ui .schedule-days{gap:4px;margin:0;padding:8px 0;border-bottom:1px solid #dce3eb}
+.shared-ui .schedule-days>button{padding:4px 0;gap:2px;min-height:62px;border-radius:10px;color:#5b687b;line-height:1.2}
+.shared-ui .schedule-days span{font-size:13px}
+.shared-ui .schedule-days strong{font-size:20px}
+.shared-ui .schedule-days i{width:4px;height:4px;margin-top:2px}
+.shared-ui .schedule-days i[data-scheduled=true]{background:#5783b5}
+.shared-ui .schedule-days>button[aria-pressed=true]{background:var(--schedule-accent);color:#fff}
+.shared-ui .schedule-days button[aria-pressed=true] i[data-scheduled=true]{background:#fff}
+.shared-ui .schedule-days button[data-today=true] strong{text-decoration:none}
+.shared-ui .schedule-days button[data-today=true]:not([aria-pressed=true]){box-shadow:inset 0 0 0 1px #aac3df;background:#eff5fc}
+.shared-ui .schedule-roster-summary{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:46px;padding:3px 0}
+.shared-ui .schedule-roster-summary>p{font-size:14px;color:#637186;margin:0;line-height:1.5}
+.shared-ui .schedule-roster-summary strong{font-weight:650;color:#33465f;font-variant-numeric:tabular-nums}
+.shared-ui .schedule-roster-summary>button{display:flex;gap:6px;align-items:center;border:0;background:transparent;font-size:14px;padding:8px;min-height:40px}
+.shared-ui .schedule-roster-summary>button[aria-expanded=true]{background:#e8eff8}
+.shared-ui .schedule-board-filters{display:grid;gap:12px;margin:0 0 16px;border:1px solid #dce3eb;padding:14px;border-radius:12px;background:#fff}
+.shared-ui .schedule-board-filters label{display:flex;flex-direction:column;gap:5px;font-size:14px}
+.shared-ui .schedule-board-filters>div{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.shared-ui .schedule-board-filters select{max-width:none}
+.shared-ui .schedule-board-filters input,.shared-ui .schedule-board-filters select{font-size:16px;border-radius:8px}
+.shared-ui .schedule-board-filters>button{justify-self:start}
+.shared-ui .schedule-agenda-heading{margin:0 0 12px;min-height:38px}
+.shared-ui .schedule-agenda-heading h2{font-size:19px;margin:0!important;line-height:1.4}
+.shared-ui .schedule-agenda-heading h2 small{font-size:14px;color:#68768b;margin-left:8px}
+.shared-ui .schedule-agenda-heading>span{font-size:14px;display:flex;gap:7px;align-items:baseline;flex-wrap:wrap;justify-content:flex-end}
+.shared-ui .schedule-agenda-heading>span>small{font-size:14px;color:#697789}
+.shared-ui .schedule-department{margin:0 0 18px;max-width:none;border:1px solid #dce3eb;border-radius:12px;overflow:hidden;background:#fff}
+.shared-ui .schedule-department>h3{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 14px;margin:0;background:#edf1f6;border-bottom:1px solid #dce3eb;font-size:14px;letter-spacing:.02em;color:#34465d}
+.shared-ui .schedule-department>h3>span{font-size:13px;font-weight:400;letter-spacing:0;color:#617187}
+.shared-ui .schedule-shift{--job-color:#537291;--job-soft:#ecf1f6;gap:8px;margin:0;padding:0 0 0 9px;border:0;border-left:3px solid var(--job-color);border-bottom:1px solid #e5eaf0;border-radius:0;background:#fff}
+.shared-ui .schedule-shift[data-job-tone=cook]{--job-color:#8060b8;--job-soft:#f0ebf8}
+.shared-ui .schedule-shift[data-job-tone=host]{--job-color:#248076;--job-soft:#e8f4f0}
+.shared-ui .schedule-shift[data-job-tone=server]{--job-color:#af7b12;--job-soft:#fbf2dc}
+.shared-ui .schedule-shift[data-job-tone=dish]{--job-color:#7c899a;--job-soft:#edf0f4}
+.shared-ui .schedule-shift[data-draft=true]{border-left-style:dashed;background:#fdfcf8}
+.shared-ui .schedule-department>.schedule-shift:last-child{border-bottom:0}
+.shared-ui .schedule-shift>button{align-items:center;padding:13px 13px 13px 4px;min-height:100px;border:0;border-radius:0;gap:10px;background:transparent}
+.shared-ui .schedule-shift>button:hover{background:#f5f8fc}
+.shared-ui .schedule-shift-main{gap:5px}
+.shared-ui .schedule-shift-main>strong{font-size:17px;font-weight:700;line-height:1.25}
+.shared-ui .schedule-shift-time{font-size:16px;font-weight:500;line-height:1.3;color:#23354c;font-variant-numeric:tabular-nums}
+.shared-ui .schedule-shift-time>small{font-size:13px;color:#67768b;margin-left:6px}
+.shared-ui .schedule-shift-job{display:flex;flex-wrap:wrap;gap:5px 7px;align-items:center;font-size:14px;line-height:1.4}
+.shared-ui .schedule-job-label{padding:1px 6px;border-radius:4px;background:var(--job-soft);color:#344358}
+.shared-ui .schedule-parent-job{color:#6a7686;font-size:13px}
+.shared-ui .schedule-shift-job>em{font-style:normal;background:#fff1d5;color:#805b14;padding:1px 6px;border-radius:4px;font-size:13px}
+.shared-ui .schedule-shift-length{display:grid;grid-template-columns:auto 8px;gap:3px 5px;align-items:center;text-align:right;font-variant-numeric:tabular-nums;color:#46586c;white-space:normal;flex:0 0 auto;max-width:100px}
+.shared-ui .schedule-shift-length>strong{font-size:15px;font-weight:650;line-height:1.3}
+.shared-ui .schedule-shift-length>small{grid-column:1;font-size:12px;line-height:1.3;color:#6b7889}
+.shared-ui .schedule-shift-length>span{grid-column:2;grid-row:1 / span 2;font-size:22px;color:#8190a2;margin:0}
+.shared-ui .schedule-shift-main .attendance-mark{font-size:13px;align-self:flex-start;margin:2px 0 0}
+.shared-ui .schedule-board-note{font-size:13px;color:#6b7889;margin:16px 0}
+.shared-ui .schedule-empty-state{padding:28px 16px;margin:12px 0 20px;border:1px dashed #c9d5e3;border-radius:14px;text-align:center;background:#fff;color:#586b81}
+.shared-ui .schedule-empty-state h2,.shared-ui .schedule-empty-state h3{font-size:18px;margin:10px 0!important;color:#344a63}
+.shared-ui .schedule-empty-state p{font-size:15px;margin:8px 0 14px}
+.shared-ui .personal-agenda-day{margin:8px 0 16px!important}
+.shared-ui .personal-date{background:#e9eff7;color:#49627c;border-radius:9px}
+.shared-ui .personal-agenda-day[data-today=true]>.personal-date{background:var(--schedule-accent)}
+.shared-ui .personal-next{color:var(--schedule-accent);font-size:14px;margin:0 0 6px!important}
+.shared-ui .personal-agenda .schedule-shift{border:1px solid #dce3eb;border-left:3px solid var(--job-color);border-radius:10px;margin:0 0 8px}
+.shared-ui .personal-agenda .schedule-shift>button{padding:15px 10px;min-height:100px;border-radius:8px}
+.shared-ui .personal-agenda .schedule-shift-time{font-size:19px;letter-spacing:0;line-height:1.4}
+.shared-ui .personal-agenda .schedule-shift-length{align-self:center;font-size:14px}
+.shared-ui .personal-agenda .schedule-shift-length>small{display:none}
+.shared-ui .schedule-person>summary>span>strong{font-size:17px}
+.shared-ui .schedule-person>summary small,.shared-ui .schedule-person-day h3,.shared-ui .schedule-person-day h3 small{font-size:14px}
+.shared-ui .schedule-person-day .schedule-shift-time{font-size:15px}
+.shared-ui .schedule-person-day .schedule-shift-length>strong{font-size:14px}
+.shared-ui .schedule-person-day .schedule-shift>button{padding-block:10px}
+@media(min-width:850px){.shared-ui .schedule-agenda{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}.shared-ui .schedule-agenda-heading,.shared-ui .schedule-agenda>.schedule-empty-state{grid-column:1 / -1}.shared-ui .schedule-department{width:100%;margin:0}.shared-ui .schedule-shift-main>strong{font-size:16px}.shared-ui .schedule-shift-time{font-size:15px}.shared-ui .schedule-week{max-width:900px!important}}
+@media(max-width:600px){
+ .shared-ui .shared-shell>header{padding:10px 14px 3px;min-height:52px}
+ .shared-ui .shared-person{min-width:0;max-width:calc(100% - 102px);font-size:14px;line-height:1.4}
+ .shared-ui .shared-person strong,.shared-ui .shared-person span{max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+ .shared-ui .shared-toolbar{padding:0 8px 3px;min-height:44px}
+ .shared-ui .shared-shell>main:has(.schedule-week){padding:10px 14px 20px;scrollbar-gutter:auto}
+ .shared-ui .schedule-title{margin-bottom:3px}.shared-ui .schedule-title h1{font-size:25px}
+ .shared-ui .schedule-title .shared-primary{padding:9px 11px;font-size:14px}
+ .shared-ui .schedule-title-actions{gap:2px}
+ .shared-ui .schedule-board-controls{top:-10px;margin-inline:-14px;padding:0 14px 0;background:#f7f8fa}
+ .shared-ui .schedule-week-nav{gap:0}.shared-ui .schedule-week-nav>button:last-child{font-size:14px;padding:8px}
+ .shared-ui .schedule-date-picker>summary{font-size:15px;gap:5px}
+ .shared-ui .schedule-days{gap:3px}.shared-ui .schedule-days>button{min-height:61px}
+ .shared-ui .schedule-shift-time>small{margin-left:0;display:block}
+ .shared-ui .schedule-roster-summary{min-height:43px}
+ .shared-ui .schedule-roster-summary>p{font-size:13px}
+ .shared-ui .schedule-agenda-heading{margin-bottom:8px}
+ .shared-ui .schedule-agenda-heading>span{font-size:13px;gap:5px}
+ .shared-ui .schedule-agenda-heading>span>small{font-size:13px}
+ .shared-ui .schedule-department>h3{padding:8px 11px}
+ .shared-ui .schedule-shift>button{padding:12px 11px 12px 2px;min-height:101px}
+ .shared-ui .schedule-shift-length{max-width:84px}
+ .shared-ui .personal-agenda-day{grid-template-columns:40px minmax(0,1fr);gap:9px}
+ .shared-ui .personal-date{padding:8px 2px}.shared-ui .personal-date>strong{font-size:23px}
+ .shared-ui .personal-agenda .schedule-shift-time{font-size:17px}
+ .shared-ui .personal-agenda .schedule-shift-length>strong{font-size:14px}
+ .shared-ui .schedule-person-day .schedule-shift-time{font-size:14px}
+ .shared-ui .schedule-person-day .schedule-shift-length>span{display:block}
+}
+@media(max-width:350px){.shared-ui .schedule-shift-length{max-width:67px}.shared-ui .schedule-shift-main>strong{font-size:16px}.shared-ui .schedule-shift-time{font-size:15px}.shared-ui .schedule-agenda-heading{align-items:flex-start}.shared-ui .schedule-agenda-heading>span{max-width:90px}.shared-ui .personal-agenda .schedule-shift>button{flex-wrap:wrap}.shared-ui .schedule-board-filters>div{grid-template-columns:1fr}.shared-ui .schedule-title h1{font-size:23px}.shared-ui .schedule-view-toggle>button{font-size:14px}}
+@media(prefers-reduced-motion:reduce){.shared-ui .personal-agenda,.shared-ui .schedule-agenda,.shared-ui .schedule-people{animation:none}}
+
+.shared-ui .schedule-board .schedule-shift{border-left-color:var(--job-color)}
+.shared-ui .schedule-draft-actions:not([open]){padding:2px 10px;margin:3px 0 6px;border-radius:9px;background:#fffaf0}
+.shared-ui .schedule-draft-actions:not([open])>summary{font-size:14px;min-height:34px;display:flex;align-items:center;gap:5px}

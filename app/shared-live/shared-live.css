@@ -1,0 +1,29 @@
+.shared-live-entry .shared-shell{max-width:1120px}
+.shared-live-entry .shared-shell>main{display:flex;align-items:flex-start;justify-content:center;padding:42px 24px}
+.shared-live-card{width:100%;max-width:490px;margin:0 auto;background:white;border:1px solid #dce3d6;border-radius:16px;padding:30px;box-shadow:0 4px 22px #27352208}
+.shared-ui .shared-live-card h1{font-size:32px;letter-spacing:-.8px;line-height:1.15;margin:10px 0 15px;color:#2d402c}
+.shared-live-intro{font-size:15px;line-height:1.7;color:#607157;margin:0 0 20px}
+.shared-live-status{font-size:13px;line-height:1.5;font-weight:650;border-radius:8px;padding:11px 12px;margin:18px 0;background:#eef3e7;color:#4f6943}
+.shared-live-status[data-state=checking]{color:#62715a;background:#f3f5ef}
+.shared-live-status[data-state=unavailable]{color:#7d602d;background:#fff5e1;border:1px solid #e9dab8}
+.shared-live-explanation{font-size:14px;line-height:1.65;color:#6b6b55}
+.shared-live-card form{margin-top:22px}.shared-live-card fieldset{border:0;padding:0;margin:0;min-width:0}
+.shared-live-card .shared-field{display:flex;flex-direction:column;gap:7px;font-size:13px;font-weight:600;margin-bottom:16px}
+.shared-live-card input{width:100%;min-width:0;max-width:100%;min-height:47px;background:#fff;border:1px solid #cad5c0;border-radius:8px;font-size:16px;padding:11px 12px;font-weight:400}
+.shared-live-card fieldset:disabled input{background:#f5f6f1;color:#899080;border-color:#dfe4d8}
+.shared-ui .shared-live-card .shared-primary{width:100%;min-height:46px;font-size:14px}
+.shared-live-help{font-size:12px;line-height:1.7;color:#798570;margin:15px 0}
+.shared-live-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:20px}
+.shared-ui .shared-live-actions>button,.shared-live-actions>a{font-size:12px;min-height:38px;display:inline-flex;align-items:center;padding:8px 10px}
+.shared-live-actions>a{color:#436139}
+.shared-live-scope{margin-top:22px;border-top:1px solid #e0e6d9;padding-top:16px;font-size:12px;line-height:1.6;color:#77816e}
+.shared-live-scope strong{color:#5a6b4f;font-weight:600}.shared-live-scope p{margin:5px 0 0}
+.shared-live-workspace .shared-shell>main{max-width:1100px;width:100%;margin-inline:auto}
+.shared-live-workspace .shared-notice{font-size:13px;line-height:1.6}
+@media(max-width:600px){
+ .shared-live-entry .shared-shell>main{padding:20px 14px}
+ .shared-live-card{padding:23px 18px;border-radius:12px}
+ .shared-ui .shared-live-card h1{font-size:28px}
+ .shared-live-actions{display:grid;grid-template-columns:1fr;gap:7px}.shared-live-actions>*{justify-content:center}
+ .shared-live-workspace .ops-fields{grid-template-columns:1fr}
+}

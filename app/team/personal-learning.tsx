@@ -1,0 +1,15 @@
+'use client';
+import {LearningProgress} from './learning-progress';
+import {personalLearning} from '../shared/personal-learning';
+import {learningNextStep} from '../shared/learning-queue';
+import type {RecordOf, Workspace, WorkRecord} from '../shared/types';
+
+export function PersonalLearning({w,now,onOpen,onStart,compact=false}:{w:Workspace;now:string;onOpen:(r:WorkRecord)=>void;onStart:(guide:RecordOf<'standard'>)=>void;compact?:boolean}) {
+ const path=personalLearning(w,now),next=path.next;
+ if(w.me.position==='Dishwasher')return null;
+ return <section className="personal-learning" aria-label="Your learning path"><div className="compact-heading"><h2>{next?'Your next step':'Your learning'}</h2>{path.items.length>0&&<span>{path.completed} of {path.items.length} confirmed</span>}</div>
+ {next?<article className="learning-focus"><span className="day-eyebrow">{next.current?'For your shift':next.updated?'Updated instructions':'For your job'} · {next.guide.data.position}</span><h3>{next.goal?.data.title??'Learn '+next.guide.data.title}</h3><p>{next.goal?learningNextStep(w,next.goal,now).label:next.guide.data.criteria[0]}</p><LearningProgress count={next.goal?.data.practiceChecks?.length??0} total={next.guide.data.criteria.length} label={next.goal?.data.phase==='verification'?'practiced · awaiting review':'practiced'}/><div className="shared-actions"><button className="shared-primary" disabled={!next.goal&&!next.reviewer} onClick={()=>next.goal?onOpen(next.goal):onStart(next.guide)}>{next.goal?next.goal.data.phase==='verification'?'View your progress':'Continue learning':'Start practice'}</button><button onClick={()=>onOpen(next.guide)}>Read the guide</button></div>{!next.goal&&!next.reviewer&&<p>Your owner needs to enable a learning reviewer for this department.</p>}</article>:<p>{path.items.length?'Your current job guides are confirmed. New or revised guides will appear here automatically.':'Your job’s approved learning will appear here automatically. Your manager is still preparing the restaurant guides.'}</p>}
+ {path.items.some(i=>i!==next&&i.goal?.data.phase==='verification')&&<div className="compact-list">{path.items.filter(i=>i!==next&&i.goal?.data.phase==='verification').map(i=><button className="compact-row" key={i.guide.id} onClick={()=>onOpen(i.goal!)}><span><strong>{i.guide.data.title}</strong><small>{learningNextStep(w,i.goal!,now).label}</small></span><span aria-hidden="true">›</span></button>)}</div>}
+ {!compact&&path.items.length>1&&<details className="compact-note"><summary>Your full learning path</summary><div className="compact-list">{path.items.filter(i=>i!==next&&i.goal?.data.phase!=='verification').map(item=><button className="compact-row" key={item.guide.id} onClick={()=>item.goal?onOpen(item.goal):onOpen(item.guide)}><span><strong>{item.guide.data.title}</strong><small>{item.completed?'Confirmed':item.goal?learningNextStep(w,item.goal,now).label:'Coming up'} · {item.guide.data.position}</small></span><span aria-hidden="true">›</span></button>)}</div></details>}
+ </section>;
+}

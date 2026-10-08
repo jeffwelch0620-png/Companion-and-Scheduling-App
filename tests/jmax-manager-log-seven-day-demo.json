@@ -1,0 +1,868 @@
+{
+  "fixture_type": "JMAX_MANAGER_LOG_DEMO_ONLY",
+  "schema_version": "demo-1",
+  "date_range": {
+    "from": "2026-09-21",
+    "through": "2026-09-27"
+  },
+  "warning": "FABRICATED TEST DATA. Do not mix with live records, analytics, notifications, or staff profiles.",
+  "assumptions": [
+    "Seven previous business dates relative to September 28, 2026.",
+    "Rudd's closes to guests Tuesday; Papa's closes Monday and Tuesday.",
+    "Commissary Tuesday production is illustrative, not a claimed actual schedule.",
+    "No invented Toast metrics or personal staff details."
+  ],
+  "closed_days": [
+    {
+      "store_id": "rudds",
+      "business_date": "2026-09-22",
+      "status": "closed_to_guests",
+      "note": "DEMO \u2014 no shift entry generated"
+    },
+    {
+      "store_id": "papa",
+      "business_date": "2026-09-21",
+      "status": "closed_to_guests",
+      "note": "DEMO \u2014 no shift entry generated"
+    },
+    {
+      "store_id": "papa",
+      "business_date": "2026-09-22",
+      "status": "closed_to_guests",
+      "note": "DEMO \u2014 no shift entry generated"
+    },
+    {
+      "store_id": "comm",
+      "business_date": "2026-09-21",
+      "status": "no_production_shift",
+      "note": "DEMO \u2014 no shift entry generated"
+    },
+    {
+      "store_id": "comm",
+      "business_date": "2026-09-23",
+      "status": "no_production_shift",
+      "note": "DEMO \u2014 no shift entry generated"
+    },
+    {
+      "store_id": "comm",
+      "business_date": "2026-09-24",
+      "status": "no_production_shift",
+      "note": "DEMO \u2014 no shift entry generated"
+    },
+    {
+      "store_id": "comm",
+      "business_date": "2026-09-25",
+      "status": "no_production_shift",
+      "note": "DEMO \u2014 no shift entry generated"
+    },
+    {
+      "store_id": "comm",
+      "business_date": "2026-09-26",
+      "status": "no_production_shift",
+      "note": "DEMO \u2014 no shift entry generated"
+    },
+    {
+      "store_id": "comm",
+      "business_date": "2026-09-27",
+      "status": "no_production_shift",
+      "note": "DEMO \u2014 no shift entry generated"
+    }
+  ],
+  "shift_entries": [
+    {
+      "id": "demo-log-berts-2026-09-21-foh",
+      "store_id": "berts",
+      "business_date": "2026-09-21",
+      "shift": "close",
+      "department": "FOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-21T21:30:00-04:00",
+      "readiness": "action_needed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [
+        "demo-issue-berts-01"
+      ],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "DEMO \u2014 next manager reviews open issue.",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-berts-2026-09-21-boh",
+      "store_id": "berts",
+      "business_date": "2026-09-21",
+      "shift": "close",
+      "department": "BOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-21T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-berts-2026-09-22-foh",
+      "store_id": "berts",
+      "business_date": "2026-09-22",
+      "shift": "close",
+      "department": "FOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-22T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [
+        "demo-issue-berts-01"
+      ],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "DEMO \u2014 next manager reviews open issue.",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-berts-2026-09-22-boh",
+      "store_id": "berts",
+      "business_date": "2026-09-22",
+      "shift": "close",
+      "department": "BOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-22T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-berts-2026-09-23-foh",
+      "store_id": "berts",
+      "business_date": "2026-09-23",
+      "shift": "close",
+      "department": "FOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-23T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [
+        "demo-issue-berts-01"
+      ],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "DEMO \u2014 next manager reviews open issue.",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-berts-2026-09-23-boh",
+      "store_id": "berts",
+      "business_date": "2026-09-23",
+      "shift": "close",
+      "department": "BOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-23T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-berts-2026-09-24-foh",
+      "store_id": "berts",
+      "business_date": "2026-09-24",
+      "shift": "close",
+      "department": "FOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-24T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [
+        "demo-issue-berts-01"
+      ],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-berts-2026-09-24-boh",
+      "store_id": "berts",
+      "business_date": "2026-09-24",
+      "shift": "close",
+      "department": "BOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-24T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-berts-2026-09-25-foh",
+      "store_id": "berts",
+      "business_date": "2026-09-25",
+      "shift": "close",
+      "department": "FOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-25T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-berts-2026-09-25-boh",
+      "store_id": "berts",
+      "business_date": "2026-09-25",
+      "shift": "close",
+      "department": "BOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-25T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-berts-2026-09-26-foh",
+      "store_id": "berts",
+      "business_date": "2026-09-26",
+      "shift": "close",
+      "department": "FOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-26T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-berts-2026-09-26-boh",
+      "store_id": "berts",
+      "business_date": "2026-09-26",
+      "shift": "close",
+      "department": "BOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-26T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-berts-2026-09-27-foh",
+      "store_id": "berts",
+      "business_date": "2026-09-27",
+      "shift": "close",
+      "department": "FOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-27T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-berts-2026-09-27-boh",
+      "store_id": "berts",
+      "business_date": "2026-09-27",
+      "shift": "close",
+      "department": "BOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-27T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-rudds-2026-09-21-foh",
+      "store_id": "rudds",
+      "business_date": "2026-09-21",
+      "shift": "close",
+      "department": "FOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-21T21:30:00-04:00",
+      "readiness": "action_needed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [
+        "demo-issue-rudds-01"
+      ],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "DEMO \u2014 next manager reviews open issue.",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-rudds-2026-09-21-boh",
+      "store_id": "rudds",
+      "business_date": "2026-09-21",
+      "shift": "close",
+      "department": "BOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-21T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-rudds-2026-09-23-foh",
+      "store_id": "rudds",
+      "business_date": "2026-09-23",
+      "shift": "close",
+      "department": "FOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-23T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [
+        "demo-issue-rudds-01"
+      ],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-rudds-2026-09-23-boh",
+      "store_id": "rudds",
+      "business_date": "2026-09-23",
+      "shift": "close",
+      "department": "BOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-23T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-rudds-2026-09-24-foh",
+      "store_id": "rudds",
+      "business_date": "2026-09-24",
+      "shift": "close",
+      "department": "FOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-24T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-rudds-2026-09-24-boh",
+      "store_id": "rudds",
+      "business_date": "2026-09-24",
+      "shift": "close",
+      "department": "BOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-24T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-rudds-2026-09-25-foh",
+      "store_id": "rudds",
+      "business_date": "2026-09-25",
+      "shift": "close",
+      "department": "FOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-25T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-rudds-2026-09-25-boh",
+      "store_id": "rudds",
+      "business_date": "2026-09-25",
+      "shift": "close",
+      "department": "BOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-25T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-rudds-2026-09-26-foh",
+      "store_id": "rudds",
+      "business_date": "2026-09-26",
+      "shift": "close",
+      "department": "FOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-26T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-rudds-2026-09-26-boh",
+      "store_id": "rudds",
+      "business_date": "2026-09-26",
+      "shift": "close",
+      "department": "BOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-26T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-rudds-2026-09-27-foh",
+      "store_id": "rudds",
+      "business_date": "2026-09-27",
+      "shift": "close",
+      "department": "FOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-27T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-rudds-2026-09-27-boh",
+      "store_id": "rudds",
+      "business_date": "2026-09-27",
+      "shift": "close",
+      "department": "BOH",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-27T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-papa-2026-09-23-combined",
+      "store_id": "papa",
+      "business_date": "2026-09-23",
+      "shift": "close",
+      "department": "combined",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-23T21:30:00-04:00",
+      "readiness": "action_needed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [
+        "demo-issue-papa-01"
+      ],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "DEMO \u2014 next manager reviews open issue.",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-papa-2026-09-24-combined",
+      "store_id": "papa",
+      "business_date": "2026-09-24",
+      "shift": "close",
+      "department": "combined",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-24T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [
+        "demo-issue-papa-01"
+      ],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "DEMO \u2014 next manager reviews open issue.",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-papa-2026-09-25-combined",
+      "store_id": "papa",
+      "business_date": "2026-09-25",
+      "shift": "close",
+      "department": "combined",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-25T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [
+        "demo-issue-papa-01"
+      ],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "DEMO \u2014 next manager reviews open issue.",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-papa-2026-09-26-combined",
+      "store_id": "papa",
+      "business_date": "2026-09-26",
+      "shift": "close",
+      "department": "combined",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-26T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [
+        "demo-issue-papa-01"
+      ],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-papa-2026-09-27-combined",
+      "store_id": "papa",
+      "business_date": "2026-09-27",
+      "shift": "close",
+      "department": "combined",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-27T21:30:00-04:00",
+      "readiness": "not_assessed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    },
+    {
+      "id": "demo-log-comm-2026-09-22-production",
+      "store_id": "comm",
+      "business_date": "2026-09-22",
+      "shift": "production",
+      "department": "production",
+      "author_id": "demo_manager",
+      "record_state": "submitted",
+      "submitted_at": "2026-09-22T15:00:00-04:00",
+      "readiness": "action_needed",
+      "shift_summary": "DEMO \u2014 illustrative handoff; no sales, labor, counts, or guest records.",
+      "opening_carried_issue_ids": [],
+      "new_issue_ids": [
+        "demo-issue-comm-01"
+      ],
+      "resolved_issue_ids": [],
+      "tomorrow_note": "DEMO \u2014 next manager reviews open issue.",
+      "toast_summary": {
+        "status": "unavailable",
+        "sales": null,
+        "labor": null
+      }
+    }
+  ],
+  "issues": [
+    {
+      "id": "demo-issue-berts-01",
+      "store_id": "berts",
+      "category": "equipment",
+      "summary": "DEMO \u2014 Demo dishwasher station handoff",
+      "origin_entry_id": "demo-log-berts-2026-09-21-foh",
+      "assigned_role": "next_shift_manager",
+      "due_at": null,
+      "current_status": "resolved",
+      "history": [
+        {
+          "business_date": "2026-09-21",
+          "action": "opened",
+          "actor": "demo_manager"
+        },
+        {
+          "business_date": "2026-09-24",
+          "action": "resolved",
+          "actor": "demo_manager",
+          "outcome": "DEMO \u2014 verified and closed"
+        }
+      ]
+    },
+    {
+      "id": "demo-issue-rudds-01",
+      "store_id": "rudds",
+      "category": "cleaning",
+      "summary": "DEMO \u2014 Demo fry station checklist follow-up",
+      "origin_entry_id": "demo-log-rudds-2026-09-21-foh",
+      "assigned_role": "next_shift_manager",
+      "due_at": null,
+      "current_status": "resolved",
+      "history": [
+        {
+          "business_date": "2026-09-21",
+          "action": "opened",
+          "actor": "demo_manager"
+        },
+        {
+          "business_date": "2026-09-23",
+          "action": "resolved",
+          "actor": "demo_manager",
+          "outcome": "DEMO \u2014 verified and closed"
+        }
+      ]
+    },
+    {
+      "id": "demo-issue-papa-01",
+      "store_id": "papa",
+      "category": "stock",
+      "summary": "DEMO \u2014 Demo packaging stock follow-up",
+      "origin_entry_id": "demo-log-papa-2026-09-23-combined",
+      "assigned_role": "next_shift_manager",
+      "due_at": null,
+      "current_status": "resolved",
+      "history": [
+        {
+          "business_date": "2026-09-23",
+          "action": "opened",
+          "actor": "demo_manager"
+        },
+        {
+          "business_date": "2026-09-26",
+          "action": "resolved",
+          "actor": "demo_manager",
+          "outcome": "DEMO \u2014 verified and closed"
+        }
+      ]
+    },
+    {
+      "id": "demo-issue-comm-01",
+      "store_id": "comm",
+      "category": "production",
+      "summary": "DEMO \u2014 Demo bulk production label review",
+      "origin_entry_id": "demo-log-comm-2026-09-22-production",
+      "assigned_role": "next_shift_manager",
+      "due_at": null,
+      "current_status": "resolved",
+      "history": [
+        {
+          "business_date": "2026-09-22",
+          "action": "opened",
+          "actor": "demo_manager"
+        },
+        {
+          "business_date": "2026-09-22",
+          "action": "resolved",
+          "actor": "demo_manager",
+          "outcome": "DEMO \u2014 verified and closed"
+        }
+      ]
+    }
+  ],
+  "completion_scenarios": [
+    "store isolation",
+    "closed-day carryover",
+    "FOH and BOH coexist",
+    "resolution history",
+    "missing Toast data"
+  ]
+}

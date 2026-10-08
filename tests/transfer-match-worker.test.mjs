@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import fs from 'node:fs';
+import path from 'node:path';
+import {Miniflare} from 'miniflare';
+process.env.MINIFLARE_REGISTRY_PATH??=path.resolve('.wrangler/registry');
+test('built transfer endpoint matches destination packs and retains converted checks without changing count records',async t=>{
+ let outbound=0;
+ const mf=new Miniflare({modules:true,scriptPath:path.resolve('dist/server/index.js'),modulesRoot:path.resolve('dist/server'),modulesRules:[{type:'ESModule',include:['**/*.js']}],compatibilityDate:'2026-05-15',compatibilityFlags:['nodejs_compat'],d1Databases:['DB'],serviceBindings:{ASSETS:()=>new Response('Not found',{status:404})},outboundService:()=>{outbound++;throw new Error('No external calls expected');}});t.after(()=>mf.dispose());
+ const db=await mf.getD1Database('DB');for(const file of fs.readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())await db.batch(fs.readFileSync('drizzle/'+file,'utf8').split('--> statement-breakpoint').filter(s=>s.trim()).map(s=>db.prepare(s)));
+ for(const loc of ['a','b']){await db.prepare('INSERT INTO locations(id,name,timezone) VALUES(?,?,?)').bind(loc,'Fictional '+loc,'America/New_York').run();await db.prepare("INSERT INTO memberships(id,email,auth_user_id,location_id,name,area,position,capabilities,qualifications,active) VALUES(?,?,?,?,?,'BOH','Owner','[\"location.manage\"]','[]',1)").bind(loc,loc+'@example.test',loc+'-identity',loc,'Fictional '+loc).run();}
+ const headers=loc=>({'oai-authenticated-user-id':loc+'-identity','oai-authenticated-user-email':loc+'@example.test',Origin:'http://localhost','Content-Type':'application/json'});
+ const post=async(loc,endpoint,body)=>{const r=await mf.dispatchFetch('http://localhost/api/'+endpoint,{method:'POST',headers:headers(loc),body:JSON.stringify({requestId:crypto.randomUUID(),locationId:loc,...body})});return {status:r.status,data:await r.json()};};
+ const ok=r=>{assert.equal(r.status,200,JSON.stringify(r.data));return r.data;};
+ const items={};for(const loc of ['a','b'])items[loc]=ok(await post(loc,'food',{action:'fooditem.import',input:{dataset:'demo',sourceRestaurantId:'fixture-'+loc,sourceLabel:'Fictional transfer matching fixture',destinationLocationId:loc,confirmed:true,rows:[{restaurantId:'fixture-'+loc,name:'Fictional flour',controlNumber:'FLOUR',purchaseUnit:loc==='a'?'bag':'tub',packCount:1,unitQty:loc==='a'?25:10,unitUOM:'lb',active:true,needsReview:false,vendorSkus:[]}]}}));
+ await db.prepare("INSERT INTO food_transfer_routes(source_id,destination_id,dataset,active) VALUES('a','b','demo',1)").run();
+ const before=(await db.prepare('SELECT id,data FROM food_records ORDER BY id').all()).results;
+ const sent=ok(await post('a','food/transfers',{action:'transfer.dispatch',input:{dataset:'demo',destinationId:'b',itemId:items.a.recordId,itemRevision:items.a.revision,reference:'Fictional built transfer',quantity:4,dispatchedAt:'2000-02-29T12:00:00Z',confirmed:true}}));
+ const body={requestId:crypto.randomUUID(),action:'transfer.match-item',recordId:sent.recordId,expectedRevision:sent.revision,input:{dataset:'demo',itemId:items.b.recordId,itemRevision:items.b.revision,reason:'Checked fictional same-product packs',confirmed:true}};
+ assert.equal((await post('a','food/transfers',body)).status,403);
+ const matched=ok(await post('b','food/transfers',body));assert.deepEqual(ok(await post('b','food/transfers',body)),matched);
+ const read=await mf.dispatchFetch('http://localhost/api/food/transfers?locationId=a&dataset=demo&recordId='+sent.recordId,{headers:headers('a')});assert.equal(read.status,200);const detail=await read.json();assert.equal(detail.destinationMatchReview,'current');assert.equal(detail.transfer.destinationMatch.destinationUnitsPerDispatchUnit,2.5);assert.equal(detail.events.length,2);assert.equal(detail.transfer.receipt,null);
+ const open={requestId:crypto.randomUUID(),action:'transfer.receive',recordId:sent.recordId,expectedRevision:matched.revision,input:{dataset:'demo',quantityBasis:'destination',accepted:2.5,rejected:0,missing:0,complete:false,receivedAt:'2000-02-29T13:00:00Z',confirmed:true}};
+ assert.equal((await post('a','food/transfers',open)).status,403);
+ const first=ok(await post('b','food/transfers',open));assert.deepEqual(ok(await post('b','food/transfers',open)),first);
+ const final=ok(await post('b','food/transfers',{action:'transfer.check-progress',recordId:sent.recordId,expectedRevision:first.revision,input:{...open.input,accepted:7.5,rejected:2.5,complete:true,reason:'Fictional damaged pack'}}));
+ const cleared=ok(await post('b','food/transfers',{action:'transfer.clear-item-match',recordId:sent.recordId,expectedRevision:final.revision,input:{dataset:'demo',reason:'Review catalog link'}}));
+ assert.equal((await post('b','food/transfers',{action:'transfer.correct-receipt',recordId:sent.recordId,expectedRevision:cleared.revision,input:{...open.input,accepted:10,complete:true,correctionReason:'Recount'}})).status,409);
+ const endResponse=await mf.dispatchFetch('http://localhost/api/food/transfers?locationId=b&dataset=demo&recordId='+sent.recordId,{headers:headers('b')});assert.equal(endResponse.status,200);const end=await endResponse.json();
+ assert.equal(end.transfer.receipt.accepted,3);assert.equal(end.transfer.receipt.rejected,1);assert.equal(end.transfer.receipt.quantitySource.accepted,7.5);assert.equal(end.transfer.receipt.quantitySource.item.revision,1);assert.equal(end.transfer.destinationMatch,null);assert.equal(end.events[2].receipt.accepted,1);assert.equal(end.events[2].receipt.quantitySource.accepted,2.5);assert.equal(end.events.length,5);
+ assert.deepEqual((await db.prepare('SELECT id,data FROM food_records ORDER BY id').all()).results,before);assert.equal(outbound,0);
+});
