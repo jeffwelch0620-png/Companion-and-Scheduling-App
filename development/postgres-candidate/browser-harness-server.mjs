@@ -19,6 +19,8 @@ const files={'/':['browser-harness.html','text/html'],'/forms':['runtime/forms-d
  '/offline-task-queue.mjs':['offline-task-queue.mjs','text/javascript']};
 files['/checkout-forms']=['runtime/forms-dist/checkout-preview.html','text/html'];
 files['/checkout-fixture']=['runtime/checkout-preview-fixture.json','application/json'];
+files['/checkout-offline-worker.js']=['runtime/forms-dist/checkout-offline-worker.js','text/javascript'];
+files['/checkout-shell.json']=['runtime/forms-dist/checkout-shell.json','application/json'];
 const server=createServer(async(req,res)=>{
  try{
   const origin='http://127.0.0.1:6610',url=new URL(req.url,origin);
