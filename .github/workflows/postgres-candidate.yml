@@ -38,6 +38,8 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Install isolated candidate dependencies
         run: npm ci --prefix development/postgres-candidate --ignore-scripts
+      - name: Check workflow coverage inventory
+        run: node development/postgres-candidate/readiness-inventory.mjs
       - name: Install PostgreSQL test client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Apply ordered migrations to empty candidate database
