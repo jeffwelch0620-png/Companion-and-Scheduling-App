@@ -72,8 +72,8 @@ test('published, cancelled, released and reference-only drafts cannot be edited'
   await assert.rejects(run(f,f.manager,command(f,{},r)),denied(409));
  }
 });
-test('station metadata and invalid durations, calendar dates and caller state fail without writes',async()=>{
- const f=await fixture();for(const change of [{stationId:randomUUID()},{end:'2031-11-03T03:00:00-05:00'},{end:'2031-11-02T00:00:00-04:00'},{start:'2031-02-30T01:00:00Z'},{start:'2031-11-02 01:00'},{published:true},{note:33}])await assert.rejects(run(f,f.manager,command(f,change)),e=>[400,409].includes(e.status));
+test('unknown stations and invalid durations, calendar dates and caller state fail without writes',async()=>{
+ const f=await fixture();for(const change of [{stationId:randomUUID()},{end:'2031-11-03T03:00:00-05:00'},{end:'2031-11-02T00:00:00-04:00'},{start:'2031-02-30T01:00:00Z'},{start:'2031-11-02 01:00'},{published:true},{note:33}])await assert.rejects(run(f,f.manager,command(f,change)),e=>[400,403,409].includes(e.status));
  await assert.rejects(db.transaction(c=>c.query('SELECT candidate_operations.save_schedule_draft($1,$2,$3,$4,$5)',[f.manager.subject,f.manager.membershipId,f.scope,randomUUID(),JSON.stringify({action:'shift.save',input:command(f,{start:'2031-02-30T01:00:00Z'}).input})])),e=>e.code.startsWith('22'));
  assert.equal((await admin.query('SELECT count(*)::int n FROM candidate_operations.shift_references WHERE restaurant_id=$1',[f.scope])).rows[0].n,0);
 });

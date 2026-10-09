@@ -75,8 +75,8 @@ export function parseCommand(raw: unknown, restaurantId: string) {
     ||!Number.isFinite(Date.parse(value.slice(0,10)+'T12:00:00Z'))||new Date(value.slice(0,10)+'T12:00:00Z').toISOString().slice(0,10)!==value.slice(0,10))throw new CommandError(400,'invalid_draft_time');
   }
   if(Object.hasOwn(input,'note')&&(typeof input.note!=='string'||input.note.trim().length>2000))throw new CommandError(400,'invalid_draft_text');
-  if(Object.hasOwn(input,'stationId')&&input.stationId!==null&&input.stationId!=='')throw new CommandError(409,'station_assignment_not_migrated');
-  payload={action:c.action,input:{personId:identifier(input.personId),start:instant(input.start),end:instant(input.end),position:string(input.position,100),note:typeof input.note==='string'?input.note.trim():''}};
+  payload={action:c.action,input:{personId:identifier(input.personId),start:instant(input.start),end:instant(input.end),position:string(input.position,100),note:typeof input.note==='string'?input.note.trim():'',
+   ...(Object.hasOwn(input,'stationId')?{stationId:input.stationId===null||input.stationId===''?null:identifier(input.stationId)}:{})}};
   if(updating)payload={...payload,recordId:identifier(c.recordId),expectedRevision:c.expectedRevision};
  }else if(c.action==='availability.save'||c.action==='availability.review'){
   const updating=Object.hasOwn(c,'recordId');

@@ -96,6 +96,10 @@
     {
       "sha256": "603bf793e2f9095b41e0465f995b3e0c11734a5d98cb1d8e8ddd4e3990a7ed6e",
       "file": "024_schedule_reconciliation.sql"
+    },
+    {
+      "sha256": "14bd73c24fa379b26d363bdca72ed98359872db5944109dc4cdfb645c5df9699",
+      "file": "025_station_scheduling.sql"
     }
   ]
 }
