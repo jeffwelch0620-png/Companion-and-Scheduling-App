@@ -43,7 +43,7 @@ npm run preview:seed --prefix development/postgres-candidate
 npm run preview:serve --prefix development/postgres-candidate
 ```
 
-Open `http://127.0.0.1:6610/schedule-forms`, `/checkout-forms`, `/overnight-forms` or `/forms` locally. The scheduling screen covers availability/time-off requests, not the full schedule board. Run seed once per fresh database; it refuses the existing fictional scheduling restaurant. The server binds only to loopback and issues short-lived, locally signed fictional tokens. Never deploy this fixture-token server. Stop it with Ctrl+C. Runtime fixture JSON, generated reference modules and preview build output stay ignored. Run browser checks after regression tests to avoid competing fictional business dates.
+Open `http://127.0.0.1:6610/schedule-forms`, `/checkout-forms`, `/overnight-forms` or `/forms` locally. The scheduling screen covers day/week/personal reads, individual drafts and availability/time-off requests; publication, copying, coverage, leadership and attendance controls remain pending. Run seed once per fresh database; it refuses the existing fictional scheduling restaurant. The server binds only to loopback and issues short-lived, locally signed fictional tokens. Never deploy this fixture-token server. Stop it with Ctrl+C. Runtime fixture JSON, generated reference modules and preview build output stay ignored. Run browser checks after regression tests to avoid competing fictional business dates.
 
 ## Scope and evidence
 
@@ -86,3 +86,5 @@ Follow [the repository Git workflow](../../docs/GIT_WORKFLOW.md). Shared migrati
 [Dated leadership](LEADERSHIP_CHECKPOINT.md) adds publisher-controlled assignment/edit/revocation, current capability checks and source-scoped reads with stable UTC timestamps. Assignment grants no membership permissions. Scheduling UI adoption, copying/attendance, source ingestion and notification delivery remain pending.
 
 [Scheduling request UI](SCHEDULE_REQUEST_UI_CHECKPOINT.md) connects existing availability/time-off forms and independent review to scoped candidate data with current viewer permissions, complete pagination and in-memory uncertain-delivery retries. Full schedule-board adoption and durable scheduling recovery remain pending.
+
+[Schedule board and draft editor](SCHEDULE_BOARD_UI_CHECKPOINT.md) add day/week/personal views and individual station-aware draft create/edit. [Candidate merge review](CANDIDATE_MERGE_REVIEW.md) records the controlled baseline consolidation gate; this is separate from Inventory integration or backend adoption.
