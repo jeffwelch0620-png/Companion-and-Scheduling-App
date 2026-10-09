@@ -47,7 +47,7 @@ Open `http://127.0.0.1:6610/checkout-forms`, `/overnight-forms` or `/forms` loca
 
 ## Scope and evidence
 
-Candidate workflows cover ordinary tasks, issues/reassignment, station handoffs, linked shift work, closing assignments/checks/correction help, separate checkout release, Dishwasher cycles/acceptance and overnight responsibility. Ordinary-task offline queuing has tests; closing/Dishwasher/overnight queuing and actual notification delivery remain pending.
+Candidate workflows cover ordinary tasks, issues/reassignment, station handoffs, linked shift work, closing assignments/checks/correction help, separate checkout release, Dishwasher cycles/acceptance and overnight responsibility. [Employee checkout queue support](CHECKOUT_OFFLINE_CHECKPOINT.md) adds tested closing readiness and Dishwasher readiness delivery to the existing ordinary-task queue. The checkout forms remain connected-only until queue UI wiring is completed. Incoming acceptance, manager checks, shift release, overnight responsibility commands and actual notification delivery remain outside this offline slice.
 
 Historical checkpoint documents were copied from the local preparation work. Their test counts and browser observations describe those checkpoints, not a fresh GitHub run. Runtime evidence referenced by them remains local and is excluded from Git. The latest historical workflow checkpoint is [Closing and Dishwasher UI](CHECKOUT_UI_CHECKPOINT.md). Production employee/schedule ingestion, remaining Companion modules, real hosted authentication, Inventory contracts and deployment remain pending.
 

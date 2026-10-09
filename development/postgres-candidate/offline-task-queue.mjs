@@ -1,5 +1,6 @@
 // Candidate browser queue. Tokens are supplied at send time and never persisted.
-// Only ready submissions on existing ordinary tasks are supported.
+// Only employee ready submissions on existing tasks or closing checklists.
+// Acceptance, verification, assignment and release remain connected actions.
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export class QueueError extends Error {}
 const copy=value=>structuredClone(value);
@@ -58,12 +59,15 @@ export class OfflineTaskQueue {
  async enqueue(subject,scope,command){
   if(typeof subject!=='string'||!subject||typeof scope!=='string'||!scope)
    throw new QueueError('identity_required');
-  if(!command||command.locationId!==scope||command.action!=='task.transition'
+  const closing=command?.action==='close.transition';
+  const answers=command?.input?.answers;
+  if(!command||command.locationId!==scope||!['task.transition','close.transition'].includes(command.action)
    ||!uuid.test(command.requestId??'')||!uuid.test(command.recordId??'')
-   ||!Number.isSafeInteger(command.expectedRevision)||command.expectedRevision<1
+   ||!Number.isSafeInteger(command.expectedRevision)||command.expectedRevision<1||command.expectedRevision>2147483646
    ||!command.input||command.input.step!=='ready'||typeof command.input.note!=='string'
    ||!command.input.note.trim()||command.input.note.trim().length>8000
-   ||Object.keys(command.input).some(k=>!['step','note'].includes(k))
+   ||Object.keys(command.input).some(k=>!(closing?['step','note','answers']:['step','note']).includes(k))
+   ||closing&&(!Array.isArray(answers)||answers.length>100||answers.some(a=>!Number.isSafeInteger(a)||a<0||a>99)||new Set(answers).size!==answers.length)
    ||Object.keys(command).some(k=>!['requestId','locationId','action','recordId','expectedRevision','input'].includes(k)))
    throw new QueueError('offline_action_not_supported');
   const payload=copy(command),key=entryKey(subject,scope,command.requestId);
