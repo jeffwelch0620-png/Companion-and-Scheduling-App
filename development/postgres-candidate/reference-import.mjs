@@ -51,9 +51,11 @@ export async function rehearseReferenceImport({ snapshot, batchId, expectedScope
     for (const s of p.standards) await client.query(`INSERT INTO candidate_operations.standard_references
       (id,restaurant_id,department,title,zone,position,revision,version,verification,status,criteria)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)`, [s.id,s.restaurant_id,s.department,s.title,s.zone,s.position,s.revision,s.version,s.verification,s.status,JSON.stringify(s.criteria)]);
+    for (const link of p.shiftStandardLinks) await client.query(`INSERT INTO candidate_operations.shift_standard_links
+      (shift_id,standard_id,restaurant_id) VALUES($1,$2,$3)`, [link.shift_id,link.standard_id,link.restaurant_id]);
     const next = (await client.query('UPDATE candidate_identity.restaurants SET revision=revision+1 WHERE id=$1 RETURNING revision', [source.restaurantId])).rows[0].revision;
     const result = { batchId: batchId.toLowerCase(), restaurantId: source.restaurantId, sourceHash: hash, workspaceRevision: next,
-      memberships: p.memberships.length, shifts: p.shifts.length, standards: p.standards.length };
+      memberships: p.memberships.length, shifts: p.shifts.length, standards: p.standards.length, shiftStandardLinks: p.shiftStandardLinks.length };
     await client.query(`INSERT INTO candidate_operations.reference_import_receipts
       (batch_id,restaurant_id,source_hash,source_snapshot,review_note,expected_scope_revision,result) VALUES($1,$2,$3,$4::jsonb,$5,$6,$7::jsonb)`,
       [batchId,source.restaurantId,hash,JSON.stringify(source),reviewNote,expectedScopeRevision,JSON.stringify(result)]);

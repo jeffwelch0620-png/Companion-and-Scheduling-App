@@ -5,7 +5,7 @@ const revision = v => Number.isInteger(v) && v > 0 && v <= 2147483647;
 const instant = v => typeof v === 'string' && /(?:Z|[+-]\d{2}:\d{2})$/.test(v) && Number.isFinite(Date.parse(v));
 
 /** Source members must include persisted revision/active state, absent from UI Member. */
-export function reviewReferenceMapping({ restaurantId, members, records, mappings }) {
+export function reviewReferenceMapping({ restaurantId, members, records, mappings, shiftStandardLinks: sourceLinks }) {
   if (!text(restaurantId) || ![members, records, mappings].every(Array.isArray)) throw new TypeError('invalid_mapping_envelope');
   const issues = [], staged = { memberships: [], shifts: [], standards: [] };
   const fail = (code, kind, sourceId) => issues.push({ code, kind, sourceId });
@@ -74,6 +74,25 @@ export function reviewReferenceMapping({ restaurantId, members, records, mapping
     }
   }
   for (const [key, m] of index) if (!sourceKeys.has(key)) fail('unused_mapping', m.kind, m.sourceId);
+  // Links are review inputs, never inferred from matching names or positions.
+  staged.shiftStandardLinks = [];
+  if (sourceLinks !== undefined && !Array.isArray(sourceLinks)) fail('invalid_shift_standard_links', 'link');
+  const pairs = new Set();
+  for (const link of Array.isArray(sourceLinks) ? sourceLinks : []) {
+    if (!link || Object.keys(link).some(k => !['shiftId','shiftRevision','standardId','standardRevision'].includes(k))) {
+      fail('invalid_shift_standard_link', 'link'); continue;
+    }
+    const sm = index.get(`shift:${link.shiftId}`), tm = index.get(`standard:${link.standardId}`);
+    const shift = staged.shifts.find(s => s.id === sm?.targetId.toLowerCase());
+    const standard = staged.standards.find(s => s.id === tm?.targetId.toLowerCase());
+    if (!shift || !standard || link.shiftRevision !== shift.revision || link.standardRevision !== standard.revision ||
+        shift.department !== standard.department || shift.position !== standard.position || shift.cancelled || standard.status !== 'approved') {
+      fail('unresolved_shift_standard_link', 'link', link.shiftId); continue;
+    }
+    const pair = `${shift.id}:${standard.id}`;
+    if (pairs.has(pair)) { fail('duplicate_shift_standard_link', 'link', link.shiftId); continue; }
+    pairs.add(pair); staged.shiftStandardLinks.push({shift_id:shift.id,standard_id:standard.id,restaurant_id:restaurantId});
+  }
   // Partial proposals are deliberately withheld when any reference is unresolved.
   return { status: issues.length ? 'blocked' : 'reviewable', issues, proposals: issues.length ? null : staged,
     requires: ['reviewed-person-identity', 'separate-access-review', 'source-archive', 'target-conflict-check', 'transactional-import'] };

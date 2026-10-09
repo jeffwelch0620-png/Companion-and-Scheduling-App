@@ -67,3 +67,21 @@ test('persisted member revision and active state are required beyond the UI proj
   const a = fixture(); delete a.members[0].revision; blocked(a, 'stale_mapping');
   const b = fixture(); delete b.members[0].active; blocked(b, 'invalid_member');
 });
+const reviewedLink = {shiftId:'shift-text-id',shiftRevision:2,standardId:'standard-text-id',standardRevision:4};
+test('explicit versioned links map to target IDs without inventing links when omitted', () => {
+  const f=fixture(); assert.deepEqual(reviewReferenceMapping(f).proposals.shiftStandardLinks,[]);
+  f.shiftStandardLinks=[reviewedLink];
+  assert.deepEqual(reviewReferenceMapping(f).proposals.shiftStandardLinks,[{shift_id:id(3),standard_id:id(4),restaurant_id:'fictional'}]);
+});
+test('link revisions, department, job, approval and cancellation are reviewed together', () => {
+  for (const change of [f=>f.shiftStandardLinks[0].shiftRevision++,f=>f.shiftStandardLinks[0].standardRevision++,
+    f=>f.shiftStandardLinks[0].standardId='unknown',f=>f.records[1].data.position='Dishwasher',
+    f=>f.records[1].data.status='draft',f=>f.records[0].data.cancelled=true]) {
+    const f=fixture(); f.shiftStandardLinks=[{...reviewedLink}]; change(f); blocked(f,'unresolved_shift_standard_link');
+  }
+});
+test('duplicate links and client-supplied authority fields block proposals', () => {
+  const f=fixture(); f.shiftStandardLinks=[reviewedLink,reviewedLink]; blocked(f,'duplicate_shift_standard_link');
+  f.shiftStandardLinks=[{...reviewedLink,clearance:true}]; blocked(f,'invalid_shift_standard_link');
+  f.shiftStandardLinks={}; blocked(f,'invalid_shift_standard_links');
+});

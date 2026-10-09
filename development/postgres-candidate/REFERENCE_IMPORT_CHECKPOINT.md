@@ -27,7 +27,7 @@ Published/cancelled shift flags and standard draft/approved/retired status are r
 
 This supports new fictional reference rows only. It does not update existing employees, schedules or standards, import tasks/closing history, authorize publication, deliver notifications or connect the active apps. Production ingestion needs a dedicated least-privilege importer and authorized review, protected archives/retention, explicit shared-person linking, realistic export fixtures, approved schedule/job rules, and reconciliation against Inventory's tested baseline.
 
-The next isolated step can address reviewed shift-standard links and historical workflow references, followed by a controlled end-to-end original-form rehearsal using imported fixtures. Production permissions and backend cutover remain separate decisions.
+The subsequent [imported closing checkpoint](IMPORTED_CLOSING_CHECKPOINT.md) adds optional, explicitly reviewed shift-standard links and a form-command/API rehearsal using imported fixtures. Historical workflow references remain pending. Production permissions and backend cutover remain separate decisions.
 
 ## Validation
 
