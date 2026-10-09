@@ -30,7 +30,7 @@ npm run check:types --prefix development/postgres-candidate
 npm run build:preview --prefix development/postgres-candidate
 ```
 
-Bootstrap verifies the versioned hash manifest and applies 001–023 in order, inserts fictional base actors after 001 so later capability conversion can run, and creates fictional sessions after migration. All candidate connection helpers use the selected database/port. Tests run serially because rollback checks create temporary failure triggers. The core concurrency tests use independent Node/PostgreSQL bridge processes; Python and machine-specific library paths are no longer required.
+Bootstrap verifies the versioned hash manifest and applies 001–024 in order, inserts fictional base actors after 001 so later capability conversion can run, and creates fictional sessions after migration. All candidate connection helpers use the selected database/port. Tests run serially because rollback checks create temporary failure triggers. The core concurrency tests use independent Node/PostgreSQL bridge processes; Python and machine-specific library paths are no longer required.
 
 The GitHub `candidate-validation` workflow performs this sequence on a fresh disposable PostgreSQL service. Passing candidate checks does not prove the complete application is migrated or deployed.
 
@@ -64,3 +64,5 @@ Follow [the repository Git workflow](../../docs/GIT_WORKFLOW.md). Shared migrati
 [Schedule draft checkpoint](SCHEDULE_DRAFT_CHECKPOINT.md) adds station-free draft create/edit with job, scope, overlap, approved availability and time-off checks. A fixture-only time-off completeness gate blocks unreviewed inputs. Time-off request workflows, station assignment, publication and full schedule UI adoption remain pending.
 
 [Time-off checkpoint](TIME_OFF_CHECKPOINT.md) adds employee requests, independent manager review, scoped reads and atomic cancellation of exactly reviewed unlinked candidate drafts. Published/linked shift cancellation and source completeness reconciliation remain pending.
+
+[Schedule reconciliation checkpoint](SCHEDULE_RECONCILIATION_CHECKPOINT.md) adds complete roster/job/time-off review and atomic fictional application with archived evidence and invalidation on administrative changes. Live export completeness, production ingestion, station workflows and publication remain pending.

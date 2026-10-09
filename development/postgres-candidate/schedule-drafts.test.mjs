@@ -16,6 +16,8 @@ async function fixture(ready=true){
 const command=(f,change={},r)=>({requestId:randomUUID(),locationId:f.scope,action:'shift.save',input:{personId:f.worker.membershipId,start:'2031-11-02T01:00:00-04:00',end:'2031-11-02T02:00:00-05:00',position:'Cook',note:'Fictional draft',...change},...(r?{recordId:r.recordId,expectedRevision:r.revision}:{})});
 const run=(f,a,c)=>executeTask(db,a,f.scope,c);const denied=status=>e=>e.status===status;
 const read=async id=>(await admin.query('SELECT * FROM candidate_operations.shift_references WHERE id=$1',[id])).rows[0];
+// Explicit fictional recertification after deliberate administrative fixture changes.
+const recertify=f=>admin.query('UPDATE candidate_operations.schedule_input_reviews SET time_off_complete=true,reviewed_at=clock_timestamp() WHERE restaurant_id=$1',[f.scope]);
 test('create and edit retain unpublished shifts, notes, atomic audit and schedule read visibility',async()=>{
  const f=await fixture(),r=await run(f,f.manager,command(f)),s=await read(r.recordId);assert.equal(s.published,false);assert.equal(s.ends_at-s.starts_at,2*3600000);
  const edited=await run(f,f.manager,command(f,{note:'Edited reason',end:'2031-11-02T03:00:00-05:00'},r));assert.equal(edited.revision,2);
@@ -30,8 +32,8 @@ test('scope and capabilities protect old and new department; titles alone give n
  await admin.query("INSERT INTO candidate_identity.membership_capabilities VALUES($1,'location.manage',true)",[f.manager.membershipId]);await run(f,f.manager,command(f,{personId:f.foreign.membershipId},r));
 });
 test('job eligibility is explicit; inactive schedule-only members are schedulable but cannot act',async()=>{
- const f=await fixture();await admin.query('UPDATE candidate_identity.schedule_eligibility SET active=false WHERE member_id=$1',[f.worker.membershipId]);await assert.rejects(run(f,f.manager,command(f)),denied(403));
- await admin.query("INSERT INTO candidate_identity.schedule_eligibility VALUES($1,'Cook','qualification',true)",[f.worker.membershipId]);await admin.query('UPDATE candidate_identity.memberships SET active=false,schedule_only=true WHERE id=$1',[f.worker.membershipId]);await run(f,f.manager,command(f));await assert.rejects(run(f,f.worker,command(f)),denied(403));
+ const f=await fixture();await admin.query('UPDATE candidate_identity.schedule_eligibility SET active=false WHERE member_id=$1',[f.worker.membershipId]);await recertify(f);await assert.rejects(run(f,f.manager,command(f)),denied(403));
+ await admin.query("INSERT INTO candidate_identity.schedule_eligibility VALUES($1,'Cook','qualification',true)",[f.worker.membershipId]);await admin.query('UPDATE candidate_identity.memberships SET active=false,schedule_only=true WHERE id=$1',[f.worker.membershipId]);await recertify(f);await run(f,f.manager,command(f));await assert.rejects(run(f,f.worker,command(f)),denied(403));
 });
 test('time-off completeness defaults blocked and cannot be self-certified by runtime',async()=>{
  const f=await fixture(false);await assert.rejects(run(f,f.manager,command(f)),e=>e.code==='schedule_inputs_incomplete');
@@ -39,8 +41,8 @@ test('time-off completeness defaults blocked and cannot be self-certified by run
  await admin.query('INSERT INTO candidate_operations.schedule_input_reviews VALUES($1,true,clock_timestamp())',[f.scope]);await run(f,f.manager,command(f));
 });
 test('approved time off and approved availability block drafts; pending restrictions do not',async()=>{
- const f=await fixture(),id=randomUUID();await admin.query("INSERT INTO candidate_operations.time_off_references(id,restaurant_id,member_id,starts_at,ends_at,status,department) VALUES($1,$2,$3,'2031-11-02T05:30:00Z','2031-11-02T06:30:00Z','approved','BOH')",[id,f.scope,f.worker.membershipId]);await assert.rejects(run(f,f.manager,command(f)),e=>e.code==='approved_time_off_conflict');
- await admin.query("UPDATE candidate_operations.time_off_references SET status='pending' WHERE id=$1",[id]);
+ const f=await fixture(),id=randomUUID();await admin.query("INSERT INTO candidate_operations.time_off_references(id,restaurant_id,member_id,starts_at,ends_at,status,department) VALUES($1,$2,$3,'2031-11-02T05:30:00Z','2031-11-02T06:30:00Z','approved','BOH')",[id,f.scope,f.worker.membershipId]);await recertify(f);await assert.rejects(run(f,f.manager,command(f)),e=>e.code==='approved_time_off_conflict');
+ await admin.query("UPDATE candidate_operations.time_off_references SET status='pending' WHERE id=$1",[id]);await recertify(f);
  const data={startDate:'2031-11-02',endDate:'2031-11-02',days:[0],startMinute:60,endMinute:120,beforeMinutes:0,afterMinutes:0,excludedDates:[],status:'approved'};
  await admin.query("INSERT INTO candidate_operations.availability_references VALUES($1,$2,$3,'BOH',1,clock_timestamp(),'approved',$4)",[randomUUID(),f.scope,f.worker.membershipId,JSON.stringify(data)]);await assert.rejects(run(f,f.manager,command(f)),e=>e.code==='availability_shift_conflict');
  await admin.query("UPDATE candidate_operations.availability_references SET status='pending',data=data||'{\"status\":\"pending\"}' WHERE restaurant_id=$1",[f.scope]);await run(f,f.manager,command(f));
