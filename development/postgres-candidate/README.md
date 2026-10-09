@@ -30,7 +30,7 @@ npm run check:types --prefix development/postgres-candidate
 npm run build:preview --prefix development/postgres-candidate
 ```
 
-Bootstrap verifies the versioned hash manifest and applies 001–017 in order, inserts fictional base actors after 001 so later capability conversion can run, and creates fictional sessions after migration. All candidate connection helpers use the selected database/port. Tests run serially because rollback checks create temporary failure triggers. The core concurrency tests use independent Node/PostgreSQL bridge processes; Python and machine-specific library paths are no longer required.
+Bootstrap verifies the versioned hash manifest and applies 001–018 in order, inserts fictional base actors after 001 so later capability conversion can run, and creates fictional sessions after migration. All candidate connection helpers use the selected database/port. Tests run serially because rollback checks create temporary failure triggers. The core concurrency tests use independent Node/PostgreSQL bridge processes; Python and machine-specific library paths are no longer required.
 
 The GitHub `candidate-validation` workflow performs this sequence on a fresh disposable PostgreSQL service. Passing candidate checks does not prove the complete application is migrated or deployed.
 
@@ -47,7 +47,7 @@ Open `http://127.0.0.1:6610/checkout-forms`, `/overnight-forms` or `/forms` loca
 
 ## Scope and evidence
 
-The [employee, schedule and standard mapping review](REFERENCE_MAPPING_CHECKPOINT.md) adds a read-only validator for explicit source-to-candidate IDs and revisions. It blocks unresolved references and produces narrow review proposals without importing data or granting access. Complete source archives, target conflicts, identity/access decisions and transactional ingestion remain pending.
+The [employee, schedule and standard mapping review](REFERENCE_MAPPING_CHECKPOINT.md) adds a read-only validator for explicit source-to-candidate IDs and revisions. The [transactional fictional import](REFERENCE_IMPORT_CHECKPOINT.md) adds target conflicts, complete source archiving, atomic new-reference writes and retry receipts in the candidate only. Production identity/access decisions, existing-reference reconciliation and authorized ingestion remain pending.
 
 Candidate workflows cover ordinary tasks, issues/reassignment, station handoffs, linked shift work, closing assignments/checks/correction help, separate checkout release, Dishwasher cycles/acceptance and overnight responsibility. [Employee checkout queue support](CHECKOUT_OFFLINE_CHECKPOINT.md) adds tested closing and Dishwasher readiness delivery. The [offline screen checkpoint](CHECKOUT_OFFLINE_UI_CHECKPOINT.md) records actual browser outage/reload/reconnect checks in the isolated preview, using cached shell/assignments and pending status. Incoming acceptance, manager checks, shift release, overnight responsibility commands and actual notification delivery remain outside this offline slice. Production identity/cache policy and application cutover remain pending.
 

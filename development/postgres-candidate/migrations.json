@@ -68,6 +68,10 @@
     {
       "sha256": "c9a8700cd9e142052776a3749097f557ed9662345e087715f89d21adc6385ffd",
       "file": "017_authenticated_runtime_grants.sql"
+    },
+    {
+      "sha256": "0718b2a9912d9922cad9cb9e6dc13c123e3179ab10c525ac22b2e6774044fed4",
+      "file": "018_reference_import_receipts.sql"
     }
   ]
 }
