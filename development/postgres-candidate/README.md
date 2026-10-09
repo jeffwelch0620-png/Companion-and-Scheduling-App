@@ -47,6 +47,8 @@ Open `http://127.0.0.1:6610/checkout-forms`, `/overnight-forms` or `/forms` loca
 
 ## Scope and evidence
 
+The [employee, schedule and standard mapping review](REFERENCE_MAPPING_CHECKPOINT.md) adds a read-only validator for explicit source-to-candidate IDs and revisions. It blocks unresolved references and produces narrow review proposals without importing data or granting access. Complete source archives, target conflicts, identity/access decisions and transactional ingestion remain pending.
+
 Candidate workflows cover ordinary tasks, issues/reassignment, station handoffs, linked shift work, closing assignments/checks/correction help, separate checkout release, Dishwasher cycles/acceptance and overnight responsibility. [Employee checkout queue support](CHECKOUT_OFFLINE_CHECKPOINT.md) adds tested closing and Dishwasher readiness delivery. The [offline screen checkpoint](CHECKOUT_OFFLINE_UI_CHECKPOINT.md) records actual browser outage/reload/reconnect checks in the isolated preview, using cached shell/assignments and pending status. Incoming acceptance, manager checks, shift release, overnight responsibility commands and actual notification delivery remain outside this offline slice. Production identity/cache policy and application cutover remain pending.
 
 Historical checkpoint documents were copied from the local preparation work. Their test counts and browser observations describe those checkpoints, not a fresh GitHub run. Runtime evidence referenced by them remains local and is excluded from Git. The latest historical workflow checkpoint is [Closing and Dishwasher UI](CHECKOUT_UI_CHECKPOINT.md). Production employee/schedule ingestion, remaining Companion modules, real hosted authentication, Inventory contracts and deployment remain pending.
