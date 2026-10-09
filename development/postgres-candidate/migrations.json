@@ -128,6 +128,10 @@
     {
       "sha256": "6f24bd408fe8e9bfb7c7d6e886d04e50d0a6b5dbcc8b43c2be4615aadbba0bd8",
       "file": "032_schedule_consent.sql"
+    },
+    {
+      "sha256": "2ed1e49f25664901648d5b2041c126ec9b99446fb52cbef05eb61687cb3ce648",
+      "file": "033_leadership_commands.sql"
     }
   ]
 }

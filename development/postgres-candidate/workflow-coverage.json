@@ -2,7 +2,8 @@
   "groups": [
     { "name": "Employee operations", "status": "candidate-workflow", "kinds": ["task", "close", "handoff"], "evidence": "IMPORTED_CLOSING_CHECKPOINT.md" },
     { "name": "Schedule drafts, publication and changes", "status": "candidate-workflow", "kinds": ["shift"], "evidence": "PUBLISHED_SCHEDULE_CHECKPOINT.md" },
-    { "name": "Standard and leadership references", "status": "reference-only", "kinds": ["standard", "leadership"], "evidence": "REFERENCE_IMPORT_CHECKPOINT.md" },
+    { "name": "Standard references", "status": "reference-only", "kinds": ["standard"], "evidence": "REFERENCE_IMPORT_CHECKPOINT.md" },
+    { "name": "Dated leadership", "status": "candidate-workflow", "kinds": ["leadership"], "evidence": "LEADERSHIP_CHECKPOINT.md" },
     { "name": "Availability commands", "status": "candidate-workflow", "kinds": ["availability"], "evidence": "AVAILABILITY_COMMAND_CHECKPOINT.md" },
     { "name": "Time-off and swap requests", "status": "candidate-workflow", "kinds": ["request"], "evidence": "SCHEDULE_CONSENT_CHECKPOINT.md" },
     { "name": "Staffing needs and publication review", "status": "candidate-workflow", "kinds": ["staffing"], "evidence": "PUBLICATION_REVIEW_CHECKPOINT.md" },

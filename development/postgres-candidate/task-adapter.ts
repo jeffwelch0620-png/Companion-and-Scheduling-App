@@ -44,7 +44,16 @@ export function parseCommand(raw: unknown, restaurantId: string) {
  if(c.locationId!==restaurantId) throw new CommandError(403,'scope_mismatch');
  const requestId=identifier(c.requestId),input=object(c.input);
  let payload: Record<string,unknown>;
- if(typeof c.action==='string'&&c.action.startsWith('coverage.')){
+ if(c.action==='leadership.assign'||c.action==='leadership.revoke'){
+  const updating=Object.hasOwn(c,'recordId');
+  if(updating&&(!Number.isSafeInteger(c.expectedRevision)||Number(c.expectedRevision)<1||Number(c.expectedRevision)>2147483646)||!updating&&Object.hasOwn(c,'expectedRevision')||c.action==='leadership.revoke'&&!updating)throw new CommandError(400,'invalid_revision');
+  if(c.action==='leadership.assign'){
+   keys(input,['personId','area','start','end','note'],['personId','area','start','end','note']);
+   for(const k of ['start','end']){const value=input[k];if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/.test(value)||!Number.isFinite(Date.parse(value.slice(0,10)+'T12:00:00Z'))||new Date(value.slice(0,10)+'T12:00:00Z').toISOString().slice(0,10)!==value.slice(0,10))throw new CommandError(400,'invalid_leadership_period');}
+   payload={action:c.action,input:{personId:identifier(input.personId),area:string(input.area,100),start:instant(input.start),end:instant(input.end),note:string(input.note,2000)}};
+  }else{keys(input,['note'],['note']);payload={action:c.action,input:{note:string(input.note,2000)}};}
+  if(updating)payload={...payload,recordId:identifier(c.recordId),expectedRevision:c.expectedRevision};
+ }else if(typeof c.action==='string'&&c.action.startsWith('coverage.')){
   if(!['coverage.create','coverage.volunteer','coverage.withdraw-volunteer','coverage.withdraw','coverage.approve'].includes(c.action))throw new CommandError(400,'invalid_coverage_action');
   const creating=c.action==='coverage.create';
   if(creating&&(Object.hasOwn(c,'recordId')||Object.hasOwn(c,'expectedRevision'))||!creating&&(!Number.isSafeInteger(c.expectedRevision)||Number(c.expectedRevision)<1||Number(c.expectedRevision)>2147483646))throw new CommandError(400,'invalid_revision');
@@ -245,6 +254,8 @@ export async function executeTask(
      ?'SELECT candidate_operations.goal_command($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
     :command.payload.action==='station.save'
      ?'SELECT candidate_operations.save_station($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
+    :['leadership.assign','leadership.revoke'].includes(String(command.payload.action))
+     ?'SELECT candidate_operations.leadership_command($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
     :typeof command.payload.action==='string'&&command.payload.action.startsWith('coverage.')
      ?'SELECT candidate_operations.schedule_consent_command($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
     :['request.create','request.review','request.consent'].includes(String(command.payload.action))
