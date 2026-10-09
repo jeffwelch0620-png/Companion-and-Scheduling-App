@@ -30,7 +30,7 @@ npm run check:types --prefix development/postgres-candidate
 npm run build:preview --prefix development/postgres-candidate
 ```
 
-Bootstrap verifies the versioned hash manifest and applies 001–025 in order, inserts fictional base actors after 001 so later capability conversion can run, and creates fictional sessions after migration. All candidate connection helpers use the selected database/port. Tests run serially because rollback checks create temporary failure triggers. The core concurrency tests use independent Node/PostgreSQL bridge processes; Python and machine-specific library paths are no longer required.
+Bootstrap verifies the versioned hash manifest and applies 001–026 in order, inserts fictional base actors after 001 so later capability conversion can run, and creates fictional sessions after migration. All candidate connection helpers use the selected database/port. Tests run serially because rollback checks create temporary failure triggers. The core concurrency tests use independent Node/PostgreSQL bridge processes; Python and machine-specific library paths are no longer required.
 
 The GitHub `candidate-validation` workflow performs this sequence on a fresh disposable PostgreSQL service. Passing candidate checks does not prove the complete application is migrated or deployed.
 
@@ -68,3 +68,5 @@ Follow [the repository Git workflow](../../docs/GIT_WORKFLOW.md). Shared migrati
 [Schedule reconciliation checkpoint](SCHEDULE_RECONCILIATION_CHECKPOINT.md) adds complete roster/job/time-off review and atomic fictional application with archived evidence and invalidation on administrative changes. Live export completeness, production ingestion, station workflows and publication remain pending.
 
 [Station scheduling checkpoint](STATION_SCHEDULING_CHECKPOINT.md) adds scoped scheduling references and station-aware drafts with job/member/Dish checks. Station configuration, guide/goals/reviewer workflows, publication and training/UI adoption remain pending.
+
+[Station setup checkpoint](STATION_SETUP_CHECKPOINT.md) adds scoped definition/setup editing with scale, threshold, guide, goal and reviewer validation. Employee learning goal issuance/review, proficiency assessment, source ingestion and publication remain pending.
