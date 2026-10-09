@@ -1,0 +1,27 @@
+{
+  "name": "jmax-postgres-review-candidate",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Isolated review candidate, not the active Companion package",
+  "dependencies": {
+    "@types/pg": "8.23.1",
+    "jose": "6.2.12",
+    "pg": "8.23.1"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "6.2.5"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "check:types": "node ../../node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck --target ES2022 --module nodenext --moduleResolution nodenext --allowImportingTsExtensions task-adapter.ts task-http.ts",
+    "test": "npm run test:prepare && node run-tests.mjs",
+    "preview:seed": "node seed-overnight-preview.mjs && node seed-checkout-preview.mjs",
+    "test:prepare": "node build-closing-reference.mjs",
+    "bootstrap": "node bootstrap.mjs",
+    "build:preview": "node build-forms-preview.mjs",
+    "preview:serve": "node browser-harness-server.mjs"
+  }
+}

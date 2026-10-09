@@ -1,0 +1,73 @@
+{
+  "purpose": "Isolated Companion candidate; not a production deployment manifest",
+  "migrations": [
+    {
+      "sha256": "36f4247798afd069a3542d2b4a4acb52592525d42447e1c8d9240152bdc0befb",
+      "file": "001_candidate.sql"
+    },
+    {
+      "sha256": "4abf10ea4529b540cd69b087de4055aad1d8d6ff051915095c68ea0e4c81ae1b",
+      "file": "002_authenticated_reads.sql"
+    },
+    {
+      "sha256": "005ee76a57b87ba3b0fe8beda14c4e14328753c6bcccc6b2cf96ab4fef7393fa",
+      "file": "003_capability_permissions.sql"
+    },
+    {
+      "sha256": "88b4cb03f6422c5bf8dece3324a9f7dc76546ce301bed80b8603ffa08bae1861",
+      "file": "004_issues_reassignment.sql"
+    },
+    {
+      "sha256": "7d399ca1fa05720eacdaef074342192d705cea7f004bafa2a0f198f1234cabdc",
+      "file": "005_station_handoffs.sql"
+    },
+    {
+      "sha256": "52c8b5d59ebd438fd52a4d030d21231462e093e165e81a488b22351c71cd2118",
+      "file": "006_linked_shift_tasks.sql"
+    },
+    {
+      "sha256": "5687695bd6cbb40e398aa63bd9d3ed4efc1d64dfd42ca941a30882e3325522f7",
+      "file": "007_closing_assignments.sql"
+    },
+    {
+      "sha256": "22581578d81c931b95176fd2586ffc824bf47c00df943751933e220d31428ca2",
+      "file": "008_closing_execution.sql"
+    },
+    {
+      "sha256": "43b2fc606a840d512e832d62ba41bd699f8c9a4cd2cf62f03fe832e6216e6525",
+      "file": "009_closing_support.sql"
+    },
+    {
+      "sha256": "0807831bb519bae599f6c1c950d531869f2ab7c65e732030f6ce0ab298e35694",
+      "file": "010_ordinary_shift_release.sql"
+    },
+    {
+      "sha256": "ed6331f72d0400635ff3be3ed0ccf5b23d934b956c4aa202788691ced4d7551e",
+      "file": "011_dish_cycle_assignment.sql"
+    },
+    {
+      "sha256": "d026575d308b74e7d0f0cd0d24d218a4c3e6997edd086e0f0aba84ccf603a33a",
+      "file": "012_dish_handoffs_execution.sql"
+    },
+    {
+      "sha256": "47e737ca1a7d2ef5371cff1b79dce75d72ebbc417cdadf15f2870ab20a564596",
+      "file": "013_dish_shift_release.sql"
+    },
+    {
+      "sha256": "912b2f66c9459c7719ba88a17e6d47c250dcff39659773c2c998bd121befe7a1",
+      "file": "014_manager_handoffs.sql"
+    },
+    {
+      "sha256": "7640ca0229b27a06a7851edf3bae5736a57aef1e4bb5738164a429a7eb6086b1",
+      "file": "015_overnight_issues.sql"
+    },
+    {
+      "sha256": "936861083789010daaa2461928df1a47f799dfeecbfbe0b51740460f30722d9c",
+      "file": "016_checkout_form_reads.sql"
+    },
+    {
+      "sha256": "c9a8700cd9e142052776a3749097f557ed9662345e087715f89d21adc6385ffd",
+      "file": "017_authenticated_runtime_grants.sql"
+    }
+  ]
+}

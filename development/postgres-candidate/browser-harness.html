@@ -1,0 +1,11 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>JMAX Offline Queue Verification</title>
+<style>body{font:17px system-ui;max-width:900px;margin:40px auto;padding:20px;background:#f8fafc;color:#17243d}button,a{margin:8px;padding:12px;display:inline-block}pre{background:white;padding:20px;white-space:pre-wrap;border:1px solid #cbd5e1}</style>
+<h1>JMAX Offline Queue Verification</h1>
+<p>Fictional local test only. This page uses the candidate task API and PostgreSQL, separate from the live Companion UI.</p>
+<button id="prepare">1 Create task and queue ready</button>
+<a href="/">2 Reload page</a>
+<button id="lost">3 Send and simulate lost response</button>
+<button id="retry">4 Reconnect and verify one effect</button>
+<pre id="report">Loading IndexedDB records…</pre>
+<script type="module" src="/browser-harness.mjs"></script></html>
