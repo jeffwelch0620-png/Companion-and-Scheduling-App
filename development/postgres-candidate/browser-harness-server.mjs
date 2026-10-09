@@ -13,10 +13,12 @@ const issuer='https://fictional.invalid/auth/v1';
 const handler=createTaskHandler(db,makeJwtVerifier({issuer,audience:'authenticated',getKey:createLocalJWKSet({keys:[jwk]})}));
 const nightFixture=JSON.parse(await readFile(new URL('runtime/overnight-preview-fixture.json',import.meta.url),'utf8'));
 const checkoutFixture=JSON.parse(await readFile(new URL('runtime/checkout-preview-fixture.json',import.meta.url),'utf8'));
-Object.assign(nightFixture.sessions,checkoutFixture.sessions);
+const scheduleFixture=JSON.parse(await readFile(new URL('runtime/schedule-preview-fixture.json',import.meta.url),'utf8'));
+Object.assign(nightFixture.sessions,checkoutFixture.sessions,scheduleFixture.sessions);
 const session={manager:'20000000-0000-0000-0000-000000000001',employee:'20000000-0000-0000-0000-000000000002',...Object.fromEntries(Object.entries(nightFixture.sessions).map(([key,value])=>[key,value.id]))};
 const files={'/':['browser-harness.html','text/html'],'/forms':['runtime/forms-dist/forms-preview.html','text/html'],'/overnight-forms':['runtime/forms-dist/overnight-preview.html','text/html'],'/overnight-fixture':['runtime/overnight-preview-fixture.json','application/json'],'/browser-harness.mjs':['browser-harness.mjs','text/javascript'],
  '/offline-task-queue.mjs':['offline-task-queue.mjs','text/javascript']};
+files['/schedule-forms']=['runtime/forms-dist/schedule-preview.html','text/html'];
 files['/checkout-forms']=['runtime/forms-dist/checkout-preview.html','text/html'];
 files['/checkout-fixture']=['runtime/checkout-preview-fixture.json','application/json'];
 files['/checkout-offline-worker.js']=['runtime/forms-dist/checkout-offline-worker.js','text/javascript'];

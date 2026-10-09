@@ -18,7 +18,7 @@
   "scripts": {
     "check:types": "node ../../node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck --target ES2022 --module nodenext --moduleResolution nodenext --allowImportingTsExtensions task-adapter.ts task-http.ts",
     "test": "npm run test:prepare && node run-tests.mjs",
-    "preview:seed": "node seed-overnight-preview.mjs && node seed-checkout-preview.mjs",
+    "preview:seed": "node seed-overnight-preview.mjs && node seed-checkout-preview.mjs && node seed-schedule-preview.mjs",
     "test:prepare": "node build-closing-reference.mjs",
     "bootstrap": "node bootstrap.mjs",
     "build:preview": "node build-forms-preview.mjs",

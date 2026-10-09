@@ -132,6 +132,10 @@
     {
       "sha256": "2ed1e49f25664901648d5b2041c126ec9b99446fb52cbef05eb61687cb3ce648",
       "file": "033_leadership_commands.sql"
+    },
+    {
+      "sha256": "8eb9ea8b3fc2465d5dd8dd985e95c7edde0acee9ed4c3dc6201d82c86fda5226",
+      "file": "034_schedule_viewer.sql"
     }
   ]
 }

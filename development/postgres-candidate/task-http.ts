@@ -54,7 +54,7 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
  return async(request:Request):Promise<Response>=>{
   try{
    const url=new URL(request.url);
-   const route=/^\/api\/operations\/([a-zA-Z0-9_-]{1,100})\/(commands|week-review|tasks|goals|staffing|publication-review|closes|dish-cycles|overnight|shifts|schedule-shifts|schedule-roster|schedule-availability|schedule-requests|schedule-stations|schedule-coverage|schedule-swaps|schedule-leadership)(?:\/([0-9a-f-]{36}))?$/.exec(url.pathname);
+   const route=/^\/api\/operations\/([a-zA-Z0-9_-]{1,100})\/(commands|week-review|tasks|goals|staffing|publication-review|closes|dish-cycles|overnight|shifts|schedule-viewer|schedule-shifts|schedule-roster|schedule-availability|schedule-requests|schedule-stations|schedule-coverage|schedule-swaps|schedule-leadership)(?:\/([0-9a-f-]{36}))?$/.exec(url.pathname);
    if(!route)return json({error:{code:'route_not_found'}},404);
    const [,scope,resource,taskId]=route;
    if((resource.startsWith('schedule-')||resource==='goals'||resource==='staffing')&&(taskId||url.searchParams.getAll('after').length>1||url.searchParams.getAll('limit').length>1))
@@ -66,6 +66,7 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
    if(!auth?.startsWith('Bearer ')||auth.length>16384)throw new CommandError(401,'authentication_required');
    const session=await verifyToken(auth.slice(7));
    const command=resource==='commands'||resource==='week-review'?await body(request):undefined;
+   if(resource==='schedule-viewer'&&url.search)throw new CommandError(400,'invalid_query');
    if([...url.searchParams.keys()].some(k=>!['after','limit'].includes(k))
     ||(resource==='commands'||resource==='week-review')&&url.search||taskId&&url.search)
     throw new CommandError(400,'invalid_query');
@@ -85,6 +86,7 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
      if(!review||typeof review!=='object'||Array.isArray(review)||Object.keys(review).some(k=>!['weekStart','draftIds'].includes(k))||typeof review.weekStart!=='string'||!Array.isArray(review.draftIds)||review.draftIds.length<1||review.draftIds.length>100||review.draftIds.some(id=>typeof id!=='string'||!uuid.test(id)))throw new CommandError(400,'invalid_week_fields');
      return result((await connection.query('SELECT candidate_operations.weekly_review($1,$2::uuid,$3,$4,$5::jsonb) AS result',[identity.subject,identity.membershipId,scope,review.weekStart,JSON.stringify(review.draftIds)])).rows[0]);
     }
+    if(resource==='schedule-viewer'){return result((await connection.query('SELECT candidate_operations.schedule_viewer($1,$2::uuid,$3) AS result',[identity.subject,identity.membershipId,scope])).rows[0]);}
     if(resource==='staffing'){
      return result((await connection.query('SELECT candidate_operations.list_staffing($1,$2::uuid,$3,$4::uuid,$5::integer) AS result',[identity.subject,identity.membershipId,scope,after,Number(limitText)])).rows[0]);
     }
