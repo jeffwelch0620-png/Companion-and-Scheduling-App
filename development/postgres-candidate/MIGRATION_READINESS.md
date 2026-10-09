@@ -86,3 +86,5 @@ Further progress: [migration 020 and schedule context reads](SCHEDULE_CONTEXT_CH
 [Migration 027 and employee goals](EMPLOYEE_GOALS_CHECKPOINT.md) add manual goal/correction assignment, named independent review, approved-instruction version checks and scoped participant reads. Automatic learning, station issuance, proficiency, browser adoption and notification delivery remain pending. M06 remains open.
 
 [Migration 028 and individual publication](SCHEDULE_PUBLICATION_CHECKPOINT.md) add reviewed unlinked draft publication, current eligibility checks and station learning proposals with persistent deduplication. Privileged fictional review evidence is required; full staffing/closing publication, batch publication, production evidence and UI adoption remain pending. M06 remains open.
+
+[Migration 029 publication review](PUBLICATION_REVIEW_CHECKPOINT.md) adds staffing workflows and source-aligned closing checks, with atomic closing linkage on publication. Weekly gaps/exceptions, batch publication and production source evidence remain pending. M06 stays open.
