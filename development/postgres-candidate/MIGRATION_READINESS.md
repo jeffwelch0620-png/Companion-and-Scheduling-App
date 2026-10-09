@@ -70,3 +70,5 @@ The new inventory check passed against the current source, all 18 migration hash
 Subsequent progress: [migration 019 and schedule shift reads](SCHEDULE_READ_CHECKPOINT.md) implement a paged shift-reference endpoint with source visibility parity. M06 remains open for roster/job eligibility, availability, remaining scheduling reads and all schedule writes. The preceding inventory/check counts describe this readiness review's baseline, not the later scheduling checkpoint.
 
 Further progress: [migration 020 and schedule context reads](SCHEDULE_CONTEXT_CHECKPOINT.md) add roster/explicit eligibility and availability reference reads. M06 remains open for their production ingestion, writes, remaining scheduling workflows and complete workspace/form adoption.
+
+[Migration 021 and availability commands](AVAILABILITY_COMMAND_CHECKPOINT.md) add save, independent review, projected shift-conflict checks and atomic replacement/audit/receipt behavior. M06 remains open; draft/edit shift writes are next. Source-level availability coverage is now classified as a candidate workflow, not production adoption.

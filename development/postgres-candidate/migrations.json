@@ -80,6 +80,10 @@
     {
       "sha256": "9cb765c443779b644919761840b07676622c48e8770d049eb83685dc6454aaaf",
       "file": "020_schedule_context_reads.sql"
+    },
+    {
+      "sha256": "f26fac10553cfc3bb32d74875d79d1246ada5c0207c2182bb0ec8820787d7884",
+      "file": "021_availability_commands.sql"
     }
   ]
 }
