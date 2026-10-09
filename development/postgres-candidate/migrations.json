@@ -124,6 +124,10 @@
     {
       "sha256": "76d72b30518f45eabccaec5328c7e76c0b3a660de3bc0c3250f5aa6fa15f53de",
       "file": "031_published_schedule.sql"
+    },
+    {
+      "sha256": "6f24bd408fe8e9bfb7c7d6e886d04e50d0a6b5dbcc8b43c2be4615aadbba0bd8",
+      "file": "032_schedule_consent.sql"
     }
   ]
 }

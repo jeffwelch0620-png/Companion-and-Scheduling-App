@@ -30,7 +30,7 @@ npm run check:types --prefix development/postgres-candidate
 npm run build:preview --prefix development/postgres-candidate
 ```
 
-Bootstrap verifies the versioned hash manifest and applies 001–031 in order, inserts fictional base actors after 001 so later capability conversion can run, and creates fictional sessions after migration. All candidate connection helpers use the selected database/port. Tests run serially because rollback checks create temporary failure triggers. The core concurrency tests use independent Node/PostgreSQL bridge processes; Python and machine-specific library paths are no longer required.
+Bootstrap verifies the versioned hash manifest and applies 001–032 in order, inserts fictional base actors after 001 so later capability conversion can run, and creates fictional sessions after migration. All candidate connection helpers use the selected database/port. Tests run serially because rollback checks create temporary failure triggers. The core concurrency tests use independent Node/PostgreSQL bridge processes; Python and machine-specific library paths are no longer required.
 
 The GitHub `candidate-validation` workflow performs this sequence on a fresh disposable PostgreSQL service. Passing candidate checks does not prove the complete application is migrated or deployed.
 
@@ -80,3 +80,5 @@ Follow [the repository Git workflow](../../docs/GIT_WORKFLOW.md). Shared migrati
 [Weekly review and publication](WEEKLY_PUBLICATION_CHECKPOINT.md) adds selected-draft staffing gaps, current review tokens, exact closing selections and atomic batch publication with explicit remaining-gap plans. Complete source evidence, published-shift changes and weekly UI adoption remain pending.
 
 [Published schedule changes](PUBLISHED_SCHEDULE_CHECKPOINT.md) add scoped edits/cancellation, exact closing transfer selections, reset submission state and atomic audit/notification intents. Coverage consent/swaps, full scheduling UI adoption and production source reconciliation remain pending.
+
+[Coverage and swap consent](SCHEDULE_CONSENT_CHECKPOINT.md) add explicit volunteering/acceptance, independent approval, current duty snapshots, atomic invalidation and private scoped reads. Existing time-off commands remain separate. Scheduling UI adoption, dated leadership writes, source reconciliation and notification delivery remain pending.

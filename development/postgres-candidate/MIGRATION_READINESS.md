@@ -92,3 +92,5 @@ Further progress: [migration 020 and schedule context reads](SCHEDULE_CONTEXT_CH
 [Migration 030 weekly review/publication](WEEKLY_PUBLICATION_CHECKPOINT.md) adds selected-only planned staffing gaps, current review tokens, gap plans and atomic batch publication. Privileged fictional scope evidence remains required. Published-shift changes, source reconciliation and UI adoption remain pending. M06 stays open.
 
 [Migration 031 published schedule changes](PUBLISHED_SCHEDULE_CHECKPOINT.md) adds reviewed published edits, scoped cancellation and exact closing responsibility transfers. Current authority, linked work and completed closing protection remain enforced. Coverage requests/consent/swaps, source reconciliation and UI adoption remain pending. M06 stays open.
+
+[Migration 032 coverage and swap consent](SCHEDULE_CONSENT_CHECKPOINT.md) adds owner offers, confirmed volunteers, named replacement acceptance, independent approval and atomic invalidation of stale consent. Scoped private reads and shared closing-transfer protections are tested in the candidate. Leadership assignment, source ingestion and complete scheduling UI adoption remain pending. M06 stays open.
