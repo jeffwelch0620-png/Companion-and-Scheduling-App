@@ -44,7 +44,13 @@ export function parseCommand(raw: unknown, restaurantId: string) {
  if(c.locationId!==restaurantId) throw new CommandError(403,'scope_mismatch');
  const requestId=identifier(c.requestId),input=object(c.input);
  let payload: Record<string,unknown>;
- if(c.action==='staffing.save'||c.action==='staffing.approve'||c.action==='staffing.retire'){
+ if(c.action==='shift.publish-batch'){
+  keys(input,['weekStart','drafts','planningReview','confirmed','note','coverageAcknowledged','coverageNote'],['weekStart','drafts','planningReview','confirmed','note']);
+  if(Object.hasOwn(c,'recordId')||Object.hasOwn(c,'expectedRevision')||input.confirmed!==true||!Array.isArray(input.drafts)||input.drafts.length<1||input.drafts.length>100||typeof input.planningReview!=='string'||!/^[0-9a-f]{64}$/.test(input.planningReview)||typeof input.weekStart!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(input.weekStart))throw new CommandError(400,'invalid_week_fields');
+  const drafts=input.drafts.map(v=>{const d=object(v);keys(d,['id','revision','closing'],['id','revision','closing']);if(!Number.isSafeInteger(d.revision)||Number(d.revision)<1||Number(d.revision)>2147483646||!Array.isArray(d.closing)||d.closing.length>100)throw new CommandError(400,'invalid_week_selection');return {id:identifier(d.id),revision:Number(d.revision),closing:d.closing.map(v=>{const close=object(v);keys(close,['id','revision'],['id','revision']);if(!Number.isSafeInteger(close.revision)||Number(close.revision)<1||Number(close.revision)>2147483646)throw new CommandError(400,'invalid_week_selection');return {id:identifier(close.id),revision:Number(close.revision)};})};});
+  if(Object.hasOwn(input,'coverageAcknowledged')&&typeof input.coverageAcknowledged!=='boolean'||Object.hasOwn(input,'coverageNote')&&(typeof input.coverageNote!=='string'||input.coverageNote.trim().length>2000))throw new CommandError(400,'invalid_week_fields');
+  payload={action:c.action,input:{...input,drafts,note:string(input.note,2000)}};
+ }else if(c.action==='staffing.save'||c.action==='staffing.approve'||c.action==='staffing.retire'){
   const updating=Object.hasOwn(c,'recordId');
   if(updating&&(!Number.isSafeInteger(c.expectedRevision)||Number(c.expectedRevision)<1||Number(c.expectedRevision)>2147483646)||!updating&&Object.hasOwn(c,'expectedRevision')||c.action!=='staffing.save'&&!updating)throw new CommandError(400,'invalid_revision');
   if(c.action==='staffing.save'){
@@ -207,7 +213,9 @@ export async function executeTask(
  try {
   return await database.transaction(async connection=>{
    const response=await connection.query(
-    String(command.payload.action).startsWith('staffing.')
+    command.payload.action==='shift.publish-batch'
+     ?'SELECT candidate_operations.publish_week($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
+    :String(command.payload.action).startsWith('staffing.')
      ?'SELECT candidate_operations.staffing_command($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
     :command.payload.action==='shift.publish'
      ?'SELECT candidate_operations.publish_shift($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
@@ -245,7 +253,7 @@ export async function executeTask(
  } catch(error) {
   const e=error as {code?:string;message?:string};
   if(e.code==='42501') throw new CommandError(403,e.message??'denied');
-  if(e.code==='P0001'&&['request_payload_conflict','revision_conflict','phase_conflict','shift_conflict','closing_zone_conflict','attention_pending','attention_not_pending','checkout_pending','dish_cycle_conflict','dish_shape_conflict','availability_replacement_conflict','availability_shift_conflict','draft_reference_only','schedule_inputs_incomplete','station_assignment_not_migrated','shift_overlap','approved_time_off_conflict','linked_shift_protected','linked_task_pending','linked_close_protected','time_off_impact_conflict','time_off_cancellation_not_migrated','station_name_immutable','station_title_conflict','station_setup_reference_only','goal_guide_changed','publication_review_required','publication_linked_work_held','station_goal_reviewer_unavailable','staffing_overlap','staffing_publication_review_required','closing_publication_review_required'].includes(e.message??''))
+  if(e.code==='P0001'&&['request_payload_conflict','revision_conflict','phase_conflict','shift_conflict','closing_zone_conflict','attention_pending','attention_not_pending','checkout_pending','dish_cycle_conflict','dish_shape_conflict','availability_replacement_conflict','availability_shift_conflict','draft_reference_only','schedule_inputs_incomplete','station_assignment_not_migrated','shift_overlap','approved_time_off_conflict','linked_shift_protected','linked_task_pending','linked_close_protected','time_off_impact_conflict','time_off_cancellation_not_migrated','station_name_immutable','station_title_conflict','station_setup_reference_only','goal_guide_changed','publication_review_required','publication_linked_work_held','station_goal_reviewer_unavailable','staffing_overlap','staffing_publication_review_required','closing_publication_review_required','planning_review_conflict','weekly_scope_review_required','closing_selection_conflict'].includes(e.message??''))
    throw new CommandError(409,e.message??'conflict');
   if(e.code?.startsWith('22')||e.code==='23514') throw new CommandError(400,e.message??'invalid_command');
   throw error; // Network/database failures must remain failures, never confirmed empty or applied.

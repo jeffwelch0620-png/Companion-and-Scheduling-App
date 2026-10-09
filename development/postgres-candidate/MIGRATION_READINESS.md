@@ -88,3 +88,5 @@ Further progress: [migration 020 and schedule context reads](SCHEDULE_CONTEXT_CH
 [Migration 028 and individual publication](SCHEDULE_PUBLICATION_CHECKPOINT.md) add reviewed unlinked draft publication, current eligibility checks and station learning proposals with persistent deduplication. Privileged fictional review evidence is required; full staffing/closing publication, batch publication, production evidence and UI adoption remain pending. M06 remains open.
 
 [Migration 029 publication review](PUBLICATION_REVIEW_CHECKPOINT.md) adds staffing workflows and source-aligned closing checks, with atomic closing linkage on publication. Weekly gaps/exceptions, batch publication and production source evidence remain pending. M06 stays open.
+
+[Migration 030 weekly review/publication](WEEKLY_PUBLICATION_CHECKPOINT.md) adds selected-only planned staffing gaps, current review tokens, gap plans and atomic batch publication. Privileged fictional scope evidence remains required. Published-shift changes, source reconciliation and UI adoption remain pending. M06 stays open.

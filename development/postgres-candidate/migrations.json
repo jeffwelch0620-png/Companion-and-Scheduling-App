@@ -116,6 +116,10 @@
     {
       "sha256": "6a9c3a005c1577354016434945215ad8e7470151f03e3dd97a5dfda312c8d49d",
       "file": "029_publication_review.sql"
+    },
+    {
+      "sha256": "8e6aeebc683ff9467c21920f1b2c321f86089d2d8ddce42620d49aea04fa3f8d",
+      "file": "030_weekly_publication.sql"
     }
   ]
 }
