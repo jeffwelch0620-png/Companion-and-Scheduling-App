@@ -65,11 +65,11 @@ test('any linked task protects draft edits including note-only changes',async()=
  await admin.query("INSERT INTO candidate_operations.tasks(id,restaurant_id,assignee_id,department,title,detail,due,phase,revision,shift_id,shift_revision) VALUES($1,$2,$3,'BOH','Fictional task','Fictional detail','2031-11-02T06:00:00Z','open',1,$4,1)",[randomUUID(),f.scope,f.worker.membershipId,r.recordId]);
  await assert.rejects(run(f,f.manager,command(f,{note:'Changed note'},r)),e=>e.code==='linked_shift_protected');assert.equal((await read(r.recordId)).revision,1);
 });
-test('published, cancelled, released and reference-only drafts cannot be edited',async()=>{
+test('draft-only manager cannot edit published, cancelled, released and reference-only drafts',async()=>{
  for(const state of ['published','cancelled','released_at','reference']){
   const f=await fixture(),r=await run(f,f.manager,command(f));
   if(state==='reference')await admin.query('DELETE FROM candidate_operations.schedule_draft_events WHERE shift_id=$1',[r.recordId]);else await admin.query(`UPDATE candidate_operations.shift_references SET ${state}=${state==='released_at'?'clock_timestamp()':'true'} WHERE id=$1`,[r.recordId]);
-  await assert.rejects(run(f,f.manager,command(f,{},r)),denied(409));
+  await assert.rejects(run(f,f.manager,command(f,{},r)),denied(state==='published'?403:409));
  }
 });
 test('unknown stations and invalid durations, calendar dates and caller state fail without writes',async()=>{

@@ -90,3 +90,5 @@ Further progress: [migration 020 and schedule context reads](SCHEDULE_CONTEXT_CH
 [Migration 029 publication review](PUBLICATION_REVIEW_CHECKPOINT.md) adds staffing workflows and source-aligned closing checks, with atomic closing linkage on publication. Weekly gaps/exceptions, batch publication and production source evidence remain pending. M06 stays open.
 
 [Migration 030 weekly review/publication](WEEKLY_PUBLICATION_CHECKPOINT.md) adds selected-only planned staffing gaps, current review tokens, gap plans and atomic batch publication. Privileged fictional scope evidence remains required. Published-shift changes, source reconciliation and UI adoption remain pending. M06 stays open.
+
+[Migration 031 published schedule changes](PUBLISHED_SCHEDULE_CHECKPOINT.md) adds reviewed published edits, scoped cancellation and exact closing responsibility transfers. Current authority, linked work and completed closing protection remain enforced. Coverage requests/consent/swaps, source reconciliation and UI adoption remain pending. M06 stays open.

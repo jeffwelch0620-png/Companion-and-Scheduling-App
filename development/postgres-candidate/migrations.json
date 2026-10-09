@@ -120,6 +120,10 @@
     {
       "sha256": "8e6aeebc683ff9467c21920f1b2c321f86089d2d8ddce42620d49aea04fa3f8d",
       "file": "030_weekly_publication.sql"
+    },
+    {
+      "sha256": "76d72b30518f45eabccaec5328c7e76c0b3a660de3bc0c3250f5aa6fa15f53de",
+      "file": "031_published_schedule.sql"
     }
   ]
 }

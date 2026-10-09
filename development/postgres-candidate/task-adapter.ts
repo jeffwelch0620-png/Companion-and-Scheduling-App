@@ -104,6 +104,13 @@ export function parseCommand(raw: unknown, restaurantId: string) {
    }
    payload={action:c.action,recordId:identifier(c.recordId),expectedRevision:c.expectedRevision,input:{approve:input.approve,note:string(input.note,2000),...(affectedShifts?{affectedShifts}:{})}};
   }
+ }else if(c.action==='shift.cancel'){
+  keys(input,['note','closeTransfers'],['note']);
+  if(!Number.isSafeInteger(c.expectedRevision)||Number(c.expectedRevision)<1||Number(c.expectedRevision)>2147483646)throw new CommandError(400,'invalid_schedule_record');
+  if(input.closeTransfers!==undefined&&(!Array.isArray(input.closeTransfers)||input.closeTransfers.length>100))throw new CommandError(400,'invalid_close_transfers');
+  const closeTransfers=(input.closeTransfers as unknown[]|undefined??[]).map(v=>{const t=object(v);keys(t,['closeId','closingRevision','shiftId','expectedRevision'],['closeId','closingRevision','shiftId','expectedRevision']);for(const k of ['closingRevision','expectedRevision'])if(!Number.isSafeInteger(t[k])||Number(t[k])<1||Number(t[k])>2147483646)throw new CommandError(400,'invalid_close_transfers');return {closeId:identifier(t.closeId),closingRevision:Number(t.closingRevision),shiftId:identifier(t.shiftId),expectedRevision:Number(t.expectedRevision)};});
+  if(new Set(closeTransfers.map(t=>t.closeId)).size!==closeTransfers.length)throw new CommandError(400,'invalid_close_transfers');
+  payload={action:c.action,recordId:identifier(c.recordId),expectedRevision:c.expectedRevision,input:{note:string(input.note,2000),closeTransfers}};
  }else if(c.action==='shift.save'){
   const updating=Object.hasOwn(c,'recordId');
   if(updating&&(!Number.isSafeInteger(c.expectedRevision)||Number(c.expectedRevision)<1||Number(c.expectedRevision)>2147483646)
@@ -225,8 +232,10 @@ export async function executeTask(
      ?'SELECT candidate_operations.save_station($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
     :['request.create','request.review'].includes(String(command.payload.action))
      ?'SELECT candidate_operations.time_off_command($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
+    :command.payload.action==='shift.cancel'
+     ?'SELECT candidate_operations.change_schedule($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
     :command.payload.action==='shift.save'
-     ?'SELECT candidate_operations.save_schedule_draft($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
+     ?'SELECT candidate_operations.save_shift($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
     :['availability.save','availability.review'].includes(String(command.payload.action))
      ?'SELECT candidate_operations.availability_command($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
     :['handoff.create','handoff.transition'].includes(String(command.payload.action))
@@ -253,7 +262,7 @@ export async function executeTask(
  } catch(error) {
   const e=error as {code?:string;message?:string};
   if(e.code==='42501') throw new CommandError(403,e.message??'denied');
-  if(e.code==='P0001'&&['request_payload_conflict','revision_conflict','phase_conflict','shift_conflict','closing_zone_conflict','attention_pending','attention_not_pending','checkout_pending','dish_cycle_conflict','dish_shape_conflict','availability_replacement_conflict','availability_shift_conflict','draft_reference_only','schedule_inputs_incomplete','station_assignment_not_migrated','shift_overlap','approved_time_off_conflict','linked_shift_protected','linked_task_pending','linked_close_protected','time_off_impact_conflict','time_off_cancellation_not_migrated','station_name_immutable','station_title_conflict','station_setup_reference_only','goal_guide_changed','publication_review_required','publication_linked_work_held','station_goal_reviewer_unavailable','staffing_overlap','staffing_publication_review_required','closing_publication_review_required','planning_review_conflict','weekly_scope_review_required','closing_selection_conflict'].includes(e.message??''))
+  if(e.code==='P0001'&&['request_payload_conflict','revision_conflict','phase_conflict','shift_conflict','closing_zone_conflict','attention_pending','attention_not_pending','checkout_pending','dish_cycle_conflict','dish_shape_conflict','availability_replacement_conflict','availability_shift_conflict','draft_reference_only','schedule_inputs_incomplete','station_assignment_not_migrated','shift_overlap','approved_time_off_conflict','linked_shift_protected','linked_task_pending','linked_close_protected','time_off_impact_conflict','time_off_cancellation_not_migrated','station_name_immutable','station_title_conflict','station_setup_reference_only','goal_guide_changed','publication_review_required','publication_linked_work_held','station_goal_reviewer_unavailable','staffing_overlap','staffing_publication_review_required','closing_publication_review_required','planning_review_conflict','weekly_scope_review_required','closing_selection_conflict','closing_transfer_selection_conflict','completed_close_protected'].includes(e.message??''))
    throw new CommandError(409,e.message??'conflict');
   if(e.code?.startsWith('22')||e.code==='23514') throw new CommandError(400,e.message??'invalid_command');
   throw error; // Network/database failures must remain failures, never confirmed empty or applied.

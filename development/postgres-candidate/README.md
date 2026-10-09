@@ -30,7 +30,7 @@ npm run check:types --prefix development/postgres-candidate
 npm run build:preview --prefix development/postgres-candidate
 ```
 
-Bootstrap verifies the versioned hash manifest and applies 001–030 in order, inserts fictional base actors after 001 so later capability conversion can run, and creates fictional sessions after migration. All candidate connection helpers use the selected database/port. Tests run serially because rollback checks create temporary failure triggers. The core concurrency tests use independent Node/PostgreSQL bridge processes; Python and machine-specific library paths are no longer required.
+Bootstrap verifies the versioned hash manifest and applies 001–031 in order, inserts fictional base actors after 001 so later capability conversion can run, and creates fictional sessions after migration. All candidate connection helpers use the selected database/port. Tests run serially because rollback checks create temporary failure triggers. The core concurrency tests use independent Node/PostgreSQL bridge processes; Python and machine-specific library paths are no longer required.
 
 The GitHub `candidate-validation` workflow performs this sequence on a fresh disposable PostgreSQL service. Passing candidate checks does not prove the complete application is migrated or deployed.
 
@@ -78,3 +78,5 @@ Follow [the repository Git workflow](../../docs/GIT_WORKFLOW.md). Shared migrati
 [Staffing and closing publication review](PUBLICATION_REVIEW_CHECKPOINT.md) adds draft/approve/retire staffing workflows, current publication blockers and valid closing publication with aligned shift revisions. Weekly staffing-gap review/batch publication and production source certification remain pending.
 
 [Weekly review and publication](WEEKLY_PUBLICATION_CHECKPOINT.md) adds selected-draft staffing gaps, current review tokens, exact closing selections and atomic batch publication with explicit remaining-gap plans. Complete source evidence, published-shift changes and weekly UI adoption remain pending.
+
+[Published schedule changes](PUBLISHED_SCHEDULE_CHECKPOINT.md) add scoped edits/cancellation, exact closing transfer selections, reset submission state and atomic audit/notification intents. Coverage consent/swaps, full scheduling UI adoption and production source reconciliation remain pending.
