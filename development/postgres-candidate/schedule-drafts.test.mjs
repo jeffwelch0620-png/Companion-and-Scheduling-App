@@ -39,7 +39,7 @@ test('time-off completeness defaults blocked and cannot be self-certified by run
  await admin.query('INSERT INTO candidate_operations.schedule_input_reviews VALUES($1,true,clock_timestamp())',[f.scope]);await run(f,f.manager,command(f));
 });
 test('approved time off and approved availability block drafts; pending restrictions do not',async()=>{
- const f=await fixture(),id=randomUUID();await admin.query("INSERT INTO candidate_operations.time_off_references VALUES($1,$2,$3,'2031-11-02T05:30:00Z','2031-11-02T06:30:00Z','approved')",[id,f.scope,f.worker.membershipId]);await assert.rejects(run(f,f.manager,command(f)),e=>e.code==='approved_time_off_conflict');
+ const f=await fixture(),id=randomUUID();await admin.query("INSERT INTO candidate_operations.time_off_references(id,restaurant_id,member_id,starts_at,ends_at,status,department) VALUES($1,$2,$3,'2031-11-02T05:30:00Z','2031-11-02T06:30:00Z','approved','BOH')",[id,f.scope,f.worker.membershipId]);await assert.rejects(run(f,f.manager,command(f)),e=>e.code==='approved_time_off_conflict');
  await admin.query("UPDATE candidate_operations.time_off_references SET status='pending' WHERE id=$1",[id]);
  const data={startDate:'2031-11-02',endDate:'2031-11-02',days:[0],startMinute:60,endMinute:120,beforeMinutes:0,afterMinutes:0,excludedDates:[],status:'approved'};
  await admin.query("INSERT INTO candidate_operations.availability_references VALUES($1,$2,$3,'BOH',1,clock_timestamp(),'approved',$4)",[randomUUID(),f.scope,f.worker.membershipId,JSON.stringify(data)]);await assert.rejects(run(f,f.manager,command(f)),e=>e.code==='availability_shift_conflict');

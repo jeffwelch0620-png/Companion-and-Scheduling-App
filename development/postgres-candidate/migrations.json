@@ -88,6 +88,10 @@
     {
       "sha256": "1afd8a38f77e6234de2e61e65179160baadf9684c5613da37212a177a2d3ad74",
       "file": "022_schedule_drafts.sql"
+    },
+    {
+      "sha256": "5394168338467e9432929dea4dcc411a322198f3a50da1dc9d02b42ff2c506c8",
+      "file": "023_time_off_commands.sql"
     }
   ]
 }
