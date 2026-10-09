@@ -44,7 +44,21 @@ export function parseCommand(raw: unknown, restaurantId: string) {
  if(c.locationId!==restaurantId) throw new CommandError(403,'scope_mismatch');
  const requestId=identifier(c.requestId),input=object(c.input);
  let payload: Record<string,unknown>;
- if(c.action==='availability.save'||c.action==='availability.review'){
+ if(c.action==='shift.save'){
+  const updating=Object.hasOwn(c,'recordId');
+  if(updating&&(!Number.isSafeInteger(c.expectedRevision)||Number(c.expectedRevision)<1||Number(c.expectedRevision)>2147483646)
+   ||!updating&&Object.hasOwn(c,'expectedRevision'))throw new CommandError(400,'invalid_draft_record');
+  keys(input,['personId','start','end','position','note','stationId'],['personId','start','end','position']);
+  for(const k of ['start','end']){
+   const value=input[k];
+   if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/.test(value)
+    ||!Number.isFinite(Date.parse(value.slice(0,10)+'T12:00:00Z'))||new Date(value.slice(0,10)+'T12:00:00Z').toISOString().slice(0,10)!==value.slice(0,10))throw new CommandError(400,'invalid_draft_time');
+  }
+  if(Object.hasOwn(input,'note')&&(typeof input.note!=='string'||input.note.trim().length>2000))throw new CommandError(400,'invalid_draft_text');
+  if(Object.hasOwn(input,'stationId')&&input.stationId!==null&&input.stationId!=='')throw new CommandError(409,'station_assignment_not_migrated');
+  payload={action:c.action,input:{personId:identifier(input.personId),start:instant(input.start),end:instant(input.end),position:string(input.position,100),note:typeof input.note==='string'?input.note.trim():''}};
+  if(updating)payload={...payload,recordId:identifier(c.recordId),expectedRevision:c.expectedRevision};
+ }else if(c.action==='availability.save'||c.action==='availability.review'){
   const updating=Object.hasOwn(c,'recordId');
   if(updating&&(!Number.isSafeInteger(c.expectedRevision)||Number(c.expectedRevision)<1||Number(c.expectedRevision)>2147483646)
     ||!updating&&Object.hasOwn(c,'expectedRevision')||c.action==='availability.review'&&!updating)throw new CommandError(400,'invalid_availability_record');
@@ -139,7 +153,9 @@ export async function executeTask(
  try {
   return await database.transaction(async connection=>{
    const response=await connection.query(
-    ['availability.save','availability.review'].includes(String(command.payload.action))
+    command.payload.action==='shift.save'
+     ?'SELECT candidate_operations.save_schedule_draft($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
+    :['availability.save','availability.review'].includes(String(command.payload.action))
      ?'SELECT candidate_operations.availability_command($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
     :['handoff.create','handoff.transition'].includes(String(command.payload.action))
      ?'SELECT candidate_operations.overnight_command($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
@@ -165,7 +181,7 @@ export async function executeTask(
  } catch(error) {
   const e=error as {code?:string;message?:string};
   if(e.code==='42501') throw new CommandError(403,e.message??'denied');
-  if(e.code==='P0001'&&['request_payload_conflict','revision_conflict','phase_conflict','shift_conflict','closing_zone_conflict','attention_pending','attention_not_pending','checkout_pending','dish_cycle_conflict','dish_shape_conflict','availability_replacement_conflict','availability_shift_conflict'].includes(e.message??''))
+  if(e.code==='P0001'&&['request_payload_conflict','revision_conflict','phase_conflict','shift_conflict','closing_zone_conflict','attention_pending','attention_not_pending','checkout_pending','dish_cycle_conflict','dish_shape_conflict','availability_replacement_conflict','availability_shift_conflict','draft_reference_only','schedule_inputs_incomplete','station_assignment_not_migrated','shift_overlap','approved_time_off_conflict','linked_shift_protected','linked_task_pending','linked_close_protected'].includes(e.message??''))
    throw new CommandError(409,e.message??'conflict');
   if(e.code?.startsWith('22')||e.code==='23514') throw new CommandError(400,e.message??'invalid_command');
   throw error; // Network/database failures must remain failures, never confirmed empty or applied.

@@ -72,3 +72,5 @@ Subsequent progress: [migration 019 and schedule shift reads](SCHEDULE_READ_CHEC
 Further progress: [migration 020 and schedule context reads](SCHEDULE_CONTEXT_CHECKPOINT.md) add roster/explicit eligibility and availability reference reads. M06 remains open for their production ingestion, writes, remaining scheduling workflows and complete workspace/form adoption.
 
 [Migration 021 and availability commands](AVAILABILITY_COMMAND_CHECKPOINT.md) add save, independent review, projected shift-conflict checks and atomic replacement/audit/receipt behavior. M06 remains open; draft/edit shift writes are next. Source-level availability coverage is now classified as a candidate workflow, not production adoption.
+
+[Migration 022 and schedule drafts](SCHEDULE_DRAFT_CHECKPOINT.md) add station-free draft save/edit, explicit job/scope checks, overlap/time-off/availability checks and atomic audit/receipts. Time-off completeness is an explicit fixture-only gate; imported, published and linked shifts remain protected. M06 remains open. Employee time-off request save/review and source reconciliation are next, followed by station and publication workflows.

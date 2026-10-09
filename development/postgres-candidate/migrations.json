@@ -84,6 +84,10 @@
     {
       "sha256": "f26fac10553cfc3bb32d74875d79d1246ada5c0207c2182bb0ec8820787d7884",
       "file": "021_availability_commands.sql"
+    },
+    {
+      "sha256": "1afd8a38f77e6234de2e61e65179160baadf9684c5613da37212a177a2d3ad74",
+      "file": "022_schedule_drafts.sql"
     }
   ]
 }
