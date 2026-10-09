@@ -54,10 +54,10 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
  return async(request:Request):Promise<Response>=>{
   try{
    const url=new URL(request.url);
-   const route=/^\/api\/operations\/([a-zA-Z0-9_-]{1,100})\/(commands|tasks|closes|dish-cycles|overnight|shifts|schedule-shifts)(?:\/([0-9a-f-]{36}))?$/.exec(url.pathname);
+   const route=/^\/api\/operations\/([a-zA-Z0-9_-]{1,100})\/(commands|tasks|closes|dish-cycles|overnight|shifts|schedule-shifts|schedule-roster|schedule-availability)(?:\/([0-9a-f-]{36}))?$/.exec(url.pathname);
    if(!route)return json({error:{code:'route_not_found'}},404);
    const [,scope,resource,taskId]=route;
-   if(resource==='schedule-shifts'&&(taskId||url.searchParams.getAll('after').length>1||url.searchParams.getAll('limit').length>1))
+   if(resource.startsWith('schedule-')&&(taskId||url.searchParams.getAll('after').length>1||url.searchParams.getAll('limit').length>1))
     throw new CommandError(400,'invalid_query');
    if(resource==='commands'&&(request.method!=='POST'||taskId)
     ||resource!=='commands'&&request.method!=='GET')return json({error:{code:'method_not_allowed'}},405);
@@ -79,6 +79,10 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
     if(resource==='commands'){
      const sameTransaction:Database={transaction:operation=>operation(connection)};
      return executeTask(sameTransaction,identity,scope,command);
+    }
+    if(resource==='schedule-roster'||resource==='schedule-availability'){
+     return result((await connection.query('SELECT candidate_operations.list_schedule_context($1,$2::uuid,$3,$4,$5::uuid,$6::integer) AS result',
+      [identity.subject,identity.membershipId,scope,resource==='schedule-roster'?'roster':'availability',after,Number(limitText)])).rows[0]);
     }
     if(resource==='schedule-shifts'){
      return result((await connection.query('SELECT candidate_operations.list_schedule_shifts($1,$2::uuid,$3,$4::uuid,$5::integer) AS result',

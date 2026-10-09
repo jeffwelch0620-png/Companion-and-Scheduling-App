@@ -68,3 +68,5 @@ The previous imported-closing checkpoint passed 196 candidate checks, fresh appl
 The new inventory check passed against the current source, all 18 migration hashes verified unchanged, and local strict adapter types/preview build passed. CI now runs the classification drift check before its existing fresh-database/regression sequence.
 
 Subsequent progress: [migration 019 and schedule shift reads](SCHEDULE_READ_CHECKPOINT.md) implement a paged shift-reference endpoint with source visibility parity. M06 remains open for roster/job eligibility, availability, remaining scheduling reads and all schedule writes. The preceding inventory/check counts describe this readiness review's baseline, not the later scheduling checkpoint.
+
+Further progress: [migration 020 and schedule context reads](SCHEDULE_CONTEXT_CHECKPOINT.md) add roster/explicit eligibility and availability reference reads. M06 remains open for their production ingestion, writes, remaining scheduling workflows and complete workspace/form adoption.

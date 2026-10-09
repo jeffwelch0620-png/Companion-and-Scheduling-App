@@ -2,7 +2,8 @@
   "groups": [
     { "name": "Employee operations", "status": "candidate-workflow", "kinds": ["task", "close", "handoff"], "evidence": "IMPORTED_CLOSING_CHECKPOINT.md" },
     { "name": "Schedule and standard references", "status": "reference-only", "kinds": ["shift", "standard", "leadership"], "evidence": "REFERENCE_IMPORT_CHECKPOINT.md" },
-    { "name": "Full scheduling", "status": "not-migrated", "kinds": ["request", "availability", "coverage", "staffing", "attendance"] },
+    { "name": "Availability references", "status": "reference-only", "kinds": ["availability"], "evidence": "SCHEDULE_CONTEXT_CHECKPOINT.md" },
+    { "name": "Full scheduling", "status": "not-migrated", "kinds": ["request", "coverage", "staffing", "attendance"] },
     { "name": "Training and development", "status": "not-migrated", "kinds": ["development", "goal", "station", "proficiency", "achievement", "learningcase"] },
     { "name": "Management coordination", "status": "not-migrated", "kinds": ["managerlog", "meeting", "shiftentry", "shiftcheckin"] },
     { "name": "Employee communication", "status": "not-migrated", "kinds": ["message", "feedback", "recognition", "staffidea"] },

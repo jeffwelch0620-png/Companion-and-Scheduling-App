@@ -76,6 +76,10 @@
     {
       "sha256": "42846c1bc6f8e45df3a6495c98f83f712195c126267d747076e63304f90783db",
       "file": "019_schedule_shift_reads.sql"
+    },
+    {
+      "sha256": "9cb765c443779b644919761840b07676622c48e8770d049eb83685dc6454aaaf",
+      "file": "020_schedule_context_reads.sql"
     }
   ]
 }
