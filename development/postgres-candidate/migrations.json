@@ -108,6 +108,10 @@
     {
       "sha256": "56fdd1564d51c82205d92160b9f01aff342441e10b08e32c5dcc11a3a11a8fb1",
       "file": "027_employee_goals.sql"
+    },
+    {
+      "sha256": "ce368055b98fd94c37263db73e77d1f28c0c09766ff27bbfcc4e88328738078d",
+      "file": "028_schedule_publication.sql"
     }
   ]
 }

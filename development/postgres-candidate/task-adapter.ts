@@ -44,7 +44,11 @@ export function parseCommand(raw: unknown, restaurantId: string) {
  if(c.locationId!==restaurantId) throw new CommandError(403,'scope_mismatch');
  const requestId=identifier(c.requestId),input=object(c.input);
  let payload: Record<string,unknown>;
- if(c.action==='goal.create'||c.action==='goal.transition'){
+ if(c.action==='shift.publish'){
+  keys(input,['note'],['note']);
+  if(!Number.isSafeInteger(c.expectedRevision)||Number(c.expectedRevision)<1||Number(c.expectedRevision)>2147483646)throw new CommandError(400,'invalid_revision');
+  payload={action:c.action,recordId:identifier(c.recordId),expectedRevision:c.expectedRevision,input:{note:string(input.note,2000)}};
+ }else if(c.action==='goal.create'||c.action==='goal.transition'){
   if(c.action==='goal.create'){
    keys(input,['ownerId','managerId','title','definition','type','due','standardId','standardRevision'],['ownerId','managerId','title','definition','type','due']);
    if(Object.hasOwn(c,'recordId')||Object.hasOwn(c,'expectedRevision')||!['development','required-correction'].some(t=>t===input.type))throw new CommandError(400,'invalid_goal_fields');
@@ -190,7 +194,9 @@ export async function executeTask(
  try {
   return await database.transaction(async connection=>{
    const response=await connection.query(
-    ['goal.create','goal.transition'].includes(String(command.payload.action))
+    command.payload.action==='shift.publish'
+     ?'SELECT candidate_operations.publish_shift($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
+    :['goal.create','goal.transition'].includes(String(command.payload.action))
      ?'SELECT candidate_operations.goal_command($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
     :command.payload.action==='station.save'
      ?'SELECT candidate_operations.save_station($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
@@ -224,7 +230,7 @@ export async function executeTask(
  } catch(error) {
   const e=error as {code?:string;message?:string};
   if(e.code==='42501') throw new CommandError(403,e.message??'denied');
-  if(e.code==='P0001'&&['request_payload_conflict','revision_conflict','phase_conflict','shift_conflict','closing_zone_conflict','attention_pending','attention_not_pending','checkout_pending','dish_cycle_conflict','dish_shape_conflict','availability_replacement_conflict','availability_shift_conflict','draft_reference_only','schedule_inputs_incomplete','station_assignment_not_migrated','shift_overlap','approved_time_off_conflict','linked_shift_protected','linked_task_pending','linked_close_protected','time_off_impact_conflict','time_off_cancellation_not_migrated','station_name_immutable','station_title_conflict','station_setup_reference_only','goal_guide_changed'].includes(e.message??''))
+  if(e.code==='P0001'&&['request_payload_conflict','revision_conflict','phase_conflict','shift_conflict','closing_zone_conflict','attention_pending','attention_not_pending','checkout_pending','dish_cycle_conflict','dish_shape_conflict','availability_replacement_conflict','availability_shift_conflict','draft_reference_only','schedule_inputs_incomplete','station_assignment_not_migrated','shift_overlap','approved_time_off_conflict','linked_shift_protected','linked_task_pending','linked_close_protected','time_off_impact_conflict','time_off_cancellation_not_migrated','station_name_immutable','station_title_conflict','station_setup_reference_only','goal_guide_changed','publication_review_required','publication_linked_work_held','station_goal_reviewer_unavailable'].includes(e.message??''))
    throw new CommandError(409,e.message??'conflict');
   if(e.code?.startsWith('22')||e.code==='23514') throw new CommandError(400,e.message??'invalid_command');
   throw error; // Network/database failures must remain failures, never confirmed empty or applied.
