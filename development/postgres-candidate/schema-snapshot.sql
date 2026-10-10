@@ -373,6 +373,23 @@ BEGIN
 END;
 $function$
 
+CREATE OR REPLACE FUNCTION candidate_operations.check_person_shift()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+BEGIN
+ -- Hold the membership key stable through projection insertion. Coordinate scope
+ -- first (aa_coordinate_policy); never acquire another location's scope here.
+ PERFORM 1 FROM candidate_identity.memberships WHERE id=NEW.member_id AND restaurant_id=NEW.restaurant_id FOR KEY SHARE;
+ IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='owner_denied'; END IF;
+ IF NOT NEW.cancelled AND candidate_operations.person_shift_conflict(NEW.member_id,NEW.starts_at,NEW.ends_at,NEW.id)
+ THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='shift_overlap'; END IF;
+ RETURN NEW;
+END;
+$function$
+
 CREATE OR REPLACE FUNCTION candidate_operations.check_time_off_evidence()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1024,14 +1041,27 @@ CREATE OR REPLACE FUNCTION candidate_operations.invalidate_schedule_inputs()
 AS $function$
 DECLARE scope_id text;
 BEGIN
+ IF TG_OP='UPDATE' THEN
+  IF TG_TABLE_NAME='memberships' THEN
+   IF ROW(OLD.restaurant_id,OLD.department,OLD.position,OLD.active,OLD.schedule_only,OLD.person_id)
+    IS NOT DISTINCT FROM ROW(NEW.restaurant_id,NEW.department,NEW.position,NEW.active,NEW.schedule_only,NEW.person_id)
+   THEN RETURN NULL; END IF;
+  ELSIF TG_TABLE_NAME='schedule_eligibility' THEN
+   IF ROW(OLD.member_id,OLD.job,OLD.source,OLD.active)
+    IS NOT DISTINCT FROM ROW(NEW.member_id,NEW.job,NEW.source,NEW.active)
+   THEN RETURN NULL; END IF;
+  END IF;
+ END IF;
  IF TG_TABLE_NAME='schedule_eligibility' THEN
-  SELECT restaurant_id INTO scope_id FROM candidate_identity.memberships WHERE id=(CASE WHEN TG_OP='DELETE' THEN to_jsonb(OLD)->>'member_id' ELSE to_jsonb(NEW)->>'member_id' END)::uuid;
+  SELECT restaurant_id INTO scope_id FROM candidate_identity.memberships
+   WHERE id=(CASE WHEN TG_OP='DELETE' THEN to_jsonb(OLD)->>'member_id' ELSE to_jsonb(NEW)->>'member_id' END)::uuid;
  ELSE scope_id:=CASE WHEN TG_OP='DELETE' THEN to_jsonb(OLD)->>'restaurant_id' ELSE to_jsonb(NEW)->>'restaurant_id' END; END IF;
  UPDATE candidate_operations.schedule_input_reviews SET time_off_complete=false,evidence_batch_id=NULL,reviewed_at=NULL WHERE restaurant_id=scope_id;
- IF TG_TABLE_NAME='schedule_eligibility' AND TG_OP='UPDATE' AND to_jsonb(OLD)->>'member_id'<>to_jsonb(NEW)->>'member_id' THEN
-  UPDATE candidate_operations.schedule_input_reviews SET time_off_complete=false,evidence_batch_id=NULL,reviewed_at=NULL WHERE restaurant_id=(SELECT restaurant_id FROM candidate_identity.memberships WHERE id=(to_jsonb(OLD)->>'member_id')::uuid);
+ IF TG_TABLE_NAME='schedule_eligibility' AND TG_OP='UPDATE' AND to_jsonb(OLD)->>'member_id' IS DISTINCT FROM to_jsonb(NEW)->>'member_id' THEN
+  UPDATE candidate_operations.schedule_input_reviews SET time_off_complete=false,evidence_batch_id=NULL,reviewed_at=NULL
+   WHERE restaurant_id=(SELECT restaurant_id FROM candidate_identity.memberships WHERE id=(to_jsonb(OLD)->>'member_id')::uuid);
  END IF;
- IF TG_TABLE_NAME='memberships' AND TG_OP='UPDATE' AND to_jsonb(OLD)->>'restaurant_id'<>to_jsonb(NEW)->>'restaurant_id' THEN
+ IF TG_TABLE_NAME='memberships' AND TG_OP='UPDATE' AND to_jsonb(OLD)->>'restaurant_id' IS DISTINCT FROM to_jsonb(NEW)->>'restaurant_id' THEN
   UPDATE candidate_operations.schedule_input_reviews SET time_off_complete=false,evidence_batch_id=NULL,reviewed_at=NULL WHERE restaurant_id=to_jsonb(OLD)->>'restaurant_id';
  END IF;
  RETURN NULL;
@@ -1504,7 +1534,7 @@ BEGIN
  IF NOT EXISTS(SELECT 1 FROM candidate_operations.schedule_input_reviews WHERE restaurant_id=p_offer.restaurant_id AND time_off_complete)
  OR NOT EXISTS(SELECT 1 FROM candidate_identity.schedule_eligibility WHERE member_id=m.id AND active AND job=s.position)
  OR s.station_id IS NOT NULL AND NOT candidate_operations.station_assignment_allowed(s.station_id,p_offer.restaurant_id,m.id,s.position)
- OR EXISTS(SELECT 1 FROM candidate_operations.shift_references WHERE restaurant_id=p_offer.restaurant_id AND member_id=m.id AND id<>s.id AND NOT cancelled AND starts_at<s.ends_at AND ends_at>s.starts_at)
+ OR candidate_operations.person_shift_conflict(m.id,s.starts_at,s.ends_at,s.id)
  OR EXISTS(SELECT 1 FROM candidate_operations.time_off_references WHERE restaurant_id=p_offer.restaurant_id AND member_id=m.id AND status='approved' AND starts_at<s.ends_at AND ends_at>s.starts_at)
  OR EXISTS(SELECT 1 FROM candidate_operations.availability_references WHERE restaurant_id=p_offer.restaurant_id AND member_id=m.id AND status='approved' AND candidate_operations.availability_period_conflict(data,s.starts_at,s.ends_at,zone)) THEN RETURN false; END IF;
  IF EXISTS(SELECT 1 FROM candidate_operations.closes c WHERE c.shift_id=s.id AND c.phase<>'cancelled' AND (m.position='Dishwasher' OR m.id IN (c.manager_id,c.verifier_id) OR c.due<s.starts_at OR c.due>s.ends_at OR c.department<>m.department OR p_offer.mode='coverage' AND c.standard_snapshot->>'position'<>s.position OR NOT EXISTS(SELECT 1 FROM candidate_identity.station_clearances WHERE member_id=m.id AND restaurant_id=p_offer.restaurant_id AND active AND position=c.standard_snapshot->>'position'))) THEN RETURN false; END IF;
@@ -1622,6 +1652,20 @@ CREATE OR REPLACE FUNCTION candidate_operations.permitted_shift_change(p_old can
  SET search_path TO 'pg_catalog'
 AS $function$
  SELECT EXISTS(SELECT 1 FROM candidate_operations.shift_change_permits WHERE shift_id=p_old.id AND transaction_id=txid_current() AND old_hash=encode(sha256(convert_to(to_jsonb(p_old)::text,'UTF8')),'hex') AND new_hash=encode(sha256(convert_to(to_jsonb(p_new)::text,'UTF8')),'hex'));
+$function$
+
+CREATE OR REPLACE FUNCTION candidate_operations.person_shift_conflict(p_member uuid, p_start timestamp with time zone, p_end timestamp with time zone, p_exclude uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+ SELECT EXISTS(
+  SELECT 1 FROM candidate_identity.memberships target
+  JOIN candidate_operations.person_shift_bookings booking ON booking.person_id=target.person_id
+  WHERE target.id=p_member AND booking.shift_id IS DISTINCT FROM p_exclude
+   AND booking.period && tstzrange(p_start,p_end,'[)')
+ );
 $function$
 
 CREATE OR REPLACE FUNCTION candidate_operations.propose_changed_shift_goals(p_actor uuid, p_restaurant text, p_shift uuid)
@@ -2720,6 +2764,32 @@ BEGIN
  FROM (SELECT DISTINCT unnest(CASE action WHEN 'close.acknowledge' THEN ARRAY[assigned.owner_id,(assigned.attention->>'raisedBy')::uuid,assigned.helper_id]
  ELSE ARRAY[assigned.owner_id,assigned.helper_id,assigned.manager_id,previous_helper] END) id) targets WHERE id IS NOT NULL;
  RETURN result;
+END;
+$function$
+
+CREATE OR REPLACE FUNCTION candidate_operations.sync_person_shift_booking()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+DECLARE person uuid;
+BEGIN
+ IF TG_OP='DELETE' THEN
+  DELETE FROM candidate_operations.person_shift_bookings WHERE shift_id=OLD.id;RETURN OLD;
+ END IF;
+ IF NEW.cancelled THEN
+  DELETE FROM candidate_operations.person_shift_bookings WHERE shift_id=NEW.id;RETURN NEW;
+ END IF;
+ SELECT person_id INTO person FROM candidate_identity.memberships WHERE id=NEW.member_id AND restaurant_id=NEW.restaurant_id FOR KEY SHARE;
+ IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='owner_denied'; END IF;
+ INSERT INTO candidate_operations.person_shift_bookings VALUES(NEW.id,NEW.member_id,person,tstzrange(NEW.starts_at,NEW.ends_at,'[)'))
+ ON CONFLICT(shift_id) DO UPDATE SET member_id=excluded.member_id,person_id=excluded.person_id,period=excluded.period;
+ RETURN NEW;
+EXCEPTION WHEN exclusion_violation THEN
+ -- A concurrent write can be invisible to the earlier person check. Translate
+ -- this final database guard to the same sanitized HTTP conflict, without IDs.
+ RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='shift_overlap';
 END;
 $function$
 

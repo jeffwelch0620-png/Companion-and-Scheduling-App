@@ -65,11 +65,16 @@ test('signed HTTP handoff reads and incoming response require the named active e
  assert.equal((await call('peer','/tasks/'+task.body.recordId)).body.data.phase,'closed');
 });
 test('signed HTTP linked task is checked independently without releasing its shift',async()=>{
- const shiftId=randomUUID();await owner.query("INSERT INTO candidate_operations.shift_references(id,restaurant_id,member_id,department,position,starts_at,ends_at,revision,published) VALUES($1,'fictional-a',$2,'BOH','Cook','2026-10-09T12:00:00-04:00','2026-10-09T20:00:00-04:00',1,true)",[shiftId,ids.employee]);
- const command={requestId:randomUUID(),locationId:'fictional-a',action:'task.create',input:{title:'Fictional HTTP linked task',detail:'Fictional checkout work.',kind:'task',ownerId:ids.employee,shiftId,due:'2026-10-09T18:00:00-04:00'}};
+ const actor='linked-'+randomUUID(),person=randomUUID();ids[actor]=randomUUID();sessions[actor]=randomUUID();
+ await owner.query('INSERT INTO candidate_identity.people(id,name) VALUES($1,$2)',[person,'Fictional HTTP linked employee']);
+ await owner.query('INSERT INTO candidate_identity.auth_links(subject,person_id) VALUES($1,$2)',[actor,person]);
+ await owner.query("INSERT INTO candidate_identity.memberships(id,person_id,restaurant_id,department,position) VALUES($1,$2,'fictional-a','BOH','Cook')",[ids[actor],person]);
+ await owner.query("INSERT INTO candidate_identity.sessions(id,subject,expires_at) VALUES($1,$2,clock_timestamp()+interval '1 hour')",[sessions[actor],actor]);
+ const shiftId=randomUUID();await owner.query("INSERT INTO candidate_operations.shift_references(id,restaurant_id,member_id,department,position,starts_at,ends_at,revision,published) VALUES($1,'fictional-a',$2,'BOH','Cook','2026-10-09T12:00:00-04:00','2026-10-09T20:00:00-04:00',1,true)",[shiftId,ids[actor]]);
+ const command={requestId:randomUUID(),locationId:'fictional-a',action:'task.create',input:{title:'Fictional HTTP linked task',detail:'Fictional checkout work.',kind:'task',ownerId:ids[actor],shiftId,due:'2026-10-09T18:00:00-04:00'}};
  const task=await call('manager','/commands',command);assert.equal(task.status,200);
- assert.equal((await call('employee','/tasks/'+task.body.recordId)).body.data.shiftId,shiftId);
- const readyResult=await call('employee','/commands',ready(task.body));assert.equal(readyResult.status,200);
+ assert.equal((await call(actor,'/tasks/'+task.body.recordId)).body.data.shiftId,shiftId);
+ const readyResult=await call(actor,'/commands',ready(task.body));assert.equal(readyResult.status,200);
  const checked=await call('manager','/commands',{...ready(task.body),expectedRevision:2,input:{step:'verify',note:'Fictional independent check.'}});assert.equal(checked.status,200);
  assert.equal((await owner.query('SELECT released_at FROM candidate_operations.shift_references WHERE id=$1',[shiftId])).rows[0].released_at,null);
 });
