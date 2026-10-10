@@ -136,6 +136,10 @@
     {
       "sha256": "8eb9ea8b3fc2465d5dd8dd985e95c7edde0acee9ed4c3dc6201d82c86fda5226",
       "file": "034_schedule_viewer.sql"
+    },
+    {
+      "sha256": "8184fa9c9db684c5a7a03d881736de512133a8d71fdc85556cec9d7c2858902d",
+      "file": "035_publication_runtime_safety.sql"
     }
   ]
 }

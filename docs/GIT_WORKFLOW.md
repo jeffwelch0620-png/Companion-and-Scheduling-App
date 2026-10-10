@@ -1,6 +1,6 @@
 # Git workflow for Companion and Inventory integration
 
-The Companion repository keeps reviewed source on `main`. PostgreSQL preparation is developed on `codex/companion-postgres-migration`; Inventory integration remains separate until its current merge has a tested baseline. Pushing saves versioned source remotely. Merging updates a shared baseline. Deployment and database application require a separate, explicit step.
+The Companion repository keeps reviewed source on `main`. PostgreSQL preparation is developed on focused `codex/` branches, currently consolidated in `codex/companion-candidate-consolidation`; Inventory integration remains separate until its current merge has a tested baseline. Pushing saves versioned source remotely. Merging updates a shared baseline. Deployment and database application require a separate, explicit step.
 
 ## Routine development
 
@@ -27,4 +27,4 @@ Cross-repository work is a reviewed port of selected components and contracts, n
 
 ## Main branch controls
 
-Require pull requests, successful `candidate-validation` checks and resolution of review conversations; block force pushes and branch deletion. Avoid requiring an approval the sole repository owner cannot supply on their own PR; use human final review and add a required independent approver when another reviewer is available. Enable these controls once the candidate check is available. The current request authorizes pushing the candidate draft PR, not merging it.
+Require pull requests, successful `candidate-validation` checks and resolution of review conversations; block force pushes and branch deletion. Avoid requiring an approval the sole repository owner cannot supply on their own PR; use human final review and add a required independent approver when another reviewer is available. Enable these controls once the candidate check is available. Merge approval must be given for the concrete reviewed PR; deployment and hosted database application require separate approval.

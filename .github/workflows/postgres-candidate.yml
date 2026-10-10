@@ -5,8 +5,26 @@ on:
     branches: [main, 'codex/**']
 permissions:
   contents: read
+concurrency:
+  group: postgres-candidate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
-  candidate-validation:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      required: ${{ steps.impact.outputs.required }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - id: impact
+        env:
+          CANDIDATE_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CANDIDATE_DIFF_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node development/postgres-candidate/ci-impact.mjs >> "$GITHUB_OUTPUT"
+  validate:
+    needs: changes
+    if: needs.changes.outputs.required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -26,8 +44,8 @@ jobs:
       CANDIDATE_ALLOW_BOOTSTRAP: fictional-local-only
       CANDIDATE_BOOTSTRAP_USER: postgres
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: npm
@@ -50,3 +68,23 @@ jobs:
         run: npm run check:types --prefix development/postgres-candidate
       - name: Build original-form previews
         run: npm run build:preview --prefix development/postgres-candidate
+  candidate-validation:
+    needs: [changes, validate]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report validation or intentional skip
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          REQUIRED: ${{ needs.changes.outputs.required }}
+          VALIDATION_RESULT: ${{ needs.validate.result }}
+        run: |
+          if [ "$CHANGES_RESULT" != success ]; then exit 1; fi
+          if [ "$REQUIRED" = true ]; then
+            test "$VALIDATION_RESULT" = success
+          elif [ "$REQUIRED" = false ]; then
+            test "$VALIDATION_RESULT" = skipped
+            echo "No candidate dependencies changed."
+          else
+            exit 1
+          fi

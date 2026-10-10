@@ -14,7 +14,4 @@ INSERT INTO candidate_identity.memberships(id,person_id,restaurant_id,department
  ('10000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000002','fictional-a','BOH',false),
  ('10000000-0000-0000-0000-000000000003','00000000-0000-0000-0000-000000000003','fictional-a','BOH',false),
  ('10000000-0000-0000-0000-000000000004','00000000-0000-0000-0000-000000000004','fictional-b','BOH',true);
-GRANT USAGE ON SCHEMA candidate_operations TO candidate_runtime;
-GRANT EXECUTE ON FUNCTION candidate_operations.command(text,uuid,text,uuid,jsonb),
- candidate_operations.read_task(text,uuid,text,uuid) TO candidate_runtime;
 RESET ROLE;

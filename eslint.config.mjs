@@ -16,6 +16,7 @@ const eslintConfig = defineConfig([
     ".wrangler/**",
     ".tmp-redirect-qa/**",
     ".tmp-menu-qa/**",
+    "development/**",
     "work/**",
     "outputs/**",
     "next-env.d.ts",

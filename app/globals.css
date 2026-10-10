@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source not "../development";
 
 :root{
   --orange:#f45a17;
