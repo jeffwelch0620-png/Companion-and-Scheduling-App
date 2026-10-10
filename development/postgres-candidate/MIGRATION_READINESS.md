@@ -1,6 +1,6 @@
 # Companion PostgreSQL migration readiness
 
-Current summary refreshed for consolidation from Companion checkpoint `545200d` (schedule board and draft editor). The isolated candidate is suitable for a reviewed Git baseline merge and continued development. The complete Companion app is **not ready for PostgreSQL backend cutover**. Inventory integration remains held until its current merge has a tested baseline. No hosted migration or deployment is authorized by this checklist. Historical progress entries below preserve their checkpoint-specific evidence.
+Accepted Companion preparation baseline: PR 25, squash-merged as `4a15a70`, with 391 checks and main CI passing. Source snapshot/checklist entries below retain their historical evidence. The isolated candidate is suitable for a reviewed Git baseline merge and continued development. The complete Companion app is **not ready for PostgreSQL backend cutover**. Inventory integration remains held until its current merge has a tested baseline. No hosted migration or deployment is authorized by this checklist. Historical progress entries below preserve their checkpoint-specific evidence.
 
 The source inventory contains **39 WorkRecord kinds, 35 declared SQLite tables and 28 API route files**. These are scope counts, not a completion percentage. Several services and workflows live outside WorkRecord; one kind can have many commands. Candidate workflow tests do not prove migration of the original D1 service or all screen reads.
 
@@ -37,7 +37,7 @@ The candidate outbox is evidence that a message was queued transactionally; it i
 
 | ID | Milestone | Status and acceptance evidence |
 | --- | --- | --- |
-| M01 | Reproducible isolated candidate and Git safeguards | Candidate complete: fresh install, versioned hashes, regression/types/build CI; draft PRs remain unmerged |
+| M01 | Reproducible isolated candidate and Git safeguards | Accepted preparation baseline: PR 25 merged at 4a15a70, 391 checks and main CI passed; further changes use focused draft PRs |
 | M02 | Core employee task/closing/handoff/checkout behavior | Candidate complete for documented slice; production adoption still pending |
 | M03 | Explicit employee/schedule/standard mappings | Candidate complete for narrow new-reference input; no automatic identity or capability inference |
 | M04 | Atomic new-reference import and linked closing rehearsal | Candidate complete with fictional inputs; existing-reference updates and real export fixtures pending |
@@ -54,7 +54,7 @@ No production data currently needs preservation. Empty-database development perm
 
 ## Implementation order
 
-1. Consolidate the tested candidate into a reviewed Companion Git baseline; see `CANDIDATE_MERGE_REVIEW.md`. Git acceptance does not enable the candidate in either running application.
+1. Baseline consolidation is complete: PR 25 at `4a15a70`. Next, harden database coordination and authentication/offline recovery in focused candidate PRs; see `DATABASE_COORDINATION_CHECKPOINT.md`. Git acceptance does not enable the candidate in either running application.
 2. Complete remaining scheduling screens and workflows: weekly publication/coverage/leadership/batch editing, copy/attendance and reviewed source ingestion completeness. Existing candidate commands are already tested; preserve timezone/DST, exact approvals and linked-work protections during UI adoption.
 3. Complete canonical employee identity/access and standards/training workflows. Keep sign-in provisioning, scheduling eligibility, dated leadership responsibility and training clearance separate.
 4. Reconcile complete workspace/history and supporting modules. Keep each module enabled only after its PostgreSQL read/write/visibility path is complete; any staged deferral must be explicit to the user before cutover.
@@ -104,3 +104,7 @@ Further progress: [migration 020 and schedule context reads](SCHEDULE_CONTEXT_CH
 ## Consolidation audit correction
 
 PR 25 now includes corrective migration 035 and passes 391 fresh-database checks locally. See [audit correction checkpoint](AUDIT_CORRECTION_CHECKPOINT.md) for the four pre-merge fixes, CI dependency gate, strict driver checking and existing root lint limitation. Production identity, remaining workflow UI, offline prep, notifications/recovery and Inventory integration remain open.
+
+## Database coordination checkpoint
+
+Corrective migration 036 and HTTP read transactions address the first post-merge reliability package. See [database coordination checkpoint](DATABASE_COORDINATION_CHECKPOINT.md) for per-location write coordination, retryable policy changes, consistent read snapshots and evidence. Authentication/offline error recovery is the next separate package; schema/workflow policy decisions and Inventory integration remain open.

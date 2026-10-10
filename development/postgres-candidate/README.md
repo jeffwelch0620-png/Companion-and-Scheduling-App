@@ -30,9 +30,9 @@ npm run check:types --prefix development/postgres-candidate
 npm run build:preview --prefix development/postgres-candidate
 ```
 
-Bootstrap verifies the versioned hash manifest and applies 001–035 in order, inserts fictional base actors after 001 so later capability conversion can run, and creates fictional sessions after migration. All candidate connection helpers use the selected database/port. Tests run serially because rollback checks create temporary failure triggers. The core concurrency tests use independent Node/PostgreSQL bridge processes; Python and machine-specific library paths are no longer required.
+Bootstrap verifies the versioned hash manifest and applies 001–036 in order, inserts fictional base actors after 001 so later capability conversion can run, and creates fictional sessions after migration. All candidate connection helpers use the selected database/port. Tests run serially because rollback checks create temporary failure triggers. The core concurrency tests use independent Node/PostgreSQL bridge processes; Python and machine-specific library paths are no longer required.
 
-The GitHub `candidate-validation` gate performs this sequence when candidate dependencies change, and reports a successful intentional skip for unrelated changes. Its dependency detection includes application, database, package/configuration, shared UI and build inputs. The validation workflow on a fresh disposable PostgreSQL service. Passing candidate checks does not prove the complete application is migrated or deployed.
+The GitHub `candidate-validation` gate performs this sequence when candidate dependencies change, and reports a successful intentional skip for unrelated changes. Its dependency detection includes application, database, package/configuration, shared UI and build inputs. Validation uses a fresh disposable PostgreSQL service. Passing candidate checks does not prove the complete application is migrated or deployed.
 
 ## Optional original-form preview
 
@@ -90,3 +90,5 @@ Follow [the repository Git workflow](../../docs/GIT_WORKFLOW.md). Shared migrati
 [Schedule board and draft editor](SCHEDULE_BOARD_UI_CHECKPOINT.md) add day/week/personal views and individual station-aware draft create/edit. [Candidate merge review](CANDIDATE_MERGE_REVIEW.md) records the controlled baseline consolidation gate; this is separate from Inventory integration or backend adoption.
 
 [Consolidation baseline review](CONSOLIDATION_REVIEW_CHECKPOINT.md) records the snapshot/base, isolated scope review, fresh validation and remaining Companion Git merge versus Inventory integration gates.
+
+[Database coordination](DATABASE_COORDINATION_CHECKPOINT.md) separates private Companion write locks from shared location records and adds snapshot-based, non-locking reads. The accepted preparation baseline is PR 25 at `4a15a70`; this corrective checkpoint is developed on `codex/companion-database-coordination`, separate from Inventory and hosted adoption.

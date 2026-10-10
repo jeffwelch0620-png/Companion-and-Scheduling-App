@@ -29,7 +29,7 @@ At import, dependency installation was attempted with Node.js 24.19.0 and npm 11
 
 The current workflow is documented in [Git workflow](docs/GIT_WORKFLOW.md). The isolated, tracked [PostgreSQL candidate](development/postgres-candidate/README.md) contains reviewable migrations, adapters, original-form previews and reproducible checks. It is not wired into the running application. Develop candidate changes there; retain ignored `work/` files only as local evidence. Feature branches and draft PRs provide remote source backup; merges and deployment are separate decisions.
 
-Use `main` as the reviewed Companion baseline and focused `codex/` branches for preparation work; the current baseline is being reviewed in `codex/companion-candidate-consolidation`. Keep changes in focused commits and review them through pull requests before merging into `main`.
+Use `main` as the reviewed Companion baseline and focused `codex/` branches for preparation work; the accepted preparation baseline is PR 25 at `4a15a70`, and the next corrective package is `codex/companion-database-coordination`. Keep changes in focused commits and review them through pull requests before merging into `main`.
 
 Inventory Build Main continues its current merge independently. Once that merge has a tested commit, create an integration branch in the Inventory repository from that exact commit and connect selected Companion components in stages. This repository supplies source and patches; it does not create a second authoritative inventory catalog or stock writer.
 

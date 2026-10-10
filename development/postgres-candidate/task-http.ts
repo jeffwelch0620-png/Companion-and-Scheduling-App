@@ -74,8 +74,10 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
    if(after!==null&&!uuid.test(after)||!/^([1-9]|[1-9][0-9]|100)$/.test(limitText))
     throw new CommandError(400,'invalid_pagination');
    const data=await database.transaction(async connection=>{
+    if(resource!=='commands')await connection.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY',[]);
     const identity=result((await connection.query(
-     'SELECT candidate_operations.resolve_identity($1,$2::uuid,$3) AS result',
+     resource==='commands'?'SELECT candidate_operations.resolve_identity($1,$2::uuid,$3) AS result'
+      :'SELECT candidate_operations.resolve_identity_read($1,$2::uuid,$3) AS result',
      [session.subject,session.sessionId,scope])).rows[0]) as TrustedIdentity;
     if(resource==='commands'){
      const sameTransaction:Database={transaction:operation=>operation(connection)};

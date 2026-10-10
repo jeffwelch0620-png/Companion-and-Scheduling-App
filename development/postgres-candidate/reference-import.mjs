@@ -23,7 +23,8 @@ export async function rehearseReferenceImport({ snapshot, batchId, expectedScope
     await client.query('BEGIN');
     const identity = (await client.query('SELECT current_database() AS db, current_user AS role')).rows[0];
     if (identity.db !== connection.database || identity.role !== 'candidate_owner') throw Error('fictional_target_required');
-    const scope = (await client.query('SELECT revision FROM candidate_identity.restaurants WHERE id=$1 FOR UPDATE', [source.restaurantId])).rows[0];
+    await client.query('SELECT candidate_operations.lock_scope($1)',[source.restaurantId]);
+    const scope = (await client.query('SELECT revision FROM candidate_identity.restaurants WHERE id=$1', [source.restaurantId])).rows[0];
     if (!scope) throw Error('restaurant_mapping_required');
     const prior = (await client.query('SELECT source_hash, result FROM candidate_operations.reference_import_receipts WHERE batch_id=$1', [batchId])).rows[0];
     if (prior) {
@@ -63,6 +64,7 @@ export async function rehearseReferenceImport({ snapshot, batchId, expectedScope
     return { ...result, replayed: false };
   } catch (error) {
     await client.query('ROLLBACK');
+    if(error.code==='42501'&&error.message==='scope_denied')throw Error('restaurant_mapping_required');
     throw error;
   } finally { await client.end(); }
 }
