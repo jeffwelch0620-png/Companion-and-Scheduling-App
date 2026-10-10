@@ -1,9 +1,10 @@
+import {configuredLocation} from './ui-store-configuration.mjs';
 // Isolated request-screen client. Partial reads never become a displayed workspace.
 export async function loadScheduleScreen(call) {
  for(let attempt=0;attempt<3;attempt++) {
   const first=await call('/schedule-viewer');
   if(first.status!==200)throw Error('Scheduling access is unavailable. Reload after checking your connection.');
-  const viewer=first.body,sets={};let changed=false;
+  const viewer=first.body,sets={};configuredLocation(viewer.location);let changed=false;
   for(const resource of ['roster','availability','requests','shifts','stations']) {
    const items=[],cursors=new Set();let after=null;
    do {
