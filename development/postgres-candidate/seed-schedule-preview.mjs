@@ -5,7 +5,7 @@ import {localInstant,nextDate} from '../../app/shared/local-time.ts';
 const pool=new pg.Pool({...connection,user:'candidate_owner'}),db=new PostgresDatabase({...connection,user:'candidate_runtime'}),scope='fictional-schedule-preview',sessions={},members={};
 try {
  await pool.query("INSERT INTO candidate_identity.restaurants(id,name,timezone,operating_departments,dish_department,dish_position,dish_aliases) VALUES($1,$2,'America/Chicago',ARRAY['Service','Kitchen'],'Kitchen','Steward',ARRAY['Steward','Steward PM'])",[scope,'Fictional configured scheduling restaurant']);
- for(const [actor,name,area,caps] of [['schedule-worker','Fictional employee','Kitchen',[]],['schedule-manager','Fictional schedule manager','Kitchen',['schedule.manage','schedule.change']],['schedule-foreign','Fictional other-department manager','Service',['schedule.manage','schedule.publish']],['schedule-publisher','Fictional schedule publisher','Kitchen',['schedule.manage','schedule.publish','schedule.change','location.manage','close.confirm','people.manage']]]){
+ for(const [actor,name,area,caps] of [['schedule-worker','Fictional employee','Kitchen',[]],['schedule-replacement','Fictional replacement employee','Kitchen',[]],['schedule-manager','Fictional schedule manager','Kitchen',['schedule.manage','schedule.change']],['schedule-foreign','Fictional other-department manager','Service',['schedule.manage','schedule.publish']],['schedule-publisher','Fictional schedule publisher','Kitchen',['schedule.manage','schedule.publish','schedule.change','location.manage','close.confirm','people.manage']]]){
   const id=randomUUID(),person=randomUUID(),session=randomUUID(),subject=actor+'-'+id;
   await pool.query('INSERT INTO candidate_identity.people(id,name) VALUES($1,$2)',[person,name]);
   await pool.query('INSERT INTO candidate_identity.auth_links(subject,person_id) VALUES($1,$2)',[subject,person]);
@@ -26,6 +26,12 @@ try {
  await executeTask(db,publisher,scope,{requestId:randomUUID(),locationId:scope,action:'shift.save',input:{personId:scheduleOnly,position:'Cook',stationId:station,start:localInstant(nextDate(day,2),'16:00','America/Chicago'),end:localInstant(nextDate(day,2),'23:00','America/Chicago'),note:'Fictional unselected draft'}});
  const staffing=await executeTask(db,publisher,scope,{requestId:randomUUID(),locationId:scope,action:'staffing.save',input:{title:'Fictional grill coverage',area:'Kitchen',position:'Cook',minimum:2,start:localInstant(nextDate(day,1),'16:00','America/Chicago'),end:localInstant(nextDate(day,1),'23:00','America/Chicago'),source:'Fictional two-person service'}});
  await executeTask(db,publisher,scope,{requestId:randomUUID(),locationId:scope,action:'staffing.approve',recordId:staffing.recordId,expectedRevision:staffing.revision,input:{confirmed:true,note:'Fictional staffing approval'}});
+ // Command-created future shifts exercise consent and approval, not imported-reference holds.
+ for(const offset of [1,2]) {
+  const shift=await executeTask(db,publisher,scope,{requestId:randomUUID(),locationId:scope,action:'shift.save',input:{personId:members['schedule-worker'],position:'Cook',start:localInstant(nextDate(day,offset),'10:00','America/Chicago'),end:localInstant(nextDate(day,offset),'12:00','America/Chicago'),note:'Fictional replacement workflow'}});
+  await pool.query("INSERT INTO candidate_operations.publication_reviews(shift_id,shift_revision,workspace_revision,no_staffing,no_closing,evidence) SELECT $1,$2,revision,true,true,'Complete fictional replacement fixture only' FROM candidate_identity.restaurants WHERE id=$3",[shift.recordId,shift.revision,scope]);
+  await executeTask(db,publisher,scope,{requestId:randomUUID(),locationId:scope,action:'shift.publish',recordId:shift.recordId,expectedRevision:shift.revision,input:{note:'Fictional replacement preview publication'}});
+ }
  // Privileged seed attestation only, after all fictional inputs; the UI cannot refresh it.
  await pool.query("INSERT INTO candidate_operations.weekly_scope_reviews(restaurant_id,workspace_revision,evidence) SELECT id,revision,'Complete fictional scheduling fixture only' FROM candidate_identity.restaurants WHERE id=$1",[scope]);
  writeFileSync(new URL('runtime/schedule-preview-fixture.json',import.meta.url),JSON.stringify({sessions}));

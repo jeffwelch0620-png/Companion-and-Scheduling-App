@@ -1,0 +1,10 @@
+import type {Workspace,RecordOf,CoverageDuty,History,Member} from '../../app/shared/types';
+export type Offer={id:string;locationId:string;ownerId:string;area:string;revision:number;updatedAt:string;kind:'coverage'|'request';data:{type?:'swap';shiftId:string;shiftRevision:number;position:string;start:string;end:string;duties:CoverageDuty[];volunteers:{personId:string;at:string}[];history:History;note:string;decision?:string;status:'open'|'pending'|'accepted-by-replacement'|'approved'|'withdrawn'|'declined'|'invalidated';replacementId?:string;selectedId?:string;eligible?:boolean;unavailableReason?:string}};
+export function isOffer(r:unknown):r is Offer;
+export function checkedOffer(w:Workspace,r:unknown):Offer;
+export function canReviewDepartment(w:Workspace,area:string,period:{start:string;end:string}):boolean;
+export function offerActions(w:Workspace,r:Offer,now:string):{current:boolean;volunteer:boolean;withdrawVolunteer:boolean;withdraw:boolean;consent:boolean;review:boolean;approve:boolean;departmentChange:boolean;replacement?:Member};
+export function replacementCandidates(w:Workspace,shift:RecordOf<'shift'>):Member[];
+export function replacementInput(w:Workspace,shift:RecordOf<'shift'>,type:string,fields:{note:unknown;replacementId?:string},now:string):Record<string,unknown>;
+export function offerIssueText(code:string):string;
+export function offerCommandInput(w:Workspace,r:Offer,action:string,fields:Record<string,unknown>,now:string):Record<string,unknown>;

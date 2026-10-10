@@ -40,3 +40,7 @@ Cross-repository work is a reviewed port of selected components and contracts, n
 ## Main branch controls
 
 Require pull requests, successful `candidate-validation` checks and resolution of review conversations; block force pushes and branch deletion. Avoid requiring an approval the sole repository owner cannot supply on their own PR; use human final review and add a required independent approver when another reviewer is available. Enable these controls once the candidate check is available. Merge approval must be given for the concrete reviewed PR; deployment and hosted database application require separate approval.
+
+## Dependent coverage/replacement preparation
+
+Weekly-publication PR32 remains a draft at reviewed preparation head `d092dca`, based on accepted main `79f3bf9`. Coverage/replacement UI preparation uses `codex/companion-coverage-swap-ui` from that dependency and targets `codex/companion-weekly-publication-ui`. Review and approve PR32 first. After its authorized merge, merge accepted main normally into the dependent branch, retarget to main, re-test and wait for separate merge approval. Do not force-push or treat either draft as deployment authorization.

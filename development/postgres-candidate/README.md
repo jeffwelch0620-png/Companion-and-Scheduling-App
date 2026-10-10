@@ -46,7 +46,7 @@ npm run preview:seed --prefix development/postgres-candidate
 npm run preview:serve --prefix development/postgres-candidate
 ```
 
-Open `http://127.0.0.1:6610/schedule-forms`, `/checkout-forms`, `/overnight-forms` or `/forms` locally. The scheduling screen covers day/week/personal reads, individual drafts and availability/time-off requests; publication, copying, coverage, leadership and attendance controls remain pending. Run seed once per fresh database; it refuses the existing fictional scheduling restaurant. The server binds only to loopback and issues short-lived, locally signed fictional tokens. Never deploy this fixture-token server. Stop it with Ctrl+C. Runtime fixture JSON, generated reference modules and preview build output stay ignored. Run browser checks after regression tests to avoid competing fictional business dates.
+Open `http://127.0.0.1:6610/schedule-forms`, `/checkout-forms`, `/overnight-forms` or `/forms` locally. The scheduling screen covers day/week/personal reads, individual drafts, availability/time-off requests, reviewed weekly publication and coverage/named replacement consent with independent approval. Copying, leadership assignment, other published edits and attendance controls remain pending. Run seed once per fresh database; it refuses the existing fictional scheduling restaurant. The server binds only to loopback and issues short-lived, locally signed fictional tokens. Never deploy this fixture-token server. Stop it with Ctrl+C. Runtime fixture JSON, generated reference modules and preview build output stay ignored. Run browser checks after regression tests to avoid competing fictional business dates.
 
 ## Scope and evidence
 
@@ -107,3 +107,5 @@ Follow [the repository Git workflow](../../docs/GIT_WORKFLOW.md). Shared migrati
 PR30 store configuration and corrective safeguards (041–043) were separately approved and accepted at main `1428e84`, from reviewed head `56cd02b` with 496/496 exact-head CI cases passing. PR31 configuration-aware UI preparation was separately approved and accepted at `79f3bf9`, with 519/519 merged-main CI checks passing. See [the UI configuration checkpoint](UI_CONFIGURATION_CHECKPOINT.md) for refresh validation and remaining adoption work.
 
 [Weekly publication UI preparation](WEEKLY_PUBLICATION_UI_CHECKPOINT.md) adds selected-draft review, server-calculated staffing gaps, exact closing selections and online publication recovery. The current branch adds read support in 044; real source certification, shared UI adoption and production integration remain separate.
+
+[Coverage and named replacement UI](COVERAGE_SWAP_UI_CHECKPOINT.md) connects scoped offers, captured duties, explicit consent, independent approval and department-change review. It depends on draft weekly-publication PR32; neither draft preparation is an accepted merge or deployment.
