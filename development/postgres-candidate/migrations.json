@@ -148,6 +148,10 @@
     {
       "file": "037_person_schedule_safeguards.sql",
       "sha256": "a12d5c07a43d3ec82d9244476f1b99961f8c56f314a27f01e2813fdec3414e66"
+    },
+    {
+      "file": "038_completed_shift_policy.sql",
+      "sha256": "9c29c354b1f00054aa83eb2d6a7e42c18d46594d1c691faba66ba0bd5cb4fdd3"
     }
   ]
 }

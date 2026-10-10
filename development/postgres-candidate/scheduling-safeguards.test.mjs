@@ -161,7 +161,7 @@ test('roster changes block publication; receipt replay stays incomplete and new 
 });
 
 test('migration 037 backfills the accepted baseline and rolls back entirely for existing overlaps',async()=>{
- const migrations=await verifyMigrationManifest();
+ const migrations=await verifyMigrationManifest(),safeguardIndex=migrations.indexOf('037_person_schedule_safeguards.sql');assert.ok(safeguardIndex>0);
  for(const overlapping of [false,true]){
   const name=connection.database+(overlapping?'_bad_upgrade':'_upgrade');assert.ok(name.length<=63);
   const server=new pg.Client({...connection,database:'postgres',user:'candidate_owner'});await server.connect();
@@ -169,10 +169,10 @@ test('migration 037 backfills the accepted baseline and rolls back entirely for 
   const c=new pg.Client({...connection,database:name,user:'candidate_owner'});await c.connect();
   try{
    await c.query(`GRANT CREATE ON DATABASE "${name}" TO candidate_schema_owner`);await c.query('GRANT USAGE,CREATE ON SCHEMA public TO candidate_schema_owner');await c.query('SET ROLE candidate_schema_owner');
-   for(const file of migrations.slice(0,-1))await c.query(await readFile(new URL(file,import.meta.url),'utf8'));
+   for(const file of migrations.slice(0,safeguardIndex))await c.query(await readFile(new URL(file,import.meta.url),'utf8'));
    const person=randomUUID(),member=randomUUID(),scope='fictional-upgrade';await c.query('INSERT INTO candidate_identity.restaurants(id,name) VALUES($1,$2)',[scope,'Fictional upgrade']);await c.query('INSERT INTO candidate_identity.people VALUES($1,$2)',[person,'Fictional upgrade worker']);await c.query("INSERT INTO candidate_identity.memberships(id,person_id,restaurant_id,department) VALUES($1,$2,$3,'BOH')",[member,person,scope]);
    for(const cancelled of [false,!overlapping])await c.query("INSERT INTO candidate_operations.shift_references(id,restaurant_id,member_id,department,position,starts_at,ends_at,revision,published,cancelled) VALUES($1,$2,$3,'BOH','Cook',$4,$5,1,true,$6)",[randomUUID(),scope,member,start,end,cancelled]);
-   const sql=await readFile(new URL(migrations.at(-1),import.meta.url),'utf8');
+   const sql=await readFile(new URL(migrations[safeguardIndex],import.meta.url),'utf8');
    if(overlapping){await assert.rejects(c.query(sql),e=>e.code==='23P01');await c.query('ROLLBACK');assert.equal((await c.query("SELECT to_regclass('candidate_operations.person_shift_bookings') relation")).rows[0].relation,null);}
    else{await c.query(sql);assert.equal((await c.query('SELECT count(*)::int n FROM candidate_operations.person_shift_bookings')).rows[0].n,1);}
    assert.equal((await c.query('SELECT count(*)::int n FROM candidate_operations.shift_references')).rows[0].n,2);

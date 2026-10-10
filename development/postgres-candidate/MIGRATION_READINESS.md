@@ -114,3 +114,7 @@ Corrective migration 036 and HTTP read transactions address the first post-merge
 ## Person scheduling and roster review safeguards
 
 [Migration 037 and scheduling safeguards](SCHEDULING_SAFEGUARDS_CHECKPOINT.md) adds person-level conflict checks across location memberships with a private database exclusion constraint, transactional booking maintenance and coverage eligibility. Expanded tests verify the existing whole-store roster invalidation contract, including old/new stores, publication blocking, stale receipt replay and renewed fictional review. M06 remains partial; these safeguards do not settle leadership self-assignment, started/ended shift edits or department-changing swaps, or finish scheduling UI/service adoption.
+
+## Confirmed scheduling policies
+
+The user selected eligible publisher self-assignment, authorized manager edits of active shifts with required reasons and manager-approved department changes during swaps. [The dependent policy checkpoint](SCHEDULING_POLICY_CHECKPOINT.md) preserves those permissions and adds migration 038's ended-shift cutoff, including draft edits/cancellation and time-off-driven cancellations. PR28 remains unmerged; this package is based on its tested draft head. M06 remains partial: a separately audited completed-record correction workflow, remaining scheduling UI, copying/attendance and production source adoption are open.

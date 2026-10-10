@@ -297,6 +297,8 @@ BEGIN
  IF jsonb_typeof(p_payload->'expectedRevision') IS DISTINCT FROM 'number' OR p_payload->>'expectedRevision' !~ '^[1-9][0-9]*$' THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_revision'; END IF;
  IF rec.revision<>(p_payload->>'expectedRevision')::integer THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='revision_conflict'; END IF;
  IF rec.cancelled OR rec.released_at IS NOT NULL OR NOT cancelling AND NOT rec.published THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='phase_conflict'; END IF;
+ -- Current server time after scope/row coordination; receipt replay above does not mutate.
+ IF rec.ends_at<=clock_timestamp() THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='shift_ended'; END IF;
  IF NOT EXISTS(SELECT 1 FROM candidate_operations.schedule_draft_events WHERE shift_id=rec.id) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='draft_reference_only'; END IF;
  IF jsonb_typeof(input->'note') IS DISTINCT FROM 'string' OR length(btrim(input->>'note')) NOT BETWEEN 1 AND 2000 THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='schedule_change_note_required'; END IF;
  note:=btrim(input->>'note');original_owner:=rec.member_id;updated:=rec;updated.revision:=rec.revision+1;
@@ -1540,6 +1542,7 @@ BEGIN
  IF p_offer.status NOT IN ('open','pending','accepted-by-replacement') THEN RETURN 'offer_finished'; END IF;
  SELECT * INTO s FROM candidate_operations.shift_references WHERE id=p_offer.shift_id AND restaurant_id=p_offer.restaurant_id;
  IF NOT FOUND OR NOT s.published OR s.cancelled OR s.released_at IS NOT NULL THEN RETURN 'offer_shift_unavailable'; END IF;
+ IF s.ends_at<=statement_timestamp() THEN RETURN 'offer_shift_ended'; END IF;
  IF ROW(s.member_id,s.revision,s.position,s.starts_at,s.ends_at,s.department) IS DISTINCT FROM ROW(p_offer.owner_id,p_offer.shift_revision,p_offer.position,p_offer.starts_at,p_offer.ends_at,p_offer.department) THEN RETURN 'offer_shift_changed'; END IF;
  IF NOT EXISTS(SELECT 1 FROM candidate_identity.memberships WHERE id=p_offer.owner_id AND restaurant_id=p_offer.restaurant_id AND active AND NOT schedule_only) THEN RETURN 'offer_owner_inactive'; END IF;
  IF p_offer.mode='coverage' AND s.starts_at<=statement_timestamp() THEN RETURN 'offer_shift_started'; END IF;
@@ -2248,6 +2251,9 @@ BEGIN
   THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_revision'; END IF;
   IF rec.revision<>(p_payload->>'expectedRevision')::integer THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='revision_conflict'; END IF;
   IF rec.published OR rec.cancelled OR rec.released_at IS NOT NULL THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='phase_conflict'; END IF;
+  IF rec.ends_at<=clock_timestamp() THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='shift_ended'; END IF;
+  IF rec.starts_at<=clock_timestamp() AND (jsonb_typeof(input->'note') IS DISTINCT FROM 'string' OR length(btrim(input->>'note')) NOT BETWEEN 1 AND 2000)
+  THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='schedule_change_note_required'; END IF;
   -- Only command-created drafts have complete candidate metadata. Imported references remain protected.
   IF NOT EXISTS(SELECT 1 FROM candidate_operations.schedule_draft_events WHERE shift_id=rec.id)
   THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='draft_reference_only'; END IF;
@@ -2916,6 +2922,7 @@ BEGIN
     AND (SELECT count(*) FROM jsonb_array_elements(input->'affectedShifts') v WHERE v->>'id'=shift_row.id::text AND v->'revision'=to_jsonb(shift_row.revision))<>1)
    THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='time_off_impact_conflict'; END IF;
    FOR s IN SELECT * FROM candidate_operations.shift_references WHERE id=ANY(affected) ORDER BY id FOR UPDATE LOOP
+    IF s.ends_at<=clock_timestamp() THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='shift_ended'; END IF;
     IF s.published OR s.released_at IS NOT NULL OR NOT EXISTS(SELECT 1 FROM candidate_operations.schedule_draft_events WHERE shift_id=s.id)
     OR EXISTS(SELECT 1 FROM candidate_operations.tasks WHERE shift_id=s.id) OR EXISTS(SELECT 1 FROM candidate_operations.closes WHERE shift_id=s.id)
     OR EXISTS(SELECT 1 FROM candidate_operations.shift_standard_links WHERE shift_id=s.id)
