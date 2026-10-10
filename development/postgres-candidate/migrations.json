@@ -168,6 +168,10 @@
     {
       "file": "042_store_configuration_safeguards.sql",
       "sha256": "32bcdc10a2de88f4af4959f0347a745c60355a8a07640d53ac790e60ad2edbf2"
+    },
+    {
+      "file": "043_portable_store_timezones.sql",
+      "sha256": "662603cd624122ccb607103e475aca441976e1ff69162762201cdbfff3f731cd"
     }
   ]
 }
