@@ -1,3 +1,4 @@
+import {fictionalStoreInsert} from './store-fixture.mjs';
 import test,{after} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -20,7 +21,7 @@ async function fixture(){
  await admin.query('INSERT INTO candidate_identity.auth_links VALUES($1,$2)',[subject,personId]);
  for(let i=0;i<2;i++){
   const scope='safeguard-'+randomUUID(),worker={personId,subject,membershipId:randomUUID()},manager={personId:randomUUID(),subject:'fictional-manager-'+randomUUID(),membershipId:randomUUID()},spare={personId:randomUUID(),membershipId:randomUUID()};
-  await admin.query('INSERT INTO candidate_identity.restaurants(id,name) VALUES($1,$2)',[scope,'Fictional safeguard store']);
+  await admin.query(fictionalStoreInsert,[scope,'Fictional safeguard store']);
   for(const actor of [manager,spare])await admin.query('INSERT INTO candidate_identity.people VALUES($1,$2)',[actor.personId,'Fictional employee']);
   await admin.query('INSERT INTO candidate_identity.auth_links VALUES($1,$2)',[manager.subject,manager.personId]);
   for(const actor of [worker,manager,spare])await admin.query("INSERT INTO candidate_identity.memberships(id,person_id,restaurant_id,department,position) VALUES($1,$2,$3,'BOH','Cook')",[actor.membershipId,actor.personId,scope]);

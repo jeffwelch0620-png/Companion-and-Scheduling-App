@@ -1,3 +1,4 @@
+import {fictionalStoreInsert} from './store-fixture.mjs';
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -13,7 +14,7 @@ const db = new PostgresDatabase({...connection,user:'candidate_runtime',max:3});
 after(async()=>{await admin.end();await db.close();});
 async function fixture() {
   const scope=`import-close-${randomUUID()}`;
-  await admin.query('INSERT INTO candidate_identity.restaurants(id,name) VALUES($1,$2)',[scope,'Fictional imported closing']);
+  await admin.query(fictionalStoreInsert,[scope,'Fictional imported closing']);
   const actors=['worker','manager','verifier'].map(name=>({name,id:randomUUID(),person:randomUUID(),subject:`import-${randomUUID()}`,session:randomUUID()}));
   const shift=randomUUID(),standard=randomUUID();
   const snapshot={restaurantId:scope,members:actors.map(a=>({revision:2,active:true,member:{id:a.name,locationId:scope,name:`Fictional ${a.name}`,area:'BOH',position:a.name==='manager'?'Manager':'Cook',capabilities:[],qualifications:[]}})),

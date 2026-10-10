@@ -1,6 +1,6 @@
 # Scheduling policy decisions and completed-shift protection
 
-This dependent candidate package starts from draft PR28 head `a045dca`, not accepted main. PR28 is still unmerged. The active Companion, Inventory and hosted services remain separate.
+This document retains historical preparation evidence from draft PR28 head `a045dca`. Current acceptance: PR28 at `0f1aa31`, followed by separately approved PR29 at `a344421` with 457/457 post-merge checks and CI passing. Draft and pending-approval statements below describe earlier checkpoints. The active Companion, Inventory and hosted services remain separate.
 
 ## Confirmed operating choices
 
@@ -53,3 +53,7 @@ Follow-up validation on 2026-10-10 passed in fresh fictional loopback database `
 The user approved the next merge on 2026-10-10. PR28 was squash-merged at `0f1aa31bdeefc96c951c69bb86cb1efdf0c386d3` from reviewed head `72214f2`. Updated main was merged normally into the PR29 branch without force-pushing. Since the dependency had been squashed, repeated-content conflicts in documentation, manifest and function snapshot were resolved by retaining the already-combined 001–040 candidate. The accepted-main tree matches the original PR28 tree, and no published SQL or hashes were changed. PR29 will target main, remain draft and wait for its own explicit approval after renewed validation. Inventory and hosted adoption remain separate.
 
 Renewed main-preparation validation passed on 2026-10-10 in fresh fictional loopback database `companion_candidate_pr29_mainprep1`: migrations 001–040, matching function snapshot, 457/457 serial tests, strict candidate types, original-form preview build and readiness inventory. The accepted PR28 main commit also passed its GitHub workflow with 439/439 tests. No new browser exercise was performed; the existing logo-path build warning remains. The PR29 pushed head must pass renewed CI and remains draft pending separate approval.
+
+## Accepted baseline
+
+PR29 was explicitly approved and squash-merged on 2026-10-10 at `a3444211b2929e887cf5e59979080261e8324c04`, from reviewed head `a847101`. Exact merged-head CI run `38058148954` passed 457/457 regression checks, fresh migrations, function snapshot, candidate types and preview build. Subsequent candidate-only store configuration is tracked separately in STORE_CONFIGURATION_CHECKPOINT.md. Inventory, hosted services and backend cutover remain separate.

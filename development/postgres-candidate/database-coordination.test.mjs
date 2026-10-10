@@ -1,9 +1,10 @@
+import {fictionalStoreInsert} from './store-fixture.mjs';
 import test,{after} from 'node:test';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';import pg from 'pg';
 import {connection} from './test-config.mjs';import {PostgresDatabase} from './postgres-driver.ts';import {executeTask,parseCommand} from './task-adapter.ts';import {createTaskHandler} from './task-http.ts';
 import {privilegedScopeTransaction} from './privileged-scope-transaction.mjs';
 const admin=new pg.Pool({...connection,user:'candidate_owner'}),db=new PostgresDatabase({...connection,user:'candidate_runtime'});after(async()=>{await admin.end();await db.close();});
 async function fixture(){
- const scope='coord-'+randomUUID(),actors=[];await admin.query('INSERT INTO candidate_identity.restaurants(id,name) VALUES($1,$2)',[scope,'Fictional coordination']);
+ const scope='coord-'+randomUUID(),actors=[];await admin.query(fictionalStoreInsert,[scope,'Fictional coordination']);
  for(const name of ['manager','employee','peer']){
   const person=randomUUID(),membershipId=randomUUID(),subject='fictional-'+randomUUID(),sessionId=randomUUID();
   await admin.query('INSERT INTO candidate_identity.people VALUES($1,$2)',[person,'Fictional '+name]);await admin.query('INSERT INTO candidate_identity.auth_links VALUES($1,$2)',[subject,person]);
