@@ -164,6 +164,10 @@
     {
       "file": "041_explicit_store_configuration.sql",
       "sha256": "15ade33a7f8c24f15354b16fb226c86d22f246e83fe1abfe3dd2c3bed33fc468"
+    },
+    {
+      "file": "042_store_configuration_safeguards.sql",
+      "sha256": "32bcdc10a2de88f4af4959f0347a745c60355a8a07640d53ac790e60ad2edbf2"
     }
   ]
 }

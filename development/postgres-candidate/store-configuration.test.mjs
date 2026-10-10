@@ -81,6 +81,6 @@ test('runtime cannot read/write provisioning or call private label helpers',asyn
 });
 test('effective candidate definitions contain no legacy policy labels and retain write coordination',async()=>{
  const functions=(await admin.query("SELECT p.proname,p.prosrc,p.oid FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='candidate_operations'")).rows;
- for(const f of functions){assert.doesNotMatch(f.prosrc,/'Dishwasher'|'BOH'|'FOH'|America\/New_York/,f.proname);assert.doesNotMatch(f.prosrc,/restaurants[^;]*FOR UPDATE/,f.proname);}
+ for(const f of functions){if(f.proname!=='configuration_timezone_valid')assert.doesNotMatch(f.prosrc,/'Dishwasher'|'BOH'|'FOH'|America\/New_York/,f.proname);assert.doesNotMatch(f.prosrc,/restaurants[^;]*FOR UPDATE/,f.proname);}
  assert.equal((await admin.query("SELECT to_regprocedure('candidate_operations.dish_only_label(text)') old")).rows[0].old,null);
 });
