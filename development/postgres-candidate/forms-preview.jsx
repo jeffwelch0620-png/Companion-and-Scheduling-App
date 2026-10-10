@@ -4,6 +4,8 @@ import {createRoot} from 'react-dom/client';
 import {FollowForm,FollowDetail} from '../../app/team/followthrough-forms';
 import '../../app/team/workspace.css';
 import {IndexedDbQueueStorage,OfflineTaskQueue} from './offline-task-queue.mjs';
+import {retainReady} from './checkout-queue-client.mjs';
+import {isSubmissionConflict} from './submission-recovery-policy.mjs';
 const scope='fictional-a';
 import {SavedSubmissionReview} from './saved-submission-review.jsx';
 const members=[['manager','001','Fictional manager','Kitchen manager',['tasks.manage']],['employee','002','Fictional employee','Cook',[]]]
@@ -34,9 +36,7 @@ function Preview(){
   setBusy(true);
   try{
    if(action==='task.transition'&&input.step==='ready'){
-    const retained=await queue.list(actor,scope);
-    if(retained.some(e=>e.command.recordId===record.id&&e.status!=='applied'))throw Error('This task already has a saved submission. Reconnect or review its status before submitting again.');
-    await queue.enqueue(actor,scope,command);
+    await retainReady(queue,actor,scope,command);
     if(!offline)await queue.flush(actor,scope,c=>call(actor,'/commands',c));
     const current=await queue.list(actor,scope);setEntries(current);
     const saved=current.find(e=>e.requestId===command.requestId);
@@ -49,7 +49,17 @@ function Preview(){
    if(!offline)await refresh();
   }finally{setBusy(false);}
  }
- async function recover(entry,discard=false){setBusy(true);try{if(discard)await queue.discard(actor,scope,entry.requestId);else{await queue.retry(actor,scope,entry.requestId);if(!offline)await queue.flush(actor,scope,c=>call(actor,'/commands',c));}setEntries(await queue.list(actor,scope));setMessage(discard?'Device copy removed. This does not cancel server work.':'Original submission retained. Review its delivery status.');if(!discard&&!offline)await refresh();}catch(e){setMessage(e.message);}finally{setBusy(false);}}
+ async function recover(entry,discard=false){
+  setBusy(true);try{
+   const redo=discard&&isSubmissionConflict(entry);
+   if(discard)await queue.discard(actor,scope,entry.requestId);
+   else{await queue.retry(actor,scope,entry.requestId);if(!offline)await queue.flush(actor,scope,c=>call(actor,'/commands',c));}
+   if(redo){setSelected(null);setRecords([]);}
+   setEntries(await queue.list(actor,scope));
+   setMessage(discard?(redo?'Device copy removed. Reload current work before redoing it; this does not cancel server work.':'Device copy removed. This does not cancel server work.'):'Original submission retained. Review its delivery status.');
+   if((!discard||redo)&&!offline)await refresh();
+  }catch(e){setMessage(e.message);}finally{setBusy(false);}
+ }
  async function clearDevice(){setBusy(true);try{await queue.clearSubject(actor);setEntries([]);setRecords([]);setSelected(null);setOffline(true);setMessage('Employee device data cleared. Connect to reload assignments.');}catch(e){setMessage(e.message);}finally{setBusy(false);}}
  async function reconnect(){setBusy(true);try{await queue.flush(actor,scope,c=>call(actor,'/commands',c));setOffline(false);await refresh();setMessage('Reconnected. Review the saved submission status below.');}catch(e){setMessage(e.message);}finally{setBusy(false);}}
  const record=records.find(r=>r.id===selected);

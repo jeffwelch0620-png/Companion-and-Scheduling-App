@@ -1,5 +1,6 @@
 import React,{useState} from 'react';
 import {submissionMessage} from './checkout-queue-client.mjs';
+import {isSubmissionConflict} from './submission-recovery-policy.mjs';
 
 // Candidate-only recovery controls. A fresh identity is still required at delivery time.
 export function SavedSubmissionReview({entries,busy,onRetry,onDiscard,onClear}){
@@ -8,8 +9,9 @@ export function SavedSubmissionReview({entries,busy,onRetry,onDiscard,onClear}){
   <ul>{entries.map(entry=><li key={entry.requestId} style={{marginBottom:16}}>
    <p>{submissionMessage(entry)}</p><p>{entry.command.input.note}</p>
    <p>Saved {new Date(entry.createdAt).toLocaleString()}. Delivery attempts: {entry.attempts}.</p>
-   {!['applied','rejected'].includes(entry.status)&&<button disabled={busy} onClick={()=>onRetry(entry)}>Retry original submission</button>}
-   <button disabled={busy} onClick={()=>setConfirm(entry.requestId)}>Discard device copy</button>
+   {isSubmissionConflict(entry)&&<p>Current work changed. The original submission cannot resolve this conflict. Check current work with the manager, discard this device copy, then reload the current assignment before redoing it.</p>}
+   {!['applied','rejected'].includes(entry.status)&&!isSubmissionConflict(entry)&&<button disabled={busy} onClick={()=>onRetry(entry)}>Retry original submission</button>}
+   <button disabled={busy} onClick={()=>setConfirm(entry.requestId)}>{isSubmissionConflict(entry)?'Discard and redo':'Discard device copy'}</button>
    {confirm===entry.requestId&&<div><p>Removing the device copy does not cancel work already received by the server. If delivery was uncertain, check current work with the manager before creating another submission.</p>
     <button disabled={busy} onClick={async()=>{await onDiscard(entry);setConfirm(null);}}>Confirm discard</button> <button onClick={()=>setConfirm(null)}>Keep saved work</button></div>}
   </li>)}</ul>

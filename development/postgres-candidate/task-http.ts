@@ -5,13 +5,39 @@ import type {Database,TrustedIdentity} from './task-adapter.ts';
 
 type VerifiedSession={subject:string;sessionId:string};
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Give a newly encountered remote kid one cooldown window to appear after rotation.
+// jose still owns fetch coalescing/cooldown; unknown keys never force a remote reload.
+export function withKeyRotationGrace(getKey:JWTVerifyGetKey,{cooldownMs=30000,now=()=>Date.now(),maxUnknownKeys=100}={}):JWTVerifyGetKey{
+ if(!Number.isFinite(cooldownMs)||cooldownMs<=0||!Number.isInteger(maxUnknownKeys)||maxUnknownKeys<1)throw Error('Invalid key rotation policy');
+ const missing=new Map<string,number>();
+ return async(header,jwt)=>{
+  const key=JSON.stringify([header.alg,header.kid]);
+  try{const result=await getKey(header,jwt);missing.delete(key);return result;}
+  catch(error){
+   if((error as {code?:string}|null)?.code!=='ERR_JWKS_NO_MATCHING_KEY')throw error;
+   if(typeof header.kid!=='string'||!header.kid||header.kid.length>200)throw error;
+   const time=now();
+   if(!missing.has(key)){
+    if(missing.size>=maxUnknownKeys){
+     // Reclaim an expired grace slot, otherwise reject excess unknown kids immediately.
+     const expired=[...missing].find(([,started])=>time-started>=cooldownMs);
+     if(!expired)throw error;missing.delete(expired[0]);
+    }
+    missing.set(key,time);
+   }
+   const started=missing.get(key)??time;
+   if(time-started<cooldownMs)throw new CommandError(503,'authentication_service_unavailable');
+   throw error; // Still unknown after the grace window: credentials are invalid (401).
+  }
+ };
+}
 export function makeJwtVerifier(options:{issuer:string;audience:string;getKey:JWTVerifyGetKey}) {
  return async(token:string):Promise<VerifiedSession>=>{
   try{
    const {payload}=await jwtVerify(token,async(header,jwt)=>{
     try{return await options.getKey(header,jwt);}
     catch(error){
-     if((error as {code?:string}).code==='ERR_JWKS_NO_MATCHING_KEY')throw error;
+     if(error instanceof CommandError||(error as {code?:string}|null)?.code==='ERR_JWKS_NO_MATCHING_KEY')throw error;
      throw new CommandError(503,'authentication_service_unavailable');
     }
    },{
@@ -26,7 +52,7 @@ export function makeJwtVerifier(options:{issuer:string;audience:string;getKey:JW
   }catch(error){
    if(error instanceof CommandError)throw error;
    // Credential failures require login. Key-service/network/configuration failures are retryable.
-   const code=(error as {code?:string}).code;
+   const code=(error as {code?:string}|null)?.code;
    if(code&&['ERR_JWT_EXPIRED','ERR_JWT_CLAIM_VALIDATION_FAILED','ERR_JWS_SIGNATURE_VERIFICATION_FAILED',
     'ERR_JWS_INVALID','ERR_JWT_INVALID','ERR_JOSE_ALG_NOT_ALLOWED','ERR_JOSE_NOT_SUPPORTED',
     'ERR_JWKS_NO_MATCHING_KEY'].includes(code))throw new CommandError(401,'authentication_required');
@@ -40,7 +66,7 @@ export function supabaseJwtVerifier(projectUrl:string) {
   throw new Error('Expected a trusted HTTPS Supabase project origin');
  const issuer=base.origin+'/auth/v1';
  return makeJwtVerifier({issuer,audience:'authenticated',
-  getKey:createRemoteJWKSet(new URL(issuer+'/.well-known/jwks.json'))});
+  getKey:withKeyRotationGrace(createRemoteJWKSet(new URL(issuer+'/.well-known/jwks.json'),{cooldownDuration:30000}),{cooldownMs:30000})});
 }
 const headers={'Content-Type':'application/json','Cache-Control':'private, no-store',
  Vary:'Authorization','X-Content-Type-Options':'nosniff'};
