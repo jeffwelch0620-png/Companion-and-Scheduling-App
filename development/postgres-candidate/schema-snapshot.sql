@@ -297,6 +297,8 @@ BEGIN
  IF jsonb_typeof(p_payload->'expectedRevision') IS DISTINCT FROM 'number' OR p_payload->>'expectedRevision' !~ '^[1-9][0-9]*$' THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_revision'; END IF;
  IF rec.revision<>(p_payload->>'expectedRevision')::integer THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='revision_conflict'; END IF;
  IF rec.cancelled OR rec.released_at IS NOT NULL OR NOT cancelling AND NOT rec.published THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='phase_conflict'; END IF;
+ -- Current server time after scope/row coordination; receipt replay above does not mutate.
+ IF rec.ends_at<=clock_timestamp() THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='shift_ended'; END IF;
  IF NOT EXISTS(SELECT 1 FROM candidate_operations.schedule_draft_events WHERE shift_id=rec.id) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='draft_reference_only'; END IF;
  IF jsonb_typeof(input->'note') IS DISTINCT FROM 'string' OR length(btrim(input->>'note')) NOT BETWEEN 1 AND 2000 THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='schedule_change_note_required'; END IF;
  note:=btrim(input->>'note');original_owner:=rec.member_id;updated:=rec;updated.revision:=rec.revision+1;
@@ -332,11 +334,13 @@ BEGIN
   IF jsonb_typeof(input->'start') IS DISTINCT FROM 'string' OR jsonb_typeof(input->'end') IS DISTINCT FROM 'string' OR jsonb_typeof(input->'position') IS DISTINCT FROM 'string' OR input->>'start' !~ '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$' OR input->>'end' !~ '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$' THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_schedule_fields'; END IF;
   updated.member_id:=owner_member.id;updated.department:=owner_member.department;updated.starts_at:=(input->>'start')::timestamptz;updated.ends_at:=(input->>'end')::timestamptz;updated.position:=btrim(input->>'position');
   IF updated.ends_at<=updated.starts_at OR updated.ends_at-updated.starts_at>interval '24 hours' OR length(updated.position) NOT BETWEEN 1 AND 100 THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_draft_duration'; END IF;
+  IF rec.starts_at<=clock_timestamp() AND (updated.starts_at>rec.starts_at OR updated.ends_at<clock_timestamp())
+  THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='active_shift_time_conflict'; END IF;
   IF NOT candidate_operations.published_change_allowed(actor.id,p_restaurant,updated.department,updated.starts_at,updated.ends_at) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='action_denied'; END IF;
   IF NOT EXISTS(SELECT 1 FROM candidate_operations.schedule_input_reviews WHERE restaurant_id=p_restaurant AND time_off_complete) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='schedule_inputs_incomplete'; END IF;
   IF NOT EXISTS(SELECT 1 FROM candidate_identity.schedule_eligibility WHERE member_id=owner_member.id AND active AND job=updated.position) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='schedule_job_denied'; END IF;
   IF EXISTS(SELECT 1 FROM candidate_operations.shift_references s WHERE s.restaurant_id=p_restaurant AND s.member_id=owner_member.id AND s.id<>rec.id AND NOT s.cancelled AND s.starts_at<updated.ends_at AND s.ends_at>updated.starts_at) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='shift_overlap'; END IF;
-  IF EXISTS(SELECT 1 FROM candidate_operations.time_off_references WHERE restaurant_id=p_restaurant AND member_id=owner_member.id AND status='approved' AND starts_at<updated.ends_at AND ends_at>updated.starts_at) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='approved_time_off_conflict'; END IF;
+  IF candidate_operations.person_time_off_conflict(owner_member.id,updated.starts_at,updated.ends_at) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='approved_time_off_conflict'; END IF;
   IF EXISTS(SELECT 1 FROM candidate_operations.availability_references WHERE restaurant_id=p_restaurant AND member_id=owner_member.id AND status='approved' AND candidate_operations.availability_period_conflict(data,updated.starts_at,updated.ends_at,scope.timezone)) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='availability_shift_conflict'; END IF;
   IF input ? 'stationId' THEN updated.station_id:=nullif(input->>'stationId','')::uuid; END IF;
   IF updated.station_id IS DISTINCT FROM rec.station_id AND EXISTS(SELECT 1 FROM candidate_operations.closes WHERE shift_id=rec.id AND phase<>'cancelled') THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='linked_close_protected'; END IF;
@@ -715,6 +719,23 @@ BEGIN
   VALUES(p_restaurant,CASE WHEN task.phase='acceptance' THEN task.incoming_id ELSE task.assignee_id END,task.id,task.revision,task.title||': '||task.phase);
  END IF;
  RETURN result;
+END;
+$function$
+
+CREATE OR REPLACE FUNCTION candidate_operations.coordinate_person_time_off()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+DECLARE old_member uuid;new_member uuid;store text;
+BEGIN
+ IF TG_OP<>'INSERT' THEN old_member:=OLD.member_id; END IF;
+ IF TG_OP<>'DELETE' THEN new_member:=NEW.member_id; END IF;
+ FOR store IN SELECT DISTINCT m.restaurant_id FROM candidate_identity.memberships m
+ WHERE m.person_id IN (SELECT person_id FROM candidate_identity.memberships WHERE id IN (old_member,new_member))
+ ORDER BY m.restaurant_id LOOP PERFORM candidate_operations.lock_scope(store,true); END LOOP;
+ IF TG_OP='DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
 END;
 $function$
 
@@ -1278,7 +1299,7 @@ BEGIN
  SELECT * INTO scope FROM candidate_identity.restaurants WHERE id=p_restaurant;
  SELECT coalesce(array_agg(capability),'{}') INTO caps FROM candidate_identity.membership_capabilities WHERE membership_id=actor.id AND active;
  SELECT array_agg(id ORDER BY id) INTO selected FROM (
-  SELECT s.id FROM candidate_operations.shift_references s WHERE s.restaurant_id=p_restaurant AND (p_after IS NULL OR s.id>p_after)
+  SELECT s.id FROM candidate_operations.shift_references s WHERE s.restaurant_id=p_restaurant AND (p_after IS NULL OR s.id>p_after) AND (s.published OR s.ends_at>statement_timestamp())
   AND (
    (caps && ARRAY['schedule.manage','schedule.publish','schedule.change'] AND (actor.department=s.department OR 'location.manage'=ANY(caps)))
    OR s.published AND (s.member_id=actor.id
@@ -1288,7 +1309,7 @@ BEGIN
   ) ORDER BY s.id LIMIT p_limit+1
  ) page;
  SELECT coalesce(jsonb_agg(jsonb_build_object('id',s.id,'kind','shift','locationId',s.restaurant_id,'area',s.department,'ownerId',s.member_id,'revision',s.revision,
-  'data',jsonb_build_object('personId',s.member_id,'position',s.position,'start',s.starts_at,'end',s.ends_at,'published',s.published,'cancelled',s.cancelled,'releasedAt',s.released_at)||CASE WHEN s.station_id IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('stationId',s.station_id,'stationName',s.station_name,'stationRevision',s.station_revision) END) ORDER BY s.id),'[]')
+  'data',jsonb_build_object('personId',s.member_id,'position',s.position,'start',s.starts_at,'end',s.ends_at,'published',s.published,'cancelled',s.cancelled,'releasedAt',s.released_at)||CASE WHEN s.station_id IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('stationId',s.station_id,'stationName',s.station_name,'stationRevision',s.station_revision) END||CASE WHEN caps && ARRAY['schedule.manage','schedule.publish','schedule.change'] AND (actor.department=s.department OR 'location.manage'=ANY(caps)) AND EXISTS(SELECT 1 FROM candidate_operations.time_off_shift_flags f WHERE f.shift_id=s.id AND f.restaurant_id=p_restaurant AND f.review_status='pending') THEN jsonb_build_object('reviewFlags',(SELECT jsonb_agg(jsonb_build_object('reason',f.reason,'reviewStatus',f.review_status) ORDER BY f.request_id) FROM candidate_operations.time_off_shift_flags f WHERE f.shift_id=s.id AND f.restaurant_id=p_restaurant AND f.review_status='pending')) ELSE '{}'::jsonb END) ORDER BY s.id),'[]')
  INTO items FROM candidate_operations.shift_references s WHERE s.id=ANY(selected[1:p_limit]);
  IF cardinality(selected)>p_limit THEN next_cursor:=selected[p_limit]; END IF;
  RETURN jsonb_build_object('items',items,'nextCursor',next_cursor,'workspaceRevision',scope.revision,'timezone',scope.timezone,'coverage','shift-references-only');
@@ -1384,6 +1405,8 @@ BEGIN
   'data',jsonb_build_object('type','time-off','start',r.starts_at,'end',r.ends_at,'status',r.status,
    'note',CASE WHEN 'schedule.change'=ANY(caps) AND (actor.department=r.department OR 'location.manage'=ANY(caps)) THEN r.note ELSE '' END,
    'decision',CASE WHEN 'schedule.change'=ANY(caps) AND (actor.department=r.department OR 'location.manage'=ANY(caps)) THEN r.decision ELSE NULL END),
+  'flaggedShifts',CASE WHEN 'schedule.manage'=ANY(caps) AND (actor.department=r.department OR 'location.manage'=ANY(caps)) THEN
+   (SELECT coalesce(jsonb_agg(jsonb_build_object('id',f.shift_id,'revision',f.shift_revision,'reason',f.reason,'reviewStatus',f.review_status) ORDER BY f.shift_id),'[]') FROM candidate_operations.time_off_shift_flags f WHERE f.request_id=r.id AND f.restaurant_id=p_restaurant) ELSE NULL END,
   'affectedShifts',CASE WHEN 'schedule.manage'=ANY(caps) AND (actor.department=r.department OR 'location.manage'=ANY(caps)) THEN
    (SELECT coalesce(jsonb_agg(jsonb_build_object('id',s.id,'revision',s.revision) ORDER BY s.starts_at,s.id),'[]') FROM candidate_operations.shift_references s WHERE s.restaurant_id=r.restaurant_id AND s.member_id=r.member_id AND NOT s.cancelled AND s.starts_at<r.ends_at AND s.ends_at>r.starts_at) ELSE NULL END) ORDER BY r.id),'[]') INTO items FROM candidate_operations.time_off_references r WHERE r.id=ANY(selected[1:p_limit]);
  IF cardinality(selected)>p_limit THEN next_cursor:=selected[p_limit]; END IF;
@@ -1535,7 +1558,7 @@ BEGIN
  OR NOT EXISTS(SELECT 1 FROM candidate_identity.schedule_eligibility WHERE member_id=m.id AND active AND job=s.position)
  OR s.station_id IS NOT NULL AND NOT candidate_operations.station_assignment_allowed(s.station_id,p_offer.restaurant_id,m.id,s.position)
  OR candidate_operations.person_shift_conflict(m.id,s.starts_at,s.ends_at,s.id)
- OR EXISTS(SELECT 1 FROM candidate_operations.time_off_references WHERE restaurant_id=p_offer.restaurant_id AND member_id=m.id AND status='approved' AND starts_at<s.ends_at AND ends_at>s.starts_at)
+ OR candidate_operations.person_time_off_conflict(m.id,s.starts_at,s.ends_at)
  OR EXISTS(SELECT 1 FROM candidate_operations.availability_references WHERE restaurant_id=p_offer.restaurant_id AND member_id=m.id AND status='approved' AND candidate_operations.availability_period_conflict(data,s.starts_at,s.ends_at,zone)) THEN RETURN false; END IF;
  IF EXISTS(SELECT 1 FROM candidate_operations.closes c WHERE c.shift_id=s.id AND c.phase<>'cancelled' AND (m.position='Dishwasher' OR m.id IN (c.manager_id,c.verifier_id) OR c.due<s.starts_at OR c.due>s.ends_at OR c.department<>m.department OR p_offer.mode='coverage' AND c.standard_snapshot->>'position'<>s.position OR NOT EXISTS(SELECT 1 FROM candidate_identity.station_clearances WHERE member_id=m.id AND restaurant_id=p_offer.restaurant_id AND active AND position=c.standard_snapshot->>'position'))) THEN RETURN false; END IF;
  RETURN true;
@@ -1553,6 +1576,7 @@ BEGIN
  IF p_offer.status NOT IN ('open','pending','accepted-by-replacement') THEN RETURN 'offer_finished'; END IF;
  SELECT * INTO s FROM candidate_operations.shift_references WHERE id=p_offer.shift_id AND restaurant_id=p_offer.restaurant_id;
  IF NOT FOUND OR NOT s.published OR s.cancelled OR s.released_at IS NOT NULL THEN RETURN 'offer_shift_unavailable'; END IF;
+ IF s.ends_at<=statement_timestamp() THEN RETURN 'offer_shift_ended'; END IF;
  IF ROW(s.member_id,s.revision,s.position,s.starts_at,s.ends_at,s.department) IS DISTINCT FROM ROW(p_offer.owner_id,p_offer.shift_revision,p_offer.position,p_offer.starts_at,p_offer.ends_at,p_offer.department) THEN RETURN 'offer_shift_changed'; END IF;
  IF NOT EXISTS(SELECT 1 FROM candidate_identity.memberships WHERE id=p_offer.owner_id AND restaurant_id=p_offer.restaurant_id AND active AND NOT schedule_only) THEN RETURN 'offer_owner_inactive'; END IF;
  IF p_offer.mode='coverage' AND s.starts_at<=statement_timestamp() THEN RETURN 'offer_shift_started'; END IF;
@@ -1666,6 +1690,18 @@ AS $function$
   WHERE target.id=p_member AND booking.shift_id IS DISTINCT FROM p_exclude
    AND booking.period && tstzrange(p_start,p_end,'[)')
  );
+$function$
+
+CREATE OR REPLACE FUNCTION candidate_operations.person_time_off_conflict(p_member uuid, p_start timestamp with time zone, p_end timestamp with time zone)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+ SELECT EXISTS(SELECT 1 FROM candidate_identity.memberships target
+ JOIN candidate_identity.memberships peer ON peer.person_id=target.person_id
+ JOIN candidate_operations.time_off_references leave_row ON leave_row.member_id=peer.id
+ WHERE target.id=p_member AND leave_row.status='approved' AND leave_row.starts_at<p_end AND leave_row.ends_at>p_start);
 $function$
 
 CREATE OR REPLACE FUNCTION candidate_operations.propose_changed_shift_goals(p_actor uuid, p_restaurant text, p_shift uuid)
@@ -1811,6 +1847,7 @@ BEGIN
  IF jsonb_typeof(p_payload->'expectedRevision') IS DISTINCT FROM 'number' OR p_payload->>'expectedRevision' !~ '^[1-9][0-9]*$' THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_revision'; END IF;
  IF rec.revision<>(p_payload->>'expectedRevision')::integer THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='revision_conflict'; END IF;
  IF p_batch AND (rec.starts_at<p_week_start OR rec.starts_at>=p_week_end) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='week_selection_denied'; END IF;
+ IF rec.ends_at<=clock_timestamp() THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='shift_ended'; END IF;
  IF rec.published OR rec.cancelled OR rec.released_at IS NOT NULL THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='phase_conflict'; END IF;
  IF NOT EXISTS(SELECT 1 FROM candidate_operations.schedule_draft_events WHERE shift_id=rec.id) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='draft_reference_only'; END IF;
  IF NOT p_batch AND NOT EXISTS(SELECT 1 FROM candidate_operations.publication_reviews WHERE shift_id=rec.id AND shift_revision=rec.revision AND workspace_revision=scope.revision AND no_staffing AND no_closing=NOT EXISTS(SELECT 1 FROM candidate_operations.closes WHERE shift_id=rec.id AND phase<>'cancelled'))
@@ -1823,7 +1860,7 @@ BEGIN
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='owner_denied'; END IF;
  IF NOT EXISTS(SELECT 1 FROM candidate_identity.schedule_eligibility WHERE member_id=owner_member.id AND active AND job=rec.position) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='schedule_job_denied'; END IF;
  IF EXISTS(SELECT 1 FROM candidate_operations.shift_references WHERE restaurant_id=p_restaurant AND member_id=rec.member_id AND id<>rec.id AND NOT cancelled AND starts_at<rec.ends_at AND ends_at>rec.starts_at) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='shift_overlap'; END IF;
- IF EXISTS(SELECT 1 FROM candidate_operations.time_off_references WHERE restaurant_id=p_restaurant AND member_id=rec.member_id AND status='approved' AND starts_at<rec.ends_at AND ends_at>rec.starts_at) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='approved_time_off_conflict'; END IF;
+ IF candidate_operations.person_time_off_conflict(rec.member_id,rec.starts_at,rec.ends_at) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='approved_time_off_conflict'; END IF;
  IF EXISTS(SELECT 1 FROM candidate_operations.availability_references WHERE restaurant_id=p_restaurant AND member_id=rec.member_id AND status='approved' AND candidate_operations.availability_period_conflict(data,rec.starts_at,rec.ends_at,scope.timezone)) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='availability_shift_conflict'; END IF;
  IF rec.station_id IS NOT NULL THEN
   IF NOT candidate_operations.station_assignment_allowed(rec.station_id,p_restaurant,owner_member.id,rec.position) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='station_assignment_denied'; END IF;
@@ -2260,6 +2297,9 @@ BEGIN
   THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_revision'; END IF;
   IF rec.revision<>(p_payload->>'expectedRevision')::integer THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='revision_conflict'; END IF;
   IF rec.published OR rec.cancelled OR rec.released_at IS NOT NULL THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='phase_conflict'; END IF;
+  IF rec.ends_at<=clock_timestamp() THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='shift_ended'; END IF;
+  IF rec.starts_at<=clock_timestamp() AND (jsonb_typeof(input->'note') IS DISTINCT FROM 'string' OR length(btrim(input->>'note')) NOT BETWEEN 1 AND 2000)
+  THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='schedule_change_note_required'; END IF;
   -- Only command-created drafts have complete candidate metadata. Imported references remain protected.
   IF NOT EXISTS(SELECT 1 FROM candidate_operations.schedule_draft_events WHERE shift_id=rec.id)
   THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='draft_reference_only'; END IF;
@@ -2287,13 +2327,15 @@ BEGIN
  first_instant:=(input->>'start')::timestamptz; last_instant:=(input->>'end')::timestamptz;
  IF last_instant<=first_instant OR last_instant-first_instant>interval '24 hours'
  THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_draft_duration'; END IF;
+ IF NOT creating AND rec.starts_at<=clock_timestamp() AND (first_instant>rec.starts_at OR last_instant<clock_timestamp())
+ THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='active_shift_time_conflict'; END IF;
  IF p_payload ? 'clientCapturedAt' THEN PERFORM (p_payload->>'clientCapturedAt')::timestamptz; END IF;
  IF NOT EXISTS(SELECT 1 FROM candidate_identity.schedule_eligibility e WHERE e.member_id=owner.id AND e.active AND e.job=draft_work.job)
  THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='schedule_job_denied'; END IF;
  IF EXISTS(SELECT 1 FROM candidate_operations.shift_references WHERE restaurant_id=p_restaurant AND member_id=owner.id AND NOT cancelled
  AND id<>coalesce(rec.id,'00000000-0000-0000-0000-000000000000'::uuid) AND starts_at<last_instant AND ends_at>first_instant)
  THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='shift_overlap'; END IF;
- IF EXISTS(SELECT 1 FROM candidate_operations.time_off_references WHERE restaurant_id=p_restaurant AND member_id=owner.id AND status='approved' AND starts_at<last_instant AND ends_at>first_instant)
+ IF candidate_operations.person_time_off_conflict(owner.id,first_instant,last_instant)
  THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='approved_time_off_conflict'; END IF;
  IF EXISTS(SELECT 1 FROM candidate_operations.availability_references WHERE restaurant_id=p_restaurant AND member_id=owner.id AND status='approved'
  AND candidate_operations.availability_period_conflict(data,first_instant,last_instant,scope.timezone))
@@ -2487,6 +2529,7 @@ BEGIN
   IF action='coverage.create' AND EXISTS(SELECT 1 FROM candidate_operations.schedule_offers WHERE shift_id=s.id AND mode='coverage' AND status='open') THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='coverage_offer_exists'; END IF;
   INSERT INTO candidate_operations.schedule_offers(restaurant_id,owner_id,department,mode,shift_id,shift_revision,position,starts_at,ends_at,duties,note,status,replacement_id) VALUES(p_restaurant,actor.id,s.department,CASE WHEN action='coverage.create' THEN 'coverage' ELSE 'swap' END,s.id,s.revision,s.position,s.starts_at,s.ends_at,candidate_operations.offer_duties(s.id),btrim(event_note),CASE WHEN action='coverage.create' THEN 'open' ELSE 'pending' END,CASE WHEN action='request.create' THEN (input->>'replacementId')::uuid END) RETURNING * INTO rec;
   reason:=candidate_operations.offer_issue(rec);
+  IF reason='offer_shift_ended' OR s.ends_at<=clock_timestamp() THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='shift_ended'; END IF;
   IF reason<>'' THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='offer_changed'; END IF;
   IF rec.mode='swap' AND NOT candidate_operations.offer_eligible(rec,rec.replacement_id) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='replacement_ineligible'; END IF;
  ELSE
@@ -2501,7 +2544,9 @@ BEGIN
    IF EXISTS(SELECT 1 FROM jsonb_object_keys(input) k WHERE k<>'note') THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_consent_fields'; END IF;
    rec.status:='withdrawn';
   ELSE
-   IF candidate_operations.offer_issue(rec)<>'' THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='offer_changed'; END IF;
+   reason:=candidate_operations.offer_issue(rec);
+   IF reason='offer_shift_ended' OR rec.ends_at<=clock_timestamp() THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='shift_ended'; END IF;
+   IF reason<>'' THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='offer_changed'; END IF;
    IF action='coverage.volunteer' THEN
     IF EXISTS(SELECT 1 FROM jsonb_object_keys(input) k WHERE k<>'confirmed') OR input->'confirmed' IS DISTINCT FROM 'true'::jsonb THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='consent_confirmation_required'; END IF;
     IF NOT candidate_operations.offer_eligible(rec,actor.id) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='replacement_ineligible'; END IF;
@@ -2866,7 +2911,7 @@ CREATE OR REPLACE FUNCTION candidate_operations.time_off_command(p_subject text,
  SET search_path TO 'pg_catalog'
 AS $function$
 DECLARE actor candidate_identity.memberships; rec candidate_operations.time_off_references; scope candidate_identity.restaurants;
- receipt candidate_operations.command_receipts; input jsonb; result jsonb; affected uuid[]; s candidate_operations.shift_references; approve boolean;
+ receipt candidate_operations.command_receipts; input jsonb; result jsonb; affected uuid[]; s candidate_operations.shift_references; approve boolean; flagged jsonb:='[]';
 BEGIN
  PERFORM candidate_operations.lock_scope(p_restaurant);
  IF p_request IS NULL OR jsonb_typeof(p_payload) IS DISTINCT FROM 'object' OR p_payload->>'action' IS NULL OR p_payload->>'action' NOT IN ('request.create','request.review')
@@ -2920,6 +2965,8 @@ BEGIN
   IF rec.status<>'pending' THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='phase_conflict'; END IF;
   approve:=(input->>'approve')::boolean;
   IF approve THEN
+   PERFORM candidate_operations.lock_scope(m.restaurant_id,true) FROM candidate_identity.memberships m
+    WHERE m.person_id=(SELECT person_id FROM candidate_identity.memberships WHERE id=rec.member_id) ORDER BY m.restaurant_id;
    IF jsonb_typeof(input->'affectedShifts') IS DISTINCT FROM 'array' THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='time_off_impact_conflict'; END IF;
    IF EXISTS(SELECT 1 FROM jsonb_array_elements(input->'affectedShifts') v WHERE jsonb_typeof(v)<>'object' OR NOT v ?& ARRAY['id','revision'])
    THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_time_off_impact'; END IF;
@@ -2928,6 +2975,12 @@ BEGIN
     AND (SELECT count(*) FROM jsonb_array_elements(input->'affectedShifts') v WHERE v->>'id'=shift_row.id::text AND v->'revision'=to_jsonb(shift_row.revision))<>1)
    THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='time_off_impact_conflict'; END IF;
    FOR s IN SELECT * FROM candidate_operations.shift_references WHERE id=ANY(affected) ORDER BY id FOR UPDATE LOOP
+    IF s.ends_at<=clock_timestamp() THEN
+     INSERT INTO candidate_operations.time_off_shift_flags(request_id,shift_id,restaurant_id,shift_revision,before_snapshot,reason)
+      VALUES(rec.id,s.id,s.restaurant_id,s.revision,to_jsonb(s),'ended_shift');
+     flagged:=flagged||jsonb_build_array(jsonb_build_object('id',s.id,'revision',s.revision,'reason','ended_shift','reviewStatus','pending'));
+     CONTINUE;
+    END IF;
     IF s.published OR s.released_at IS NOT NULL OR NOT EXISTS(SELECT 1 FROM candidate_operations.schedule_draft_events WHERE shift_id=s.id)
     OR EXISTS(SELECT 1 FROM candidate_operations.tasks WHERE shift_id=s.id) OR EXISTS(SELECT 1 FROM candidate_operations.closes WHERE shift_id=s.id)
     OR EXISTS(SELECT 1 FROM candidate_operations.shift_standard_links WHERE shift_id=s.id)
@@ -2936,11 +2989,27 @@ BEGIN
     INSERT INTO candidate_operations.schedule_draft_events VALUES(s.id,s.revision,actor.id,jsonb_build_object('personId',s.member_id,'start',s.starts_at,'end',s.ends_at,'position',s.position,'published',false,'cancelled',true,'action','time-off-approved','requestId',rec.id,'note',btrim(input->>'note'),'stationId',s.station_id,'stationName',s.station_name,'stationRevision',s.station_revision),clock_timestamp());
    END LOOP;
   END IF;
+  IF approve THEN
+   FOR s IN SELECT shift_row.* FROM candidate_operations.shift_references shift_row JOIN candidate_identity.memberships peer ON peer.id=shift_row.member_id
+    WHERE peer.person_id=(SELECT person_id FROM candidate_identity.memberships WHERE id=rec.member_id)
+     AND shift_row.restaurant_id<>p_restaurant AND NOT shift_row.cancelled AND shift_row.starts_at<rec.ends_at AND shift_row.ends_at>rec.starts_at ORDER BY shift_row.id LOOP
+    INSERT INTO candidate_operations.time_off_shift_flags(request_id,shift_id,restaurant_id,shift_revision,before_snapshot,reason)
+     VALUES(rec.id,s.id,s.restaurant_id,s.revision,to_jsonb(s),'cross_store_review');
+   END LOOP;
+  END IF;
   UPDATE candidate_operations.time_off_references SET status=CASE WHEN approve THEN 'approved' ELSE 'declined' END,decision=btrim(input->>'note'),revision=revision+1,updated_at=clock_timestamp() WHERE id=rec.id RETURNING * INTO rec;
  END IF;
+ INSERT INTO candidate_operations.time_off_conflict_outbox
+ SELECT flag.request_id,flag.shift_id,m.id,'Approved leave overlaps scheduled work; manager review required',NULL
+ FROM candidate_operations.time_off_shift_flags flag JOIN candidate_identity.memberships m ON m.restaurant_id=flag.restaurant_id
+ WHERE flag.request_id=rec.id AND m.active AND NOT m.schedule_only
+ AND EXISTS(SELECT 1 FROM candidate_identity.membership_capabilities cap WHERE cap.membership_id=m.id AND cap.active AND cap.capability IN ('schedule.manage','schedule.publish'))
+ AND candidate_operations.goal_authorized(m.id,flag.before_snapshot->>'department','schedule.manage')
+ ON CONFLICT DO NOTHING;
  INSERT INTO candidate_operations.time_off_events VALUES(rec.id,rec.revision,actor.id,to_jsonb(rec),clock_timestamp());
  UPDATE candidate_identity.restaurants SET revision=revision+1 WHERE id=p_restaurant RETURNING revision INTO scope.revision;
  result:=jsonb_build_object('recordId',rec.id,'revision',rec.revision,'workspaceRevision',scope.revision,'requestId',p_request,'appliedAt',clock_timestamp(),'replayed',false);
+ result:=result||jsonb_build_object('flaggedShifts',flagged);
  INSERT INTO candidate_operations.command_receipts VALUES(p_restaurant,actor.id,p_request,p_payload,encode(sha256(convert_to(p_payload::text,'UTF8')),'hex'),result);
  IF p_payload->>'action'='request.review' THEN INSERT INTO candidate_operations.time_off_outbox VALUES(rec.id,rec.revision,rec.member_id,'Time off '||rec.status,NULL);
  ELSE
@@ -3072,7 +3141,7 @@ BEGIN
  IF cardinality(ids)<>(SELECT count(DISTINCT id) FROM unnest(ids) id) THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='duplicate_shift_selection'; END IF;
  SELECT timezone,revision INTO tz,scope_revision FROM candidate_identity.restaurants WHERE id=p_restaurant;
  week_start:=p_week::date::timestamp AT TIME ZONE tz;week_end:=(p_week::date+7)::timestamp AT TIME ZONE tz;
- IF EXISTS(SELECT 1 FROM unnest(ids) AS sel(shift_id) WHERE NOT EXISTS(SELECT 1 FROM candidate_operations.shift_references s WHERE s.id=sel.shift_id AND s.restaurant_id=p_restaurant AND NOT s.published AND NOT s.cancelled AND s.released_at IS NULL AND s.starts_at>=week_start AND s.starts_at<week_end AND candidate_operations.goal_authorized(actor.id,s.department,'schedule.publish'))) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='week_selection_denied'; END IF;
+ IF EXISTS(SELECT 1 FROM unnest(ids) AS sel(shift_id) WHERE NOT EXISTS(SELECT 1 FROM candidate_operations.shift_references s WHERE s.id=sel.shift_id AND s.restaurant_id=p_restaurant AND NOT s.published AND NOT s.cancelled AND s.released_at IS NULL AND s.ends_at>statement_timestamp() AND s.starts_at>=week_start AND s.starts_at<week_end AND candidate_operations.goal_authorized(actor.id,s.department,'schedule.publish'))) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='week_selection_denied'; END IF;
  -- The conservative snapshot also detects privileged fixture changes that did not advance a scope revision.
  SELECT jsonb_build_object('week',p_week,'selected',to_jsonb(ids),'workspaceRevision',scope_revision,
  'members',(SELECT coalesce(jsonb_agg(to_jsonb(m) ORDER BY m.id),'[]') FROM candidate_identity.memberships m WHERE m.restaurant_id=p_restaurant),
@@ -3084,7 +3153,7 @@ BEGIN
  'stationJobs',(SELECT coalesce(jsonb_agg(to_jsonb(j) ORDER BY j.station_id,j.job),'[]') FROM candidate_operations.station_jobs j JOIN candidate_operations.station_references s ON s.id=j.station_id WHERE s.restaurant_id=p_restaurant),
  'stationMembers',(SELECT coalesce(jsonb_agg(to_jsonb(m) ORDER BY m.station_id,m.member_id),'[]') FROM candidate_operations.station_members m WHERE m.restaurant_id=p_restaurant),
  'availability',(SELECT coalesce(jsonb_agg(to_jsonb(a) ORDER BY a.id),'[]') FROM candidate_operations.availability_references a WHERE a.restaurant_id=p_restaurant),
- 'timeOff',(SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]') FROM candidate_operations.time_off_references t WHERE t.restaurant_id=p_restaurant),
+ 'timeOff',(SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]') FROM candidate_operations.time_off_references t JOIN candidate_identity.memberships peer ON peer.id=t.member_id WHERE EXISTS(SELECT 1 FROM candidate_identity.memberships local_member WHERE local_member.restaurant_id=p_restaurant AND local_member.person_id=peer.person_id)),
  'closes',(SELECT coalesce(jsonb_agg(to_jsonb(c) ORDER BY c.id),'[]') FROM candidate_operations.closes c WHERE c.restaurant_id=p_restaurant),
  'standards',(SELECT coalesce(jsonb_agg(to_jsonb(s) ORDER BY s.id),'[]') FROM candidate_operations.standard_references s WHERE s.restaurant_id=p_restaurant),
  'leadership',(SELECT coalesce(jsonb_agg(to_jsonb(l) ORDER BY l.id),'[]') FROM candidate_operations.leadership_references l WHERE l.restaurant_id=p_restaurant)) INTO snapshot;
@@ -3094,7 +3163,7 @@ BEGIN
  AND m.department=s.department AND (m.active OR m.schedule_only) AND candidate_operations.schedule_plan_allowed(actor.id,s.department)
  AND EXISTS(SELECT 1 FROM candidate_identity.schedule_eligibility e WHERE e.member_id=m.id AND e.active AND e.job=s.position)
  AND (s.station_id IS NULL OR candidate_operations.station_assignment_allowed(s.station_id,p_restaurant,m.id,s.position))
- AND NOT EXISTS(SELECT 1 FROM candidate_operations.time_off_references t WHERE t.restaurant_id=p_restaurant AND t.member_id=m.id AND t.status='approved' AND t.starts_at<s.ends_at AND t.ends_at>s.starts_at)
+ AND NOT candidate_operations.person_time_off_conflict(m.id,s.starts_at,s.ends_at)
  AND NOT EXISTS(SELECT 1 FROM candidate_operations.availability_references a WHERE a.restaurant_id=p_restaurant AND a.member_id=m.id AND a.status='approved' AND candidate_operations.availability_period_conflict(a.data,s.starts_at,s.ends_at,tz))
  AND NOT EXISTS(SELECT 1 FROM candidate_operations.shift_references other WHERE other.restaurant_id=p_restaurant AND other.member_id=m.id AND other.id<>s.id AND NOT other.cancelled AND (other.published OR other.id=ANY(ids)) AND other.starts_at<s.ends_at AND other.ends_at>s.starts_at)
  ), staffing AS (SELECT n.*,greatest(n.starts_at,week_start) first_at,least(n.ends_at,week_end) last_at FROM candidate_operations.staffing_needs n WHERE n.restaurant_id=p_restaurant AND n.status='approved' AND n.starts_at<week_end AND n.ends_at>week_start AND candidate_operations.schedule_plan_allowed(actor.id,n.department)),

@@ -150,8 +150,16 @@
       "sha256": "a12d5c07a43d3ec82d9244476f1b99961f8c56f314a27f01e2813fdec3414e66"
     },
     {
+      "file": "038_completed_shift_policy.sql",
+      "sha256": "9c29c354b1f00054aa83eb2d6a7e42c18d46594d1c691faba66ba0bd5cb4fdd3"
+    },
+    {
       "file": "039_schedule_review_and_booking_checks.sql",
       "sha256": "ba7c00a3d9c1a92a179d8ce27353c706470f9dafad6f1fb4445cb20b944db866"
+    },
+    {
+      "file": "040_person_time_off_and_active_shift_policy.sql",
+      "sha256": "bc03202b376fb72cccf9798688c979d628528b8a978ab70197a3d45e7ce1a443"
     }
   ]
 }
