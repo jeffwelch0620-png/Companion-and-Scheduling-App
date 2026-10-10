@@ -120,13 +120,12 @@ test('coverage eligibility rechecks cross-location work before accepting a volun
  assert.deepEqual((await admin.query('SELECT volunteers FROM candidate_operations.schedule_offers WHERE id=$1',[offer])).rows[0].volunteers,[]);
 });
 
-test('all membership writes invalidate the whole store review; failed writes preserve it and other stores',async()=>{
- for(const operation of ['insert','update','delete','noop']){
+test('relevant membership writes invalidate the whole store review; failed writes preserve it and other stores',async()=>{
+ for(const operation of ['insert','update','delete']){
   const [a,b]=await fixture();const reviewed=await certify(a);await certify(b);
   if(operation==='insert'){const person=randomUUID();await admin.query('INSERT INTO candidate_identity.people VALUES($1,$2)',[person,'Fictional new hire']);await admin.query("INSERT INTO candidate_identity.memberships(person_id,restaurant_id,department) VALUES($1,$2,'FOH')",[person,a.scope]);}
   if(operation==='update')await admin.query("UPDATE candidate_identity.memberships SET position='Fictional changed job',department='FOH',active=false,schedule_only=true WHERE id=$1",[a.spare.membershipId]);
   if(operation==='delete')await admin.query('DELETE FROM candidate_identity.memberships WHERE id=$1',[a.spare.membershipId]);
-  if(operation==='noop')await admin.query('UPDATE candidate_identity.memberships SET position=position WHERE id=$1',[a.spare.membershipId]);
   const invalidated=await gate(a);assert.deepEqual([invalidated.time_off_complete,invalidated.reviewed_at,invalidated.evidence_batch_id],[false,null,null]);
   assert.equal((await gate(b)).time_off_complete,true);
   await assert.rejects(run(a,draft(a)),e=>e.code==='schedule_inputs_incomplete');
@@ -139,7 +138,7 @@ test('eligibility insert, edit, delete and parent moves invalidate old and new w
  for(const operation of ['insert','update','delete','move']){
   const [a,b]=await fixture();await certify(a);await certify(b);
   if(operation==='insert')await admin.query("INSERT INTO candidate_identity.schedule_eligibility VALUES($1,'Cook','qualification',true)",[a.worker.membershipId]);
-  if(operation==='update')await admin.query('UPDATE candidate_identity.schedule_eligibility SET active=active WHERE member_id=$1',[a.worker.membershipId]);
+  if(operation==='update')await admin.query('UPDATE candidate_identity.schedule_eligibility SET active=false WHERE member_id=$1',[a.worker.membershipId]);
   if(operation==='delete')await admin.query('DELETE FROM candidate_identity.schedule_eligibility WHERE member_id=$1',[a.worker.membershipId]);
   if(operation==='move')await admin.query('UPDATE candidate_identity.schedule_eligibility SET member_id=$2 WHERE member_id=$1',[a.worker.membershipId,b.spare.membershipId]);
   assert.equal((await gate(a)).time_off_complete,false);assert.equal((await gate(a)).evidence_batch_id,null);
@@ -153,7 +152,7 @@ test('eligibility insert, edit, delete and parent moves invalidate old and new w
 test('roster changes block publication; receipt replay stays incomplete and new reviewed evidence restores scheduling',async()=>{
  const [a]=await fixture();const original=await certify(a);const r=await run(a,draft(a));
  await admin.query("INSERT INTO candidate_operations.publication_reviews(shift_id,shift_revision,workspace_revision,no_staffing,no_closing,evidence) SELECT $1,$2,revision,true,true,'Fictional full publication review' FROM candidate_identity.restaurants WHERE id=$3",[r.recordId,r.revision,a.scope]);
- await admin.query('UPDATE candidate_identity.memberships SET position=position WHERE id=$1',[a.spare.membershipId]);
+ await admin.query("UPDATE candidate_identity.memberships SET position=position||' changed' WHERE id=$1",[a.spare.membershipId]);
  await assert.rejects(run(a,{requestId:randomUUID(),locationId:a.scope,action:'shift.publish',recordId:r.recordId,expectedRevision:r.revision,input:{note:'Fictional publish'}}),e=>e.code==='schedule_inputs_incomplete');
  assert.equal((await rehearseScheduleReconciliation(original.review)).replayed,true);assert.equal((await gate(a)).time_off_complete,false);
  await certify(a);assert.equal((await gate(a)).time_off_complete,true);
@@ -161,7 +160,7 @@ test('roster changes block publication; receipt replay stays incomplete and new 
 });
 
 test('migration 037 backfills the accepted baseline and rolls back entirely for existing overlaps',async()=>{
- const migrations=await verifyMigrationManifest();
+ const migrations=await verifyMigrationManifest(),safeguardIndex=migrations.indexOf('037_person_schedule_safeguards.sql');assert.ok(safeguardIndex>0);
  for(const overlapping of [false,true]){
   const name=connection.database+(overlapping?'_bad_upgrade':'_upgrade');assert.ok(name.length<=63);
   const server=new pg.Client({...connection,database:'postgres',user:'candidate_owner'});await server.connect();
@@ -169,13 +168,31 @@ test('migration 037 backfills the accepted baseline and rolls back entirely for 
   const c=new pg.Client({...connection,database:name,user:'candidate_owner'});await c.connect();
   try{
    await c.query(`GRANT CREATE ON DATABASE "${name}" TO candidate_schema_owner`);await c.query('GRANT USAGE,CREATE ON SCHEMA public TO candidate_schema_owner');await c.query('SET ROLE candidate_schema_owner');
-   for(const file of migrations.slice(0,-1))await c.query(await readFile(new URL(file,import.meta.url),'utf8'));
+   for(const file of migrations.slice(0,safeguardIndex))await c.query(await readFile(new URL(file,import.meta.url),'utf8'));
    const person=randomUUID(),member=randomUUID(),scope='fictional-upgrade';await c.query('INSERT INTO candidate_identity.restaurants(id,name) VALUES($1,$2)',[scope,'Fictional upgrade']);await c.query('INSERT INTO candidate_identity.people VALUES($1,$2)',[person,'Fictional upgrade worker']);await c.query("INSERT INTO candidate_identity.memberships(id,person_id,restaurant_id,department) VALUES($1,$2,$3,'BOH')",[member,person,scope]);
    for(const cancelled of [false,!overlapping])await c.query("INSERT INTO candidate_operations.shift_references(id,restaurant_id,member_id,department,position,starts_at,ends_at,revision,published,cancelled) VALUES($1,$2,$3,'BOH','Cook',$4,$5,1,true,$6)",[randomUUID(),scope,member,start,end,cancelled]);
-   const sql=await readFile(new URL(migrations.at(-1),import.meta.url),'utf8');
+   const sql=await readFile(new URL(migrations[safeguardIndex],import.meta.url),'utf8');
    if(overlapping){await assert.rejects(c.query(sql),e=>e.code==='23P01');await c.query('ROLLBACK');assert.equal((await c.query("SELECT to_regclass('candidate_operations.person_shift_bookings') relation")).rows[0].relation,null);}
    else{await c.query(sql);assert.equal((await c.query('SELECT count(*)::int n FROM candidate_operations.person_shift_bookings')).rows[0].n,1);}
    assert.equal((await c.query('SELECT count(*)::int n FROM candidate_operations.shift_references')).rows[0].n,2);
   }finally{await c.query('ROLLBACK');await c.end();}
  }
+});
+
+test('nightly full roster and eligibility writes with identical values preserve reviewed scheduling',async()=>{
+ const [a,b]=await fixture();await certify(a);await certify(b);const before=await gate(a);
+ await admin.query('UPDATE candidate_identity.memberships SET person_id=person_id,restaurant_id=restaurant_id,department=department,position=position,active=active,schedule_only=schedule_only WHERE restaurant_id=$1',[a.scope]);
+ await admin.query('UPDATE candidate_identity.schedule_eligibility SET member_id=member_id,job=job,source=source,active=active WHERE member_id=$1',[a.worker.membershipId]);
+ assert.deepEqual(await gate(a),before);assert.equal((await gate(b)).time_off_complete,true);await run(a,draft(a));
+});
+
+test('publish-only updates skip friendly overlap checks while changed periods still check',async()=>{
+ const [a]=await fixture(),shift=await raw(a),c=await admin.connect();
+ try{
+  await c.query('BEGIN');
+  await c.query("CREATE OR REPLACE FUNCTION candidate_operations.person_shift_conflict(p_member uuid,p_start timestamptz,p_end timestamptz,p_exclude uuid) RETURNS boolean LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$ BEGIN RAISE EXCEPTION 'fictional_overlap_probe'; END $$");
+  await c.query('UPDATE candidate_operations.shift_references SET published=true,revision=revision+1 WHERE id=$1',[shift]);
+  assert.equal((await c.query('SELECT published FROM candidate_operations.shift_references WHERE id=$1',[shift])).rows[0].published,true);
+  await assert.rejects(c.query("UPDATE candidate_operations.shift_references SET ends_at=ends_at+interval '1 minute' WHERE id=$1",[shift]),e=>e.message==='fictional_overlap_probe');
+ }finally{await c.query('ROLLBACK');c.release();}
 });

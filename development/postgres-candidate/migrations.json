@@ -148,6 +148,10 @@
     {
       "file": "037_person_schedule_safeguards.sql",
       "sha256": "a12d5c07a43d3ec82d9244476f1b99961f8c56f314a27f01e2813fdec3414e66"
+    },
+    {
+      "file": "039_schedule_review_and_booking_checks.sql",
+      "sha256": "ba7c00a3d9c1a92a179d8ce27353c706470f9dafad6f1fb4445cb20b944db866"
     }
   ]
 }

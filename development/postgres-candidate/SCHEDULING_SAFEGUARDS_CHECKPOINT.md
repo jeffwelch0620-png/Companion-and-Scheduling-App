@@ -27,3 +27,15 @@ Local validation on 2026-10-10 passed in fresh fictional loopback database `comp
 The preview build retains its existing runtime logo-path warning; no new live browser exercise was performed for this database-only package. The inventory check still reports active backend cutover not ready. GitHub CI results belong to the draft PR's exact tested head and must be verified separately; these local results do not establish hosted or Inventory readiness.
 
 Next operating decisions remain leadership self-assignment, started/ended shift edits and department-changing swaps. Configurable operating labels/timezones, remaining scheduling UI, copying/attendance, production identity, offline scheduling/prep, notification delivery, hosted recovery and Inventory integration are outside this package. Draft PR acceptance, database application and deployment require separate decisions.
+
+## Approved pre-merge follow-up
+
+Migration 039 changes the review invalidation policy: unchanged membership and eligibility writes preserve completeness, review time and evidence linkage. Real changes to membership person/location/department/position/active/schedule-only, or eligibility member/job/source/active, invalidate review. Inserts, deletes and old/new-store transfers remain covered. Full nightly-sync-style no-op writes now have positive scheduling regression coverage.
+
+The person conflict helper queries the private GiST-indexed booking projection. Insert preflight remains unconditional; update preflight runs only for changed member/time/cancellation values. A transactional throwing probe verifies publication-only updates skip the overlap helper and changed periods still call it. The exclusion constraint and atomic projection maintenance remain the final concurrency guard. Migration-037 upgrade tests are explicitly pinned to 037.
+
+For the eventual shared-database port use explicit definitions and `CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA extensions`. Inspect the installed extension schema first: IF NOT EXISTS does not relocate an existing extension. Reconcile operator resolution, schema permissions and canonical identity before adopting the constraint. Published migration 037 is unchanged. Migration 038 is reserved by the dependent PR29, so this branch appends 039 after 037; the combined branch orders 037, 038, 039.
+
+Inventory's merge is complete and its baseline is undergoing testing, per the user. Do not port or apply anything there until its tested commit is supplied. Both Companion PRs remain draft and need explicit merge approval.
+
+Follow-up validation passed on 2026-10-10 in fresh fictional loopback database `companion_candidate_followup28b`: 439/439 serial tests, fresh migration application (001–037 then 039), generated snapshot comparison, strict candidate types, preview build and readiness inventory. The existing logo-path build warning remains. No live browser exercise, hosted application or Inventory integration was performed. Exact-head CI is reported with the PR checkpoint.
