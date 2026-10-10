@@ -1,10 +1,11 @@
+import {fictionalStoreInsert} from './store-fixture.mjs';
 import {connection} from './test-config.mjs';
 import pg from 'pg';import {randomUUID} from 'node:crypto';import {writeFileSync} from 'node:fs';
 import {PostgresDatabase} from './postgres-driver.ts';import {executeTask} from './task-adapter.ts';
 import {localInstant} from '../../app/shared/local-time.ts';
 const pool=new pg.Pool({...connection,user:'candidate_owner'}),db=new PostgresDatabase({...connection,user:'candidate_runtime'}),scope='fictional-schedule-preview',sessions={},members={};
 try {
- await pool.query('INSERT INTO candidate_identity.restaurants(id,name) VALUES($1,$2)',[scope,'Fictional scheduling restaurant']);
+ await pool.query(fictionalStoreInsert,[scope,'Fictional scheduling restaurant']);
  for(const [actor,name,area,caps] of [['schedule-worker','Fictional employee','BOH',[]],['schedule-manager','Fictional schedule manager','BOH',['schedule.manage','schedule.change']],['schedule-foreign','Fictional other-department manager','FOH',['schedule.manage']]]){
   const id=randomUUID(),person=randomUUID(),session=randomUUID(),subject=actor+'-'+id;
   await pool.query('INSERT INTO candidate_identity.people(id,name) VALUES($1,$2)',[person,name]);
