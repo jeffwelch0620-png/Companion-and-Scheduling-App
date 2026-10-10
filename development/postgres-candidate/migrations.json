@@ -152,6 +152,10 @@
     {
       "file": "038_completed_shift_policy.sql",
       "sha256": "9c29c354b1f00054aa83eb2d6a7e42c18d46594d1c691faba66ba0bd5cb4fdd3"
+    },
+    {
+      "file": "039_schedule_review_and_booking_checks.sql",
+      "sha256": "ba7c00a3d9c1a92a179d8ce27353c706470f9dafad6f1fb4445cb20b944db866"
     }
   ]
 }

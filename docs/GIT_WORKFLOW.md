@@ -1,6 +1,6 @@
 # Git workflow for Companion and Inventory integration
 
-The Companion repository keeps reviewed source on `main`. PostgreSQL preparation is developed on focused `codex/` branches, from the accepted PR27 baseline at `2193afc`. PR28 (`codex/companion-scheduling-safeguards`) remains draft at `a045dca`. The next dependent package, `codex/companion-scheduling-policy`, implements confirmed operating choices and completed-shift protection from that draft head. Inventory integration remains separate until its current merge has a tested baseline. Pushing saves versioned source remotely. Merging updates a shared baseline. Deployment and database application require a separate, explicit step.
+The Companion repository keeps reviewed source on `main`. PostgreSQL preparation is developed on focused `codex/` branches, from the accepted PR27 baseline at `2193afc`. PR28 (`codex/companion-scheduling-safeguards`) remains draft at `a045dca`. The next dependent package, `codex/companion-scheduling-policy`, implements confirmed operating choices and completed-shift protection from that draft head. Inventory's merge is complete and its baseline is undergoing testing. Integration remains separate until the user supplies its tested baseline commit. Pushing saves versioned source remotely. Merging updates a shared baseline. Deployment and database application require a separate, explicit step.
 
 ## Routine development
 

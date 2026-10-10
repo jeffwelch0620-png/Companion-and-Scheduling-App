@@ -31,7 +31,7 @@ npm run check:types --prefix development/postgres-candidate
 npm run build:preview --prefix development/postgres-candidate
 ```
 
-Bootstrap verifies the versioned hash manifest and applies 001–038 in order, inserts fictional base actors after 001 so later capability conversion can run, and creates fictional sessions after migration. Migration 037 requires PostgreSQL's trusted btree_gist extension for person booking exclusion. All candidate connection helpers use the selected database/port. Tests run serially because rollback checks create temporary failure triggers. The core concurrency tests use independent Node/PostgreSQL bridge processes; Python and machine-specific library paths are no longer required.
+Bootstrap verifies the versioned hash manifest and applies 001–039 in order, inserts fictional base actors after 001 so later capability conversion can run, and creates fictional sessions after migration. Migration 037 requires PostgreSQL's trusted btree_gist extension for person booking exclusion. All candidate connection helpers use the selected database/port. Tests run serially because rollback checks create temporary failure triggers. The core concurrency tests use independent Node/PostgreSQL bridge processes; Python and machine-specific library paths are no longer required.
 
 The GitHub `candidate-validation` gate performs this sequence when candidate dependencies change, and reports a successful intentional skip for unrelated changes. Its dependency detection includes application, database, package/configuration, shared UI and build inputs. Validation uses a fresh disposable PostgreSQL service. Passing candidate checks does not prove the complete application is migrated or deployed.
 
