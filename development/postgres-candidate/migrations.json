@@ -172,6 +172,10 @@
     {
       "file": "043_portable_store_timezones.sql",
       "sha256": "662603cd624122ccb607103e475aca441976e1ff69162762201cdbfff3f731cd"
+    },
+    {
+      "file": "044_publication_review_selection.sql",
+      "sha256": "30f66b9d92e67be1434c1ac6e0e046ada120268d51e4056028edf87bfa5831b0"
     }
   ]
 }
