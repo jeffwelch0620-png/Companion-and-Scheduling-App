@@ -160,6 +160,18 @@
     {
       "file": "040_person_time_off_and_active_shift_policy.sql",
       "sha256": "bc03202b376fb72cccf9798688c979d628528b8a978ab70197a3d45e7ce1a443"
+    },
+    {
+      "file": "041_explicit_store_configuration.sql",
+      "sha256": "15ade33a7f8c24f15354b16fb226c86d22f246e83fe1abfe3dd2c3bed33fc468"
+    },
+    {
+      "file": "042_store_configuration_safeguards.sql",
+      "sha256": "32bcdc10a2de88f4af4959f0347a745c60355a8a07640d53ac790e60ad2edbf2"
+    },
+    {
+      "file": "043_portable_store_timezones.sql",
+      "sha256": "662603cd624122ccb607103e475aca441976e1ff69162762201cdbfff3f731cd"
     }
   ]
 }

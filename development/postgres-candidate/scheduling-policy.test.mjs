@@ -1,3 +1,4 @@
+import {fictionalStoreInsert} from './store-fixture.mjs';
 import test,{after} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -10,7 +11,7 @@ const admin=new pg.Pool({...connection,user:'candidate_owner',max:4}),db=new Pos
 after(async()=>{await admin.end();await db.close();});
 async function fixture(){
  const scope='policy-'+randomUUID(),actors=[];
- await admin.query('INSERT INTO candidate_identity.restaurants(id,name) VALUES($1,$2)',[scope,'Fictional policy store']);
+ await admin.query(fictionalStoreInsert,[scope,'Fictional policy store']);
  for(const department of ['BOH','BOH','BOH','FOH']){
   const person=randomUUID(),membershipId=randomUUID(),subject='fictional-'+randomUUID();
   await admin.query('INSERT INTO candidate_identity.people VALUES($1,$2)',[person,'Fictional policy employee']);

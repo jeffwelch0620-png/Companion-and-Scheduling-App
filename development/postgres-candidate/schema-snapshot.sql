@@ -31,10 +31,10 @@ BEGIN
   OR EXISTS(SELECT 1 FROM jsonb_each(input) f WHERE jsonb_typeof(f.value)<>'string') THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_closing_assignment'; END IF;
  IF p_payload ? 'clientCapturedAt' THEN PERFORM (p_payload->>'clientCapturedAt')::timestamptz; END IF;
  SELECT * INTO shift FROM candidate_operations.shift_references WHERE id=(input->>'shiftId')::uuid AND restaurant_id=p_restaurant FOR SHARE;
- IF NOT FOUND OR shift.cancelled OR shift.released_at IS NOT NULL OR shift.position='Dishwasher' THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='shift_denied'; END IF;
+ IF NOT FOUND OR shift.cancelled OR shift.released_at IS NOT NULL OR candidate_operations.is_dish_position(shift.restaurant_id,shift.position) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='shift_denied'; END IF;
  IF NOT candidate_operations.closing_manager(actor.id,p_restaurant,shift.department,'tasks.manage') THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='action_denied'; END IF;
  SELECT * INTO owner FROM candidate_identity.memberships WHERE id=shift.member_id AND restaurant_id=p_restaurant AND active AND NOT schedule_only FOR SHARE;
- IF NOT FOUND OR owner.position='Dishwasher' OR owner.department<>shift.department THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='owner_denied'; END IF;
+ IF NOT FOUND OR candidate_operations.is_dish_position(owner.restaurant_id,owner.position) OR owner.department<>shift.department THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='owner_denied'; END IF;
  SELECT * INTO standard FROM candidate_operations.standard_references WHERE id=(input->>'standardId')::uuid AND restaurant_id=p_restaurant AND department=shift.department AND status='approved' FOR SHARE;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='standard_denied'; END IF;
  PERFORM 1 FROM candidate_operations.shift_standard_links WHERE shift_id=shift.id AND standard_id=standard.id AND restaurant_id=p_restaurant AND active FOR SHARE;
@@ -109,7 +109,7 @@ BEGIN
   IF jsonb_typeof(p_payload->'clientCapturedAt')<>'string' THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_time'; END IF;PERFORM (p_payload->>'clientCapturedAt')::timestamptz;
  END IF;
  FOREACH task_id IN ARRAY participants LOOP
-  SELECT * INTO person FROM candidate_identity.memberships WHERE id=task_id AND restaurant_id=p_restaurant AND department='BOH' AND position='Dishwasher' AND active AND NOT schedule_only FOR SHARE;
+  SELECT * INTO person FROM candidate_identity.memberships WHERE id=task_id AND restaurant_id=p_restaurant AND department=candidate_operations.dish_department(p_restaurant) AND candidate_operations.is_dish_position(p_restaurant,position) AND active AND NOT schedule_only FOR SHARE;
   IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='dishwasher_denied'; END IF;
   PERFORM 1 FROM candidate_identity.auth_links WHERE person_id=person.person_id FOR SHARE;
   IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='sign_in_required'; END IF;
@@ -118,10 +118,10 @@ BEGIN
  INSERT INTO candidate_operations.dish_cycles(restaurant_id,business_date,title,detail,due,created_by) VALUES(p_restaurant,checkout_date,title,detail,due_at,p_member) RETURNING * INTO cycle;
  FOR slot IN 0..2 LOOP
   INSERT INTO candidate_operations.tasks(restaurant_id,assignee_id,department,title,detail,due,phase,revision,kind)
-  VALUES(p_restaurant,participants[slot+1],'BOH',(CASE WHEN slot=0 THEN 'AM' ELSE 'PM' END)||' checkout: '||title,detail,due_at,'open',1,'task') RETURNING id INTO task_id;
+  VALUES(p_restaurant,participants[slot+1],candidate_operations.dish_department(p_restaurant),(CASE WHEN slot=0 THEN 'AM' ELSE 'PM' END)||' checkout: '||title,detail,due_at,'open',1,'task') RETURNING id INTO task_id;
   INSERT INTO candidate_operations.dish_participants(cycle_id,restaurant_id,slot,member_id,task_id) VALUES(cycle.id,p_restaurant,slot,participants[slot+1],task_id);
   INSERT INTO candidate_operations.task_events(task_id,restaurant_id,revision,actor_id,action,note,phase,assignee_id) VALUES(task_id,p_restaurant,1,p_member,'assigned',detail,'open',participants[slot+1]);
-  INSERT INTO candidate_operations.notification_outbox(restaurant_id,recipient_id,task_id,revision,message) VALUES(p_restaurant,participants[slot+1],task_id,1,'Dishwasher checkout assigned: '||title);
+  INSERT INTO candidate_operations.notification_outbox(restaurant_id,recipient_id,task_id,revision,message) VALUES(p_restaurant,participants[slot+1],task_id,1,'Checkout assigned: '||title);
  END LOOP;
  UPDATE candidate_identity.restaurants SET revision=revision+1 WHERE id=p_restaurant RETURNING revision INTO scope_revision;
  result:=jsonb_build_object('recordId',cycle.id,'revision',1,'workspaceRevision',scope_revision,'requestId',p_request,'appliedAt',clock_timestamp(),'replayed',false);
@@ -317,7 +317,7 @@ BEGIN
    IF NOT FOUND OR target.revision<>(mapping->>'expectedRevision')::integer THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='closing_transfer_selection_conflict'; END IF;
    IF rec.published AND NOT target.published OR target.department<>c.department OR c.due<target.starts_at OR c.due>target.ends_at THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='closing_covering_shift_denied'; END IF;
    IF target.published AND NOT candidate_operations.published_change_allowed(actor.id,p_restaurant,target.department,target.starts_at,target.ends_at) OR NOT target.published AND NOT candidate_operations.goal_authorized(actor.id,target.department,'schedule.manage') THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='action_denied'; END IF;
-   SELECT * INTO owner_member FROM candidate_identity.memberships WHERE id=target.member_id AND restaurant_id=p_restaurant AND active AND NOT schedule_only AND position<>'Dishwasher' FOR SHARE;
+   SELECT * INTO owner_member FROM candidate_identity.memberships WHERE id=target.member_id AND restaurant_id=p_restaurant AND active AND NOT schedule_only AND NOT candidate_operations.is_dish_position(p_restaurant,position) FOR SHARE;
    IF NOT FOUND OR owner_member.id IN (c.manager_id,c.verifier_id) OR NOT EXISTS(SELECT 1 FROM candidate_identity.station_clearances WHERE member_id=owner_member.id AND restaurant_id=p_restaurant AND active AND position=c.standard_snapshot->>'position') OR NOT EXISTS(SELECT 1 FROM candidate_operations.shift_standard_links WHERE shift_id=target.id AND standard_id=c.standard_id AND active) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='closing_covering_employee_denied'; END IF;
    IF EXISTS(SELECT 1 FROM candidate_operations.closes WHERE shift_id=target.id AND phase<>'cancelled' AND zone=c.zone) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='closing_zone_conflict'; END IF;
    old_helper:=c.helper_id;
@@ -353,7 +353,7 @@ BEGIN
   IF structural AND EXISTS(SELECT 1 FROM candidate_operations.tasks WHERE shift_id=rec.id) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='linked_shift_protected'; END IF;
   FOR c IN SELECT * FROM candidate_operations.closes WHERE shift_id=rec.id AND phase<>'cancelled' ORDER BY id FOR UPDATE LOOP
    IF structural AND c.phase='closed' THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='completed_close_protected'; END IF;
-   IF structural AND (owner_member.id IN (c.manager_id,c.verifier_id) OR owner_member.position='Dishwasher' OR NOT EXISTS(SELECT 1 FROM candidate_identity.station_clearances WHERE member_id=owner_member.id AND restaurant_id=p_restaurant AND active AND position=c.standard_snapshot->>'position') OR c.due<updated.starts_at OR c.due>updated.ends_at OR updated.department<>c.department) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='closing_covering_employee_denied'; END IF;
+   IF structural AND (owner_member.id IN (c.manager_id,c.verifier_id) OR candidate_operations.is_dish_position(owner_member.restaurant_id,owner_member.position) OR NOT EXISTS(SELECT 1 FROM candidate_identity.station_clearances WHERE member_id=owner_member.id AND restaurant_id=p_restaurant AND active AND position=c.standard_snapshot->>'position') OR c.due<updated.starts_at OR c.due>updated.ends_at OR updated.department<>c.department) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='closing_covering_employee_denied'; END IF;
    old_helper:=c.helper_id;
    UPDATE candidate_operations.closes SET owner_id=owner_member.id,shift_revision=updated.revision,phase=CASE WHEN structural THEN 'open' ELSE phase END,answers=CASE WHEN structural THEN '[]'::jsonb ELSE answers END,helper_id=CASE WHEN structural THEN NULL ELSE helper_id END,correction=CASE WHEN structural THEN NULL ELSE correction END,revision=revision+1 WHERE id=c.id RETURNING * INTO c;
    INSERT INTO candidate_operations.close_events(close_id,restaurant_id,revision,actor_id,action,note) VALUES(c.id,p_restaurant,c.revision,actor.id,CASE WHEN structural THEN 'schedule-changed' ELSE 'shift-link-updated' END,note);
@@ -394,6 +394,37 @@ BEGIN
 END;
 $function$
 
+CREATE OR REPLACE FUNCTION candidate_operations.check_station_job_role()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+DECLARE scope text;
+BEGIN
+ SELECT restaurant_id INTO scope FROM candidate_operations.station_references WHERE id=NEW.station_id;
+ IF candidate_operations.dish_only_label(scope,NEW.job) THEN
+  RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='station_job_role_denied';
+ END IF;
+ RETURN NEW;
+END;
+$function$
+
+CREATE OR REPLACE FUNCTION candidate_operations.check_station_store_roles()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+BEGIN
+ IF EXISTS(SELECT 1 FROM candidate_operations.station_jobs WHERE station_id=NEW.id
+  AND candidate_operations.dish_only_label(NEW.restaurant_id,job)) THEN
+  RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='station_job_role_denied';
+ END IF;
+ RETURN NEW;
+END;
+$function$
+
 CREATE OR REPLACE FUNCTION candidate_operations.check_time_off_evidence()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -428,11 +459,11 @@ AS $function$
 DECLARE actor candidate_identity.memberships; caps text[];
 BEGIN
  SELECT * INTO actor FROM candidate_identity.memberships WHERE id=p_member AND restaurant_id=p_restaurant AND active AND NOT schedule_only FOR SHARE;
- IF NOT FOUND OR actor.position='Dishwasher' THEN RETURN false; END IF;
+ IF NOT FOUND OR candidate_operations.is_dish_position(actor.restaurant_id,actor.position) THEN RETURN false; END IF;
  PERFORM 1 FROM candidate_identity.membership_capabilities WHERE membership_id=actor.id ORDER BY capability FOR SHARE;
  SELECT coalesce(array_agg(capability),'{}') INTO caps FROM candidate_identity.membership_capabilities WHERE membership_id=actor.id AND active;
  RETURN p_capability=ANY(caps) AND (actor.department=p_department OR 'location.manage'=ANY(caps)
-  OR 'tasks.manage'=ANY(caps) AND 'operations.store'=ANY(caps) AND p_department IN ('FOH','BOH'));
+  OR 'tasks.manage'=ANY(caps) AND 'operations.store'=ANY(caps) AND candidate_operations.operating_department(p_restaurant,p_department));
 END;
 $function$
 
@@ -445,11 +476,11 @@ AS $function$
 DECLARE actor candidate_identity.memberships; caps text[];
 BEGIN
  SELECT * INTO actor FROM candidate_identity.memberships WHERE id=p_member AND restaurant_id=p_restaurant AND active AND NOT schedule_only;
- IF NOT FOUND OR actor.position='Dishwasher' THEN RETURN false; END IF;
+ IF NOT FOUND OR candidate_operations.is_dish_position(actor.restaurant_id,actor.position) THEN RETURN false; END IF;
  PERFORM 1 FROM candidate_identity.membership_capabilities WHERE membership_id=actor.id ORDER BY capability;
  SELECT coalesce(array_agg(capability),'{}') INTO caps FROM candidate_identity.membership_capabilities WHERE membership_id=actor.id AND active;
  RETURN p_capability=ANY(caps) AND (actor.department=p_department OR 'location.manage'=ANY(caps)
-  OR 'tasks.manage'=ANY(caps) AND 'operations.store'=ANY(caps) AND p_department IN ('FOH','BOH'));
+  OR 'tasks.manage'=ANY(caps) AND 'operations.store'=ANY(caps) AND candidate_operations.operating_department(p_restaurant,p_department));
 END;
 $function$
 
@@ -465,7 +496,7 @@ BEGIN
  FOR c IN SELECT * FROM candidate_operations.closes WHERE shift_id=s.id AND phase<>'cancelled' ORDER BY id LOOP
   SELECT * INTO standard FROM candidate_operations.standard_references WHERE id=c.standard_id AND restaurant_id=p_restaurant;
   IF NOT FOUND OR standard.status<>'approved' OR standard.revision<>c.standard_revision THEN issues:=issues||jsonb_build_array(jsonb_build_object('closeId',c.id,'code','closing_instruction_changed')); END IF;
-  IF c.shift_revision<>s.revision OR c.owner_id<>s.member_id OR c.department<>s.department OR c.due<s.starts_at OR c.due>s.ends_at OR NOT EXISTS(SELECT 1 FROM candidate_identity.memberships WHERE id=s.member_id AND restaurant_id=p_restaurant AND active AND NOT schedule_only AND position<>'Dishwasher') OR NOT EXISTS(SELECT 1 FROM candidate_operations.shift_standard_links WHERE shift_id=s.id AND standard_id=c.standard_id AND active) OR (s.station_id IS NULL AND standard.position IS DISTINCT FROM s.position) OR (s.station_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM candidate_operations.station_references t WHERE t.id=s.station_id AND t.status='active' AND (t.setup_data->'standardIds' @> to_jsonb(ARRAY[c.standard_id::text]) OR lower(btrim(standard.position))=lower(btrim(t.title))))) THEN issues:=issues||jsonb_build_array(jsonb_build_object('closeId',c.id,'code','closing_assignment_changed')); END IF;
+  IF c.shift_revision<>s.revision OR c.owner_id<>s.member_id OR c.department<>s.department OR c.due<s.starts_at OR c.due>s.ends_at OR NOT EXISTS(SELECT 1 FROM candidate_identity.memberships WHERE id=s.member_id AND restaurant_id=p_restaurant AND active AND NOT schedule_only AND NOT candidate_operations.is_dish_position(p_restaurant,position)) OR NOT EXISTS(SELECT 1 FROM candidate_operations.shift_standard_links WHERE shift_id=s.id AND standard_id=c.standard_id AND active) OR (s.station_id IS NULL AND standard.position IS DISTINCT FROM s.position) OR (s.station_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM candidate_operations.station_references t WHERE t.id=s.station_id AND t.status='active' AND (t.setup_data->'standardIds' @> to_jsonb(ARRAY[c.standard_id::text]) OR lower(btrim(standard.position))=lower(btrim(t.title))))) THEN issues:=issues||jsonb_build_array(jsonb_build_object('closeId',c.id,'code','closing_assignment_changed')); END IF;
   IF c.manager_id=s.member_id OR NOT candidate_operations.closing_manager(c.manager_id,p_restaurant,s.department,'close.confirm') OR NOT EXISTS(SELECT 1 FROM candidate_identity.membership_capabilities WHERE membership_id=c.manager_id AND capability='location.manage' AND active) AND NOT EXISTS(SELECT 1 FROM candidate_operations.leadership_references WHERE member_id=c.manager_id AND restaurant_id=p_restaurant AND department=s.department AND active AND starts_at<=c.due AND ends_at>=c.due) THEN issues:=issues||jsonb_build_array(jsonb_build_object('closeId',c.id,'code','closing_manager_unavailable')); END IF;
   IF c.standard_snapshot->>'verification'='senior-then-manager' AND (c.verifier_id IS NULL OR c.verifier_id IN (s.member_id,c.manager_id) OR NOT candidate_operations.closing_manager(c.verifier_id,p_restaurant,s.department,'close.verify')) THEN issues:=issues||jsonb_build_array(jsonb_build_object('closeId',c.id,'code','closing_verifier_unavailable')); END IF;
  END LOOP;
@@ -486,7 +517,7 @@ BEGIN
  FOR c IN SELECT * FROM candidate_operations.closes WHERE shift_id=s.id AND phase<>'cancelled' ORDER BY id LOOP
   SELECT * INTO standard FROM candidate_operations.standard_references WHERE id=c.standard_id AND restaurant_id=p_restaurant;
   IF NOT FOUND OR standard.status<>'approved' OR standard.revision<>c.standard_revision THEN issues:=issues||jsonb_build_array(jsonb_build_object('closeId',c.id,'code','closing_instruction_changed')); END IF;
-  IF c.shift_revision<>s.revision OR c.owner_id<>s.member_id OR c.department<>s.department OR c.due<s.starts_at OR c.due>s.ends_at OR NOT EXISTS(SELECT 1 FROM candidate_identity.memberships WHERE id=s.member_id AND restaurant_id=p_restaurant AND active AND NOT schedule_only AND position<>'Dishwasher') OR NOT EXISTS(SELECT 1 FROM candidate_operations.shift_standard_links WHERE shift_id=s.id AND standard_id=c.standard_id AND active) OR (s.station_id IS NULL AND standard.position IS DISTINCT FROM s.position) OR (s.station_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM candidate_operations.station_references t WHERE t.id=s.station_id AND t.status='active' AND (t.setup_data->'standardIds' @> to_jsonb(ARRAY[c.standard_id::text]) OR lower(btrim(standard.position))=lower(btrim(t.title))))) THEN issues:=issues||jsonb_build_array(jsonb_build_object('closeId',c.id,'code','closing_assignment_changed')); END IF;
+  IF c.shift_revision<>s.revision OR c.owner_id<>s.member_id OR c.department<>s.department OR c.due<s.starts_at OR c.due>s.ends_at OR NOT EXISTS(SELECT 1 FROM candidate_identity.memberships WHERE id=s.member_id AND restaurant_id=p_restaurant AND active AND NOT schedule_only AND NOT candidate_operations.is_dish_position(p_restaurant,position)) OR NOT EXISTS(SELECT 1 FROM candidate_operations.shift_standard_links WHERE shift_id=s.id AND standard_id=c.standard_id AND active) OR (s.station_id IS NULL AND standard.position IS DISTINCT FROM s.position) OR (s.station_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM candidate_operations.station_references t WHERE t.id=s.station_id AND t.status='active' AND (t.setup_data->'standardIds' @> to_jsonb(ARRAY[c.standard_id::text]) OR lower(btrim(standard.position))=lower(btrim(t.title))))) THEN issues:=issues||jsonb_build_array(jsonb_build_object('closeId',c.id,'code','closing_assignment_changed')); END IF;
   IF c.manager_id=s.member_id OR NOT candidate_operations.closing_manager_read(c.manager_id,p_restaurant,s.department,'close.confirm') OR NOT EXISTS(SELECT 1 FROM candidate_identity.membership_capabilities WHERE membership_id=c.manager_id AND capability='location.manage' AND active) AND NOT EXISTS(SELECT 1 FROM candidate_operations.leadership_references WHERE member_id=c.manager_id AND restaurant_id=p_restaurant AND department=s.department AND active AND starts_at<=c.due AND ends_at>=c.due) THEN issues:=issues||jsonb_build_array(jsonb_build_object('closeId',c.id,'code','closing_manager_unavailable')); END IF;
   IF c.standard_snapshot->>'verification'='senior-then-manager' AND (c.verifier_id IS NULL OR c.verifier_id IN (s.member_id,c.manager_id) OR NOT candidate_operations.closing_manager_read(c.verifier_id,p_restaurant,s.department,'close.verify')) THEN issues:=issues||jsonb_build_array(jsonb_build_object('closeId',c.id,'code','closing_verifier_unavailable')); END IF;
  END LOOP;
@@ -558,7 +589,7 @@ BEGIN
    RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='action_denied';
   END IF;
   IF receipt.payload->>'action'='task.transition' AND receipt.payload->'input'->>'step' IN ('accept','dispute')
-   AND (task.kind<>'handoff' OR task.incoming_id IS DISTINCT FROM actor.id OR actor.position='Dishwasher') THEN
+   AND (task.kind<>'handoff' OR task.incoming_id IS DISTINCT FROM actor.id OR candidate_operations.is_dish_position(actor.restaurant_id,actor.position)) THEN
    RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='action_denied';
   END IF;
   IF receipt.payload->>'action' IN ('task.create','task.reassign') OR receipt.payload->'input'->>'step' IN ('verify','fix') THEN
@@ -594,20 +625,20 @@ BEGIN
   target_id:=(input->>'ownerId')::uuid; due_at:=(input->>'due')::timestamptz;
   SELECT * INTO target FROM candidate_identity.memberships
    WHERE id=target_id AND restaurant_id=p_restaurant AND active AND NOT schedule_only FOR SHARE;
-  IF NOT FOUND OR NOT candidate_operations.task_reviewer(actor.id,p_restaurant,target.department,CASE WHEN action='task.reassign' THEN task.shift_id WHEN input ? 'shiftId' THEN (input->>'shiftId')::uuid ELSE NULL END) OR target.position='Dishwasher' AND input->>'kind'<>'task' THEN
+  IF NOT FOUND OR NOT candidate_operations.task_reviewer(actor.id,p_restaurant,target.department,CASE WHEN action='task.reassign' THEN task.shift_id WHEN input ? 'shiftId' THEN (input->>'shiftId')::uuid ELSE NULL END) OR candidate_operations.is_dish_position(target.restaurant_id,target.position) AND input->>'kind'<>'task' THEN
    RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='assignee_denied';
   END IF;
   IF input ? 'shiftId' THEN
    IF input->>'kind'='handoff' THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='linked_handoff_not_supported'; END IF;
    SELECT * INTO linked FROM candidate_operations.shift_references WHERE id=(input->>'shiftId')::uuid AND restaurant_id=p_restaurant FOR SHARE;
-   IF NOT FOUND OR linked.member_id<>target.id OR linked.department<>target.department OR linked.position='Dishwasher'
+   IF NOT FOUND OR linked.member_id<>target.id OR linked.department<>target.department OR candidate_operations.is_dish_position(linked.restaurant_id,linked.position)
     OR NOT linked.published OR linked.cancelled OR linked.released_at IS NOT NULL OR due_at<linked.starts_at OR due_at>linked.ends_at THEN
     RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='shift_denied';
    END IF;
   END IF;
   IF input->>'kind'='handoff' THEN
    SELECT * INTO incoming FROM candidate_identity.memberships WHERE id=(input->>'incomingId')::uuid AND restaurant_id=p_restaurant AND active AND NOT schedule_only FOR SHARE;
-   IF NOT FOUND OR incoming.id=target.id OR incoming.position='Dishwasher' OR NOT candidate_operations.task_manager(actor.id,p_restaurant,incoming.department) THEN
+   IF NOT FOUND OR incoming.id=target.id OR candidate_operations.is_dish_position(incoming.restaurant_id,incoming.position) OR NOT candidate_operations.task_manager(actor.id,p_restaurant,incoming.department) THEN
     RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='incoming_denied';
    END IF;
   END IF;
@@ -635,7 +666,7 @@ BEGIN
   IF task.phase='closed' THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='phase_conflict'; END IF;
   SELECT * INTO target FROM candidate_identity.memberships WHERE id=(input->>'ownerId')::uuid AND restaurant_id=p_restaurant AND active AND NOT schedule_only FOR SHARE;
   IF NOT FOUND OR target.department<>task.department OR NOT candidate_operations.task_reviewer(actor.id,p_restaurant,target.department,CASE WHEN action='task.reassign' THEN task.shift_id WHEN input ? 'shiftId' THEN (input->>'shiftId')::uuid ELSE NULL END)
-   OR target.position='Dishwasher' AND task.kind<>'task' OR target.id=task.incoming_id THEN
+   OR candidate_operations.is_dish_position(target.restaurant_id,target.position) AND task.kind<>'task' OR target.id=task.incoming_id THEN
    RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='assignee_denied';
   END IF;
   IF task.shift_id IS NOT NULL AND target.id<>task.assignee_id THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='linked_reassignment_denied'; END IF;
@@ -670,7 +701,7 @@ BEGIN
    RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_note';
   END IF;
   IF verb='ready' THEN
-   IF actor.position='Dishwasher' AND task.kind<>'task' THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='action_denied'; END IF;
+   IF candidate_operations.is_dish_position(actor.restaurant_id,actor.position) AND task.kind<>'task' THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='action_denied'; END IF;
    IF task.assignee_id<>actor.id THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='action_denied'; END IF;
    IF task.phase NOT IN ('open','correction') THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='phase_conflict'; END IF;
    next_phase:='verification';
@@ -687,7 +718,7 @@ BEGIN
     next_phase:='correction';
    END IF;
   ELSIF verb IN ('accept','dispute') THEN
-   IF task.kind<>'handoff' OR task.incoming_id IS DISTINCT FROM actor.id OR actor.position='Dishwasher' THEN
+   IF task.kind<>'handoff' OR task.incoming_id IS DISTINCT FROM actor.id OR candidate_operations.is_dish_position(actor.restaurant_id,actor.position) THEN
     RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='action_denied';
    END IF;
    IF task.phase<>'acceptance' THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='phase_conflict'; END IF;
@@ -720,6 +751,63 @@ BEGIN
  END IF;
  RETURN result;
 END;
+$function$
+
+CREATE OR REPLACE FUNCTION candidate_operations.configuration_department_in_use(p_store text, p_department text)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+ SELECT EXISTS(SELECT 1 FROM candidate_identity.memberships WHERE restaurant_id=p_store AND department=p_department) OR
+  EXISTS(SELECT 1 FROM candidate_identity.job_assignments j JOIN candidate_identity.memberships m ON m.id=j.membership_id WHERE m.restaurant_id=p_store AND j.department=p_department) OR
+  EXISTS(SELECT 1 FROM candidate_operations.shift_references WHERE restaurant_id=p_store AND department=p_department) OR
+  EXISTS(SELECT 1 FROM candidate_operations.staffing_needs WHERE restaurant_id=p_store AND department=p_department) OR
+  EXISTS(SELECT 1 FROM candidate_operations.closes WHERE restaurant_id=p_store AND department=p_department) OR
+  EXISTS(SELECT 1 FROM candidate_operations.station_references WHERE restaurant_id=p_store AND department=p_department) OR
+  EXISTS(SELECT 1 FROM candidate_operations.employee_goals WHERE restaurant_id=p_store AND department=p_department) OR
+  EXISTS(SELECT 1 FROM candidate_operations.tasks WHERE restaurant_id=p_store AND department=p_department) OR
+  EXISTS(SELECT 1 FROM candidate_operations.standard_references WHERE restaurant_id=p_store AND department=p_department) OR
+  EXISTS(SELECT 1 FROM candidate_operations.leadership_references WHERE restaurant_id=p_store AND department=p_department) OR
+  EXISTS(SELECT 1 FROM candidate_operations.availability_references WHERE restaurant_id=p_store AND department=p_department) OR
+  EXISTS(SELECT 1 FROM candidate_operations.schedule_offers WHERE restaurant_id=p_store AND department=p_department AND status IN ('open','pending','accepted-by-replacement'));
+$function$
+
+CREATE OR REPLACE FUNCTION candidate_operations.configuration_label_valid(p_value text)
+ RETURNS boolean
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+ SELECT coalesce(length(p_value) BETWEEN 1 AND 100 AND p_value=btrim(p_value)
+  AND NOT EXISTS(SELECT 1 FROM generate_series(1,length(p_value)) i
+   WHERE ascii(substr(p_value,i,1))=ANY(ARRAY[9,10,11,12,13,133,160,5760,8192,8193,8194,8195,8196,8197,8198,8199,8200,8201,8202,8232,8233,8239,8287,12288,65279])),false);
+$function$
+
+CREATE OR REPLACE FUNCTION candidate_operations.configuration_timezone_in_use(p_store text)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+ SELECT EXISTS(SELECT 1 FROM candidate_operations.shift_references WHERE restaurant_id=p_store) OR
+  EXISTS(SELECT 1 FROM candidate_operations.dish_cycles WHERE restaurant_id=p_store) OR
+  EXISTS(SELECT 1 FROM candidate_operations.employee_goals WHERE restaurant_id=p_store) OR
+  EXISTS(SELECT 1 FROM candidate_operations.time_off_references WHERE restaurant_id=p_store) OR
+  EXISTS(SELECT 1 FROM candidate_operations.leadership_references WHERE restaurant_id=p_store) OR
+  EXISTS(SELECT 1 FROM candidate_operations.availability_references WHERE restaurant_id=p_store) OR
+  EXISTS(SELECT 1 FROM candidate_operations.staffing_needs WHERE restaurant_id=p_store) OR
+  EXISTS(SELECT 1 FROM candidate_operations.tasks WHERE restaurant_id=p_store);
+$function$
+
+CREATE OR REPLACE FUNCTION candidate_operations.configuration_timezone_valid(p_zone text)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+ SELECT coalesce(p_zone=ANY(ARRAY['Africa/Abidjan','Africa/Algiers','Africa/Bissau','Africa/Cairo','Africa/Casablanca','Africa/Ceuta','Africa/El_Aaiun','Africa/Johannesburg','Africa/Juba','Africa/Khartoum','Africa/Lagos','Africa/Maputo','Africa/Monrovia','Africa/Nairobi','Africa/Ndjamena','Africa/Sao_Tome','Africa/Tripoli','Africa/Tunis','Africa/Windhoek','America/Adak','America/Anchorage','America/Araguaina','America/Argentina/Buenos_Aires','America/Argentina/Catamarca','America/Argentina/Cordoba','America/Argentina/Jujuy','America/Argentina/La_Rioja','America/Argentina/Mendoza','America/Argentina/Rio_Gallegos','America/Argentina/Salta','America/Argentina/San_Juan','America/Argentina/San_Luis','America/Argentina/Tucuman','America/Argentina/Ushuaia','America/Asuncion','America/Bahia','America/Bahia_Banderas','America/Barbados','America/Belem','America/Belize','America/Boa_Vista','America/Bogota','America/Boise','America/Cambridge_Bay','America/Campo_Grande','America/Cancun','America/Caracas','America/Cayenne','America/Chicago','America/Chihuahua','America/Ciudad_Juarez','America/Costa_Rica','America/Coyhaique','America/Cuiaba','America/Danmarkshavn','America/Dawson','America/Dawson_Creek','America/Denver','America/Detroit','America/Edmonton','America/Eirunepe','America/El_Salvador','America/Fort_Nelson','America/Fortaleza','America/Glace_Bay','America/Goose_Bay','America/Grand_Turk','America/Guatemala','America/Guayaquil','America/Guyana','America/Halifax','America/Havana','America/Hermosillo','America/Indiana/Indianapolis','America/Indiana/Knox','America/Indiana/Marengo','America/Indiana/Petersburg','America/Indiana/Tell_City','America/Indiana/Vevay','America/Indiana/Vincennes','America/Indiana/Winamac','America/Inuvik','America/Iqaluit','America/Jamaica','America/Juneau','America/Kentucky/Louisville','America/Kentucky/Monticello','America/La_Paz','America/Lima','America/Los_Angeles','America/Maceio','America/Managua','America/Manaus','America/Martinique','America/Matamoros','America/Mazatlan','America/Menominee','America/Merida','America/Metlakatla','America/Mexico_City','America/Miquelon','America/Moncton','America/Monterrey','America/Montevideo','America/New_York','America/Nome','America/Noronha','America/North_Dakota/Beulah','America/North_Dakota/Center','America/North_Dakota/New_Salem','America/Nuuk','America/Ojinaga','America/Panama','America/Paramaribo','America/Phoenix','America/Port-au-Prince','America/Porto_Velho','America/Puerto_Rico','America/Punta_Arenas','America/Rankin_Inlet','America/Recife','America/Regina','America/Resolute','America/Rio_Branco','America/Santarem','America/Santiago','America/Santo_Domingo','America/Sao_Paulo','America/Scoresbysund','America/Sitka','America/St_Johns','America/Swift_Current','America/Tegucigalpa','America/Thule','America/Tijuana','America/Toronto','America/Vancouver','America/Whitehorse','America/Winnipeg','America/Yakutat','Antarctica/Casey','Antarctica/Davis','Antarctica/Macquarie','Antarctica/Mawson','Antarctica/Palmer','Antarctica/Rothera','Antarctica/Troll','Antarctica/Vostok','Asia/Almaty','Asia/Amman','Asia/Anadyr','Asia/Aqtau','Asia/Aqtobe','Asia/Ashgabat','Asia/Atyrau','Asia/Baghdad','Asia/Baku','Asia/Bangkok','Asia/Barnaul','Asia/Beirut','Asia/Bishkek','Asia/Chita','Asia/Colombo','Asia/Damascus','Asia/Dhaka','Asia/Dili','Asia/Dubai','Asia/Dushanbe','Asia/Famagusta','Asia/Gaza','Asia/Hebron','Asia/Ho_Chi_Minh','Asia/Hong_Kong','Asia/Hovd','Asia/Irkutsk','Asia/Jakarta','Asia/Jayapura','Asia/Jerusalem','Asia/Kabul','Asia/Kamchatka','Asia/Karachi','Asia/Kathmandu','Asia/Khandyga','Asia/Kolkata','Asia/Krasnoyarsk','Asia/Kuching','Asia/Macau','Asia/Magadan','Asia/Makassar','Asia/Manila','Asia/Nicosia','Asia/Novokuznetsk','Asia/Novosibirsk','Asia/Omsk','Asia/Oral','Asia/Pontianak','Asia/Pyongyang','Asia/Qatar','Asia/Qostanay','Asia/Qyzylorda','Asia/Riyadh','Asia/Sakhalin','Asia/Samarkand','Asia/Seoul','Asia/Shanghai','Asia/Singapore','Asia/Srednekolymsk','Asia/Taipei','Asia/Tashkent','Asia/Tbilisi','Asia/Tehran','Asia/Thimphu','Asia/Tokyo','Asia/Tomsk','Asia/Ulaanbaatar','Asia/Urumqi','Asia/Ust-Nera','Asia/Vladivostok','Asia/Yakutsk','Asia/Yangon','Asia/Yekaterinburg','Asia/Yerevan','Atlantic/Azores','Atlantic/Bermuda','Atlantic/Canary','Atlantic/Cape_Verde','Atlantic/Faroe','Atlantic/Madeira','Atlantic/South_Georgia','Atlantic/Stanley','Australia/Adelaide','Australia/Brisbane','Australia/Broken_Hill','Australia/Darwin','Australia/Eucla','Australia/Hobart','Australia/Lindeman','Australia/Lord_Howe','Australia/Melbourne','Australia/Perth','Australia/Sydney','Etc/GMT','Etc/UTC','Europe/Andorra','Europe/Astrakhan','Europe/Athens','Europe/Belgrade','Europe/Berlin','Europe/Brussels','Europe/Bucharest','Europe/Budapest','Europe/Chisinau','Europe/Dublin','Europe/Gibraltar','Europe/Helsinki','Europe/Istanbul','Europe/Kaliningrad','Europe/Kirov','Europe/Kyiv','Europe/Lisbon','Europe/London','Europe/Madrid','Europe/Malta','Europe/Minsk','Europe/Moscow','Europe/Paris','Europe/Prague','Europe/Riga','Europe/Rome','Europe/Samara','Europe/Saratov','Europe/Simferopol','Europe/Sofia','Europe/Tallinn','Europe/Tirane','Europe/Ulyanovsk','Europe/Vienna','Europe/Vilnius','Europe/Volgograd','Europe/Warsaw','Europe/Zurich','Indian/Chagos','Indian/Maldives','Indian/Mauritius','Pacific/Apia','Pacific/Auckland','Pacific/Bougainville','Pacific/Chatham','Pacific/Easter','Pacific/Efate','Pacific/Fakaofo','Pacific/Fiji','Pacific/Galapagos','Pacific/Gambier','Pacific/Guadalcanal','Pacific/Guam','Pacific/Honolulu','Pacific/Kanton','Pacific/Kiritimati','Pacific/Kosrae','Pacific/Kwajalein','Pacific/Marquesas','Pacific/Nauru','Pacific/Niue','Pacific/Norfolk','Pacific/Noumea','Pacific/Pago_Pago','Pacific/Palau','Pacific/Pitcairn','Pacific/Port_Moresby','Pacific/Rarotonga','Pacific/Tahiti','Pacific/Tarawa','Pacific/Tongatapu','UTC'])
+  AND EXISTS(SELECT 1 FROM pg_timezone_names WHERE name=p_zone),false);
 $function$
 
 CREATE OR REPLACE FUNCTION candidate_operations.coordinate_person_time_off()
@@ -824,7 +912,7 @@ BEGIN
  IF cycle_id IS NULL THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='dish_task_required'; END IF;
  manager:=candidate_operations.dish_manager(actor.id,p_restaurant);
  IF action='task.dish-pass' OR step IN ('ready','accept') THEN
-  IF actor.id<>task.assignee_id OR actor.position<>'Dishwasher' OR actor.department<>'BOH' THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='dish_owner_denied'; END IF;
+  IF actor.id<>task.assignee_id OR NOT candidate_operations.is_dish_position(actor.restaurant_id,actor.position) OR actor.department<>candidate_operations.dish_department(actor.restaurant_id) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='dish_owner_denied'; END IF;
  ELSE
   IF NOT manager OR actor.id=task.assignee_id THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='checker_denied'; END IF;
  END IF;
@@ -836,12 +924,12 @@ BEGIN
  IF NOT candidate_operations.dish_shape(cycle_id) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='dish_shape_conflict'; END IF;
  IF action='task.dish-pass' THEN
   IF participant.slot IS DISTINCT FROM 0 OR task.phase NOT IN ('open','correction') THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='phase_conflict'; END IF;
-  SELECT * INTO incoming FROM candidate_identity.memberships WHERE id=(input->>'incomingId')::uuid AND restaurant_id=p_restaurant AND active AND NOT schedule_only AND position='Dishwasher' AND department='BOH' FOR SHARE;
+  SELECT * INTO incoming FROM candidate_identity.memberships WHERE id=(input->>'incomingId')::uuid AND restaurant_id=p_restaurant AND active AND NOT schedule_only AND candidate_operations.is_dish_position(p_restaurant,position) AND department=candidate_operations.dish_department(p_restaurant) FOR SHARE;
   IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='incoming_denied'; END IF;
   PERFORM 1 FROM candidate_operations.dish_participants p JOIN candidate_operations.tasks t ON t.id=p.task_id WHERE p.cycle_id=cycle_id AND p.slot IN (1,2) AND p.member_id=incoming.id AND t.phase IN ('open','correction') FOR SHARE OF p,t;
   IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='incoming_denied'; END IF;
   due_at:=(input->>'due')::timestamptz;
-  INSERT INTO candidate_operations.tasks(restaurant_id,assignee_id,department,title,detail,due,phase,revision,kind) VALUES(p_restaurant,incoming.id,'BOH',left('Unfinished AM work: '||task.title,200),note,due_at,'open',1,'task') RETURNING id INTO child_id;
+  INSERT INTO candidate_operations.tasks(restaurant_id,assignee_id,department,title,detail,due,phase,revision,kind) VALUES(p_restaurant,incoming.id,candidate_operations.dish_department(p_restaurant),left('Unfinished AM work: '||task.title,200),note,due_at,'open',1,'task') RETURNING id INTO child_id;
   INSERT INTO candidate_operations.dish_handoffs(task_id,restaurant_id,cycle_id,source_id) VALUES(child_id,p_restaurant,cycle_id,task.id);
   INSERT INTO candidate_operations.task_events(task_id,restaurant_id,revision,actor_id,action,note,phase,assignee_id) VALUES(child_id,p_restaurant,1,actor.id,'passed',note,'open',incoming.id);
   UPDATE candidate_operations.tasks SET revision=revision+1 WHERE id=task.id RETURNING * INTO task;
@@ -881,6 +969,15 @@ BEGIN
 END;
 $function$
 
+CREATE OR REPLACE FUNCTION candidate_operations.dish_department(p_restaurant text)
+ RETURNS text
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+ SELECT dish_department FROM candidate_identity.restaurants WHERE id=p_restaurant;
+$function$
+
 CREATE OR REPLACE FUNCTION candidate_operations.dish_manager(p_member uuid, p_restaurant text)
  RETURNS boolean
  LANGUAGE plpgsql
@@ -890,10 +987,10 @@ AS $function$
 DECLARE actor candidate_identity.memberships; caps text[];
 BEGIN
  SELECT * INTO actor FROM candidate_identity.memberships WHERE id=p_member AND restaurant_id=p_restaurant AND active AND NOT schedule_only FOR SHARE;
- IF NOT FOUND OR actor.position='Dishwasher' THEN RETURN false; END IF;
+ IF NOT FOUND OR candidate_operations.is_dish_position(actor.restaurant_id,actor.position) THEN RETURN false; END IF;
  PERFORM 1 FROM candidate_identity.membership_capabilities WHERE membership_id=actor.id ORDER BY capability FOR SHARE;
  SELECT coalesce(array_agg(capability),'{}') INTO caps FROM candidate_identity.membership_capabilities WHERE membership_id=actor.id AND active;
- RETURN 'location.manage'=ANY(caps) OR 'tasks.manage'=ANY(caps) AND (actor.department='BOH' OR 'operations.store'=ANY(caps));
+ RETURN 'location.manage'=ANY(caps) OR 'tasks.manage'=ANY(caps) AND (actor.department=candidate_operations.dish_department(actor.restaurant_id) OR 'operations.store'=ANY(caps));
 END;
 $function$
 
@@ -906,20 +1003,21 @@ AS $function$
 DECLARE actor candidate_identity.memberships; caps text[];
 BEGIN
  SELECT * INTO actor FROM candidate_identity.memberships WHERE id=p_member AND restaurant_id=p_restaurant AND active AND NOT schedule_only;
- IF NOT FOUND OR actor.position='Dishwasher' THEN RETURN false; END IF;
+ IF NOT FOUND OR candidate_operations.is_dish_position(actor.restaurant_id,actor.position) THEN RETURN false; END IF;
  PERFORM 1 FROM candidate_identity.membership_capabilities WHERE membership_id=actor.id ORDER BY capability;
  SELECT coalesce(array_agg(capability),'{}') INTO caps FROM candidate_identity.membership_capabilities WHERE membership_id=actor.id AND active;
- RETURN 'location.manage'=ANY(caps) OR 'tasks.manage'=ANY(caps) AND (actor.department='BOH' OR 'operations.store'=ANY(caps));
+ RETURN 'location.manage'=ANY(caps) OR 'tasks.manage'=ANY(caps) AND (actor.department=candidate_operations.dish_department(actor.restaurant_id) OR 'operations.store'=ANY(caps));
 END;
 $function$
 
-CREATE OR REPLACE FUNCTION candidate_operations.dish_only_label(p_label text)
+CREATE OR REPLACE FUNCTION candidate_operations.dish_only_label(p_restaurant text, p_label text)
  RETURNS boolean
  LANGUAGE sql
- IMMUTABLE
+ STABLE
  SET search_path TO 'pg_catalog'
 AS $function$
- SELECT btrim(p_label) ~* '^(dish|dish\s*washer)(\s*(\((am|pm|morning|evening|night)\)|am|pm))?$';
+ SELECT EXISTS(SELECT 1 FROM candidate_identity.restaurants r,unnest(r.dish_aliases) a
+  WHERE r.id=p_restaurant AND lower(regexp_replace(btrim(p_label),'\s+',' ','g'))=lower(regexp_replace(a,'\s+',' ','g')));
 $function$
 
 CREATE OR REPLACE FUNCTION candidate_operations.dish_shape(p_cycle uuid)
@@ -929,9 +1027,9 @@ CREATE OR REPLACE FUNCTION candidate_operations.dish_shape(p_cycle uuid)
  SET search_path TO 'pg_catalog'
 AS $function$
  SELECT (SELECT count(*) FROM candidate_operations.dish_participants WHERE cycle_id=p_cycle)=3
- AND NOT EXISTS(SELECT 1 FROM candidate_operations.dish_participants p JOIN candidate_operations.tasks t ON t.id=p.task_id WHERE p.cycle_id=p_cycle AND (t.assignee_id<>p.member_id OR t.department<>'BOH' OR t.kind<>'task' OR t.restaurant_id<>p.restaurant_id))
+ AND NOT EXISTS(SELECT 1 FROM candidate_operations.dish_participants p JOIN candidate_operations.tasks t ON t.id=p.task_id WHERE p.cycle_id=p_cycle AND (t.assignee_id<>p.member_id OR t.department<>candidate_operations.dish_department(t.restaurant_id) OR t.kind<>'task' OR t.restaurant_id<>p.restaurant_id))
  AND NOT EXISTS(SELECT 1 FROM candidate_operations.dish_handoffs h JOIN candidate_operations.tasks t ON t.id=h.task_id WHERE h.cycle_id=p_cycle AND
- (t.department<>'BOH' OR t.kind<>'task' OR t.restaurant_id<>h.restaurant_id OR NOT EXISTS(SELECT 1 FROM candidate_operations.dish_participants p WHERE p.cycle_id=p_cycle AND p.slot=0 AND p.task_id=h.source_id)
+ (t.department<>candidate_operations.dish_department(t.restaurant_id) OR t.kind<>'task' OR t.restaurant_id<>h.restaurant_id OR NOT EXISTS(SELECT 1 FROM candidate_operations.dish_participants p WHERE p.cycle_id=p_cycle AND p.slot=0 AND p.task_id=h.source_id)
  OR NOT EXISTS(SELECT 1 FROM candidate_operations.dish_participants p WHERE p.cycle_id=p_cycle AND p.slot IN (1,2) AND p.member_id=t.assignee_id)
  OR h.accepted_by IS NOT NULL AND h.accepted_by<>t.assignee_id));
 $function$
@@ -962,7 +1060,7 @@ BEGIN
  SELECT * INTO scope FROM candidate_identity.restaurants WHERE id=p_restaurant;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='scope_denied'; END IF;
  SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND a.subject=p_subject FOR SHARE OF m,a;
- IF NOT FOUND OR actor.position='Dishwasher' THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
+ IF NOT FOUND OR candidate_operations.is_dish_position(actor.restaurant_id,actor.position) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
  PERFORM 1 FROM candidate_identity.membership_capabilities WHERE membership_id=actor.id ORDER BY capability FOR SHARE;
  SELECT * INTO receipt FROM candidate_operations.command_receipts WHERE restaurant_id=p_restaurant AND actor_id=p_member AND request_id=p_request;
  IF FOUND THEN
@@ -981,7 +1079,7 @@ BEGIN
   IF coalesce(input->>'type','') NOT IN ('development','required-correction') OR jsonb_typeof(input->'title') IS DISTINCT FROM 'string' OR length(btrim(input->>'title')) NOT BETWEEN 1 AND 200 OR jsonb_typeof(input->'definition') IS DISTINCT FROM 'string' OR length(btrim(input->>'definition')) NOT BETWEEN 1 AND 2000
    OR jsonb_typeof(input->'due') IS DISTINCT FROM 'string' OR input->>'due' !~ '^\d{4}-\d{2}-\d{2}T.*(Z|[+-]\d{2}:\d{2})$' OR NOT isfinite((input->>'due')::timestamptz) THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_goal_value'; END IF;
   SELECT * INTO owner_member FROM candidate_identity.memberships WHERE id=(input->>'ownerId')::uuid AND restaurant_id=p_restaurant AND active AND NOT schedule_only FOR SHARE;
-  IF NOT FOUND OR owner_member.position='Dishwasher' THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='goal_owner_denied'; END IF;
+  IF NOT FOUND OR candidate_operations.is_dish_position(owner_member.restaurant_id,owner_member.position) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='goal_owner_denied'; END IF;
   cap:=CASE WHEN input->>'type'='development' THEN 'people.manage' ELSE 'tasks.manage' END;
   IF (input->>'type'='required-correction' OR owner_member.id<>actor.id) AND NOT candidate_operations.goal_authorized(actor.id,owner_member.department,cap) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='action_denied'; END IF;
   SELECT * INTO reviewer FROM candidate_identity.memberships WHERE id=(input->>'managerId')::uuid AND restaurant_id=p_restaurant AND active AND NOT schedule_only FOR SHARE;
@@ -1109,6 +1207,15 @@ BEGIN
 END;
 $function$
 
+CREATE OR REPLACE FUNCTION candidate_operations.is_dish_position(p_restaurant text, p_position text)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+ SELECT coalesce((SELECT p_position=dish_position FROM candidate_identity.restaurants WHERE id=p_restaurant),false);
+$function$
+
 CREATE OR REPLACE FUNCTION candidate_operations.leadership_command(p_subject text, p_member uuid, p_restaurant text, p_request uuid, p_payload jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -1183,7 +1290,7 @@ AS $function$
 DECLARE shift candidate_operations.shift_references;
 BEGIN
  SELECT * INTO shift FROM candidate_operations.shift_references WHERE id=p_shift AND restaurant_id=p_restaurant FOR SHARE;
- RETURN FOUND AND shift.member_id=p_member AND shift.department=p_department AND shift.position<>'Dishwasher'
+ RETURN FOUND AND shift.member_id=p_member AND shift.department=p_department AND NOT candidate_operations.is_dish_position(shift.restaurant_id,shift.position)
   AND shift.published AND NOT shift.cancelled AND shift.released_at IS NULL AND shift.revision=p_revision
   AND p_due BETWEEN shift.starts_at AND shift.ends_at;
 END;
@@ -1199,7 +1306,7 @@ DECLARE actor candidate_identity.memberships; selected uuid[]; items jsonb; next
 BEGIN
  IF p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 100 THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_page_size'; END IF;
  SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND a.subject=p_subject;
- IF NOT FOUND OR actor.position='Dishwasher' THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
+ IF NOT FOUND OR candidate_operations.is_dish_position(actor.restaurant_id,actor.position) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
  SELECT array_agg(id ORDER BY id) INTO selected FROM (SELECT g.id FROM candidate_operations.employee_goals g WHERE g.restaurant_id=p_restaurant AND (p_after IS NULL OR g.id>p_after)
  AND (g.owner_id=actor.id OR g.manager_id=actor.id AND candidate_operations.goal_authorized(actor.id,g.department,CASE WHEN g.type='development' THEN 'people.manage' ELSE 'tasks.manage' END)) ORDER BY g.id LIMIT p_limit+1) page;
  SELECT coalesce(jsonb_agg(jsonb_build_object('id',g.id,'kind','goal','locationId',g.restaurant_id,'area',g.department,'ownerId',g.owner_id,'revision',g.revision,
@@ -1303,9 +1410,9 @@ BEGIN
   AND (
    (caps && ARRAY['schedule.manage','schedule.publish','schedule.change'] AND (actor.department=s.department OR 'location.manage'=ANY(caps)))
    OR s.published AND (s.member_id=actor.id
-    OR actor.position<>'Dishwasher' AND ('location.manage'=ANY(caps) OR 'people.manage'=ANY(caps) AND actor.department=s.department)
+    OR NOT candidate_operations.is_dish_position(actor.restaurant_id,actor.position) AND ('location.manage'=ANY(caps) OR 'people.manage'=ANY(caps) AND actor.department=s.department)
     OR 'close.confirm'=ANY(caps) AND (actor.department=s.department OR 'location.manage'=ANY(caps)
-      OR actor.position<>'Dishwasher' AND 'tasks.manage'=ANY(caps) AND 'operations.store'=ANY(caps) AND s.department IN ('FOH','BOH')))
+      OR NOT candidate_operations.is_dish_position(actor.restaurant_id,actor.position) AND 'tasks.manage'=ANY(caps) AND 'operations.store'=ANY(caps) AND candidate_operations.operating_department(s.restaurant_id,s.department)))
   ) ORDER BY s.id LIMIT p_limit+1
  ) page;
  SELECT coalesce(jsonb_agg(jsonb_build_object('id',s.id,'kind','shift','locationId',s.restaurant_id,'area',s.department,'ownerId',s.member_id,'revision',s.revision,
@@ -1350,7 +1457,7 @@ DECLARE actor candidate_identity.memberships; selected uuid[]; items jsonb; scop
 BEGIN
  IF p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 100 THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_page_size'; END IF;
  SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND a.subject=p_subject;
- IF NOT FOUND OR actor.position='Dishwasher' THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
+ IF NOT FOUND OR candidate_operations.is_dish_position(actor.restaurant_id,actor.position) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
  SELECT array_agg(id ORDER BY id) INTO selected FROM (SELECT n.id FROM candidate_operations.staffing_needs n WHERE n.restaurant_id=p_restaurant AND (p_after IS NULL OR n.id>p_after) AND (candidate_operations.goal_authorized(actor.id,n.department,'schedule.manage') OR candidate_operations.goal_authorized(actor.id,n.department,'schedule.publish') OR candidate_operations.goal_authorized(actor.id,n.department,'schedule.change')) ORDER BY n.id LIMIT p_limit+1) page;
  SELECT coalesce(jsonb_agg(jsonb_build_object('id',n.id,'kind','staffing','locationId',n.restaurant_id,'area',n.department,'ownerId',n.owner_id,'revision',n.revision,'data',jsonb_build_object('title',n.title,'position',n.position,'start',n.starts_at,'end',n.ends_at,'minimum',n.minimum,'source',n.source,'status',n.status,'history',(SELECT jsonb_agg(jsonb_build_object('actorId',e.actor_id,'action',CASE e.action WHEN 'staffing.save' THEN 'drafted' WHEN 'staffing.approve' THEN 'approved' ELSE 'retired' END,'note',e.note,'at',e.recorded_at) ORDER BY e.revision) FROM candidate_operations.staffing_events e WHERE e.staffing_id=n.id))||CASE WHEN n.copied_from IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('copiedFrom',n.copied_from) END) ORDER BY n.id),'[]') INTO items FROM candidate_operations.staffing_needs n WHERE n.id=ANY(selected[1:p_limit]);
  SELECT revision INTO scope_revision FROM candidate_identity.restaurants WHERE id=p_restaurant;
@@ -1447,7 +1554,7 @@ BEGIN
  PERFORM candidate_operations.lock_scope(p_restaurant);
  SELECT revision INTO scope_revision FROM candidate_identity.restaurants WHERE id=p_restaurant;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='scope_denied'; END IF;
- SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND m.position<>'Dishwasher' AND a.subject=p_subject FOR SHARE OF m,a;
+ SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND NOT candidate_operations.is_dish_position(m.restaurant_id,m.position) AND a.subject=p_subject FOR SHARE OF m,a;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
  IF p_request IS NULL OR p_payload IS NULL OR jsonb_typeof(p_payload)<>'object' THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_command'; END IF;
  input:=p_payload->'input';action:=p_payload->>'action';step:=input->>'step';
@@ -1475,11 +1582,11 @@ BEGIN
   OR EXISTS(SELECT 1 FROM jsonb_object_keys(input) k WHERE k NOT IN ('title','detail','kind','ownerId','incomingId','shiftId','due'))
   OR EXISTS(SELECT 1 FROM jsonb_each(input) f WHERE jsonb_typeof(f.value)<>'string') OR p_payload ? 'recordId' OR p_payload ? 'expectedRevision'
   THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_manager_handoff'; END IF;
-  SELECT * INTO target FROM candidate_identity.memberships WHERE id=(input->>'ownerId')::uuid AND restaurant_id=p_restaurant AND active AND NOT schedule_only AND position<>'Dishwasher' FOR SHARE;
+  SELECT * INTO target FROM candidate_identity.memberships WHERE id=(input->>'ownerId')::uuid AND restaurant_id=p_restaurant AND active AND NOT schedule_only AND NOT candidate_operations.is_dish_position(p_restaurant,position) FOR SHARE;
   IF NOT FOUND OR NOT candidate_operations.closing_manager(actor.id,p_restaurant,target.department,'tasks.manage') THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='owner_denied'; END IF;
-  SELECT * INTO incoming FROM candidate_identity.memberships WHERE id=(input->>'incomingId')::uuid AND restaurant_id=p_restaurant AND active AND NOT schedule_only AND position<>'Dishwasher' FOR SHARE;
+  SELECT * INTO incoming FROM candidate_identity.memberships WHERE id=(input->>'incomingId')::uuid AND restaurant_id=p_restaurant AND active AND NOT schedule_only AND NOT candidate_operations.is_dish_position(p_restaurant,position) FOR SHARE;
   IF NOT FOUND OR incoming.id=target.id OR NOT candidate_operations.closing_manager(actor.id,p_restaurant,incoming.department,'tasks.manage') THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='incoming_denied'; END IF;
-  SELECT * INTO shift FROM candidate_operations.shift_references WHERE id=(input->>'shiftId')::uuid AND restaurant_id=p_restaurant AND member_id=target.id AND department=target.department AND published AND NOT cancelled AND released_at IS NULL AND position<>'Dishwasher' FOR SHARE;
+  SELECT * INTO shift FROM candidate_operations.shift_references WHERE id=(input->>'shiftId')::uuid AND restaurant_id=p_restaurant AND member_id=target.id AND department=target.department AND published AND NOT cancelled AND released_at IS NULL AND NOT candidate_operations.is_dish_position(p_restaurant,position) FOR SHARE;
   IF NOT FOUND OR (input->>'due')::timestamptz NOT BETWEEN shift.starts_at AND shift.ends_at THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='shift_denied'; END IF;
   IF length(btrim(input->>'title')) NOT BETWEEN 1 AND 200 OR length(btrim(input->>'detail')) NOT BETWEEN 1 AND 8000 THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_text'; END IF;
   INSERT INTO candidate_operations.tasks(restaurant_id,assignee_id,department,title,detail,due,phase,revision,kind,incoming_id,shift_id,shift_revision)
@@ -1560,7 +1667,7 @@ BEGIN
  OR candidate_operations.person_shift_conflict(m.id,s.starts_at,s.ends_at,s.id)
  OR candidate_operations.person_time_off_conflict(m.id,s.starts_at,s.ends_at)
  OR EXISTS(SELECT 1 FROM candidate_operations.availability_references WHERE restaurant_id=p_offer.restaurant_id AND member_id=m.id AND status='approved' AND candidate_operations.availability_period_conflict(data,s.starts_at,s.ends_at,zone)) THEN RETURN false; END IF;
- IF EXISTS(SELECT 1 FROM candidate_operations.closes c WHERE c.shift_id=s.id AND c.phase<>'cancelled' AND (m.position='Dishwasher' OR m.id IN (c.manager_id,c.verifier_id) OR c.due<s.starts_at OR c.due>s.ends_at OR c.department<>m.department OR p_offer.mode='coverage' AND c.standard_snapshot->>'position'<>s.position OR NOT EXISTS(SELECT 1 FROM candidate_identity.station_clearances WHERE member_id=m.id AND restaurant_id=p_offer.restaurant_id AND active AND position=c.standard_snapshot->>'position'))) THEN RETURN false; END IF;
+ IF EXISTS(SELECT 1 FROM candidate_operations.closes c WHERE c.shift_id=s.id AND c.phase<>'cancelled' AND (candidate_operations.is_dish_position(m.restaurant_id,m.position) OR m.id IN (c.manager_id,c.verifier_id) OR c.due<s.starts_at OR c.due>s.ends_at OR c.department<>m.department OR p_offer.mode='coverage' AND c.standard_snapshot->>'position'<>s.position OR NOT EXISTS(SELECT 1 FROM candidate_identity.station_clearances WHERE member_id=m.id AND restaurant_id=p_offer.restaurant_id AND active AND position=c.standard_snapshot->>'position'))) THEN RETURN false; END IF;
  RETURN true;
 END;
 $function$
@@ -1586,6 +1693,15 @@ BEGIN
 END;
 $function$
 
+CREATE OR REPLACE FUNCTION candidate_operations.operating_department(p_restaurant text, p_department text)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+ SELECT coalesce((SELECT p_department=ANY(operating_departments) FROM candidate_identity.restaurants WHERE id=p_restaurant),false);
+$function$
+
 CREATE OR REPLACE FUNCTION candidate_operations.overnight_command(p_subject text, p_member uuid, p_restaurant text, p_request uuid, p_payload jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -1599,7 +1715,7 @@ BEGIN
  IF p_request IS NULL OR p_payload IS NULL OR jsonb_typeof(p_payload)<>'object' THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_command'; END IF;
  SELECT revision INTO scope_revision FROM candidate_identity.restaurants WHERE id=p_restaurant;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='scope_denied'; END IF;
- SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND m.position<>'Dishwasher' AND a.subject=p_subject FOR SHARE OF m,a;
+ SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND NOT candidate_operations.is_dish_position(m.restaurant_id,m.position) AND a.subject=p_subject FOR SHARE OF m,a;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
  input:=p_payload->'input';action:=p_payload->>'action';step:=input->>'step';
  IF action IS NULL OR action NOT IN ('handoff.create','handoff.transition') OR jsonb_typeof(input) IS DISTINCT FROM 'object' OR EXISTS(SELECT 1 FROM jsonb_object_keys(p_payload) k WHERE k NOT IN ('action','input','recordId','expectedRevision','clientCapturedAt')) THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_overnight_command'; END IF;
@@ -1633,7 +1749,7 @@ BEGIN
  END IF;
  previous_owner:=issue.owner_id;previous_incoming:=issue.incoming_id;
  IF action='handoff.create' OR step IN ('offer','recover') THEN
-  SELECT * INTO incoming FROM candidate_identity.memberships WHERE id=(input->>'incomingId')::uuid AND restaurant_id=p_restaurant AND active AND NOT schedule_only AND position<>'Dishwasher' FOR SHARE;
+  SELECT * INTO incoming FROM candidate_identity.memberships WHERE id=(input->>'incomingId')::uuid AND restaurant_id=p_restaurant AND active AND NOT schedule_only AND NOT candidate_operations.is_dish_position(p_restaurant,position) FOR SHARE;
   IF NOT FOUND OR incoming.id=actor.id OR NOT candidate_operations.task_manager(incoming.id,p_restaurant,issue.department) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='incoming_denied'; END IF;
   SELECT * INTO opening FROM candidate_operations.leadership_references WHERE id=(input->>'incomingLeadershipId')::uuid AND restaurant_id=p_restaurant AND member_id=incoming.id AND department=issue.department AND active FOR SHARE;
   IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='leadership_denied'; END IF;
@@ -1655,7 +1771,7 @@ BEGIN
  END IF;
  IF issue.priority='urgent' AND (action='handoff.create' OR step='recover') THEN
   PERFORM 1 FROM candidate_identity.membership_capabilities c JOIN candidate_identity.memberships m ON m.id=c.membership_id WHERE m.restaurant_id=p_restaurant ORDER BY c.membership_id,c.capability FOR SHARE OF c;
-  SELECT array_agg(m.id) INTO escalation FROM candidate_identity.memberships m WHERE m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND m.position<>'Dishwasher' AND (m.department=issue.department OR EXISTS(SELECT 1 FROM candidate_identity.membership_capabilities WHERE membership_id=m.id AND capability='location.manage' AND active)) AND EXISTS(SELECT 1 FROM candidate_identity.membership_capabilities WHERE membership_id=m.id AND capability='operations.escalation' AND active);
+  SELECT array_agg(m.id) INTO escalation FROM candidate_identity.memberships m WHERE m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND NOT candidate_operations.is_dish_position(m.restaurant_id,m.position) AND (m.department=issue.department OR EXISTS(SELECT 1 FROM candidate_identity.membership_capabilities WHERE membership_id=m.id AND capability='location.manage' AND active)) AND EXISTS(SELECT 1 FROM candidate_identity.membership_capabilities WHERE membership_id=m.id AND capability='operations.escalation' AND active);
   IF escalation IS NULL THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='escalation_recipient_required'; END IF;
  END IF;
  IF action='handoff.create' THEN
@@ -1924,7 +2040,7 @@ BEGIN
  SELECT * INTO scope FROM candidate_identity.restaurants WHERE id=p_restaurant;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='scope_denied'; END IF;
  SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND a.subject=p_subject FOR SHARE OF m,a;
- IF NOT FOUND OR actor.position='Dishwasher' THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
+ IF NOT FOUND OR candidate_operations.is_dish_position(actor.restaurant_id,actor.position) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
  PERFORM 1 FROM candidate_identity.membership_capabilities WHERE membership_id=actor.id ORDER BY capability FOR SHARE;
  SELECT * INTO receipt FROM candidate_operations.command_receipts WHERE restaurant_id=p_restaurant AND actor_id=p_member AND request_id=p_request;
  IF FOUND THEN
@@ -1979,7 +2095,7 @@ CREATE OR REPLACE FUNCTION candidate_operations.read_close(p_subject text, p_mem
 AS $function$
 DECLARE actor candidate_identity.memberships; assigned candidate_operations.closes; history jsonb;
 BEGIN
- SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND m.position<>'Dishwasher' AND a.subject=p_subject;
+ SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND NOT candidate_operations.is_dish_position(m.restaurant_id,m.position) AND a.subject=p_subject;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
  SELECT * INTO assigned FROM candidate_operations.closes WHERE id=p_close AND restaurant_id=p_restaurant;
  IF NOT FOUND OR NOT (actor.id=assigned.owner_id OR actor.id IS NOT DISTINCT FROM assigned.helper_id OR actor.id=assigned.manager_id OR actor.id IS NOT DISTINCT FROM assigned.verifier_id OR candidate_operations.closing_manager_read(actor.id,p_restaurant,assigned.department,'tasks.manage')) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='closing_denied'; END IF;
@@ -2055,7 +2171,7 @@ CREATE OR REPLACE FUNCTION candidate_operations.read_overnight(p_subject text, p
 AS $function$
 DECLARE actor candidate_identity.memberships; issue candidate_operations.overnight_issues; history jsonb;
 BEGIN
- SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND m.position<>'Dishwasher' AND a.subject=p_subject;
+ SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND NOT candidate_operations.is_dish_position(m.restaurant_id,m.position) AND a.subject=p_subject;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
  SELECT * INTO issue FROM candidate_operations.overnight_issues WHERE id=p_issue AND restaurant_id=p_restaurant;
  IF NOT FOUND OR NOT(actor.id IN (issue.owner_id,issue.outgoing_id,issue.incoming_id) OR candidate_operations.task_manager_read(actor.id,p_restaurant,issue.department)) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='issue_denied'; END IF;
@@ -2073,7 +2189,7 @@ AS $function$
 DECLARE actor candidate_identity.memberships; s candidate_operations.shift_references; scope_revision integer; needs jsonb;
 BEGIN
  SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND a.subject=p_subject;
- IF NOT FOUND OR actor.position='Dishwasher' THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
+ IF NOT FOUND OR candidate_operations.is_dish_position(actor.restaurant_id,actor.position) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
  SELECT * INTO s FROM candidate_operations.shift_references WHERE id=p_shift AND restaurant_id=p_restaurant;
  IF NOT FOUND OR NOT (candidate_operations.goal_authorized(actor.id,s.department,'schedule.manage') OR candidate_operations.goal_authorized(actor.id,s.department,'schedule.publish') OR candidate_operations.goal_authorized(actor.id,s.department,'schedule.change')) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='action_denied'; END IF;
  SELECT coalesce(jsonb_agg(jsonb_build_object('id',n.id,'revision',n.revision,'status',n.status,'position',n.position,'minimum',n.minimum) ORDER BY n.id),'[]') INTO needs FROM candidate_operations.staffing_needs n WHERE n.restaurant_id=p_restaurant AND n.department=s.department AND n.starts_at<s.ends_at AND n.ends_at>s.starts_at AND (n.status='approved' OR n.status='draft' AND n.copied_from IS NOT NULL AND n.position=s.position);
@@ -2138,7 +2254,7 @@ BEGIN
  SELECT revision INTO scope_revision FROM candidate_identity.restaurants WHERE id=p_restaurant;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='scope_denied'; END IF;
  SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id
- WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND m.position<>'Dishwasher' AND a.subject=p_subject FOR SHARE OF m,a;
+ WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND NOT candidate_operations.is_dish_position(m.restaurant_id,m.position) AND a.subject=p_subject FOR SHARE OF m,a;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
  input:=p_payload->'input';
  IF p_payload->>'action' IS DISTINCT FROM 'shift.release' OR jsonb_typeof(input) IS DISTINCT FROM 'object'
@@ -2167,8 +2283,8 @@ BEGIN
  END IF;
  IF shift.revision<>(p_payload->>'expectedRevision')::integer THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='revision_conflict'; END IF;
  IF NOT shift.published OR shift.cancelled OR shift.released_at IS NOT NULL THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='shift_conflict'; END IF;
- IF shift.checkout_profile NOT IN ('ordinary','dishwasher','overnight-manager') OR (shift.checkout_profile IN ('ordinary','overnight-manager') AND shift.position='Dishwasher') OR (shift.checkout_profile='dishwasher' AND shift.position<>'Dishwasher') THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='checkout_profile_unsupported'; END IF;
- PERFORM 1 FROM candidate_identity.memberships WHERE id=shift.member_id AND restaurant_id=p_restaurant AND active AND NOT schedule_only AND (position<>'Dishwasher' OR shift.checkout_profile='dishwasher' AND position='Dishwasher') AND department=shift.department FOR SHARE;
+ IF shift.checkout_profile NOT IN ('ordinary','dishwasher','overnight-manager') OR (shift.checkout_profile IN ('ordinary','overnight-manager') AND candidate_operations.is_dish_position(shift.restaurant_id,shift.position)) OR (shift.checkout_profile='dishwasher' AND NOT candidate_operations.is_dish_position(shift.restaurant_id,shift.position)) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='checkout_profile_unsupported'; END IF;
+ PERFORM 1 FROM candidate_identity.memberships WHERE id=shift.member_id AND restaurant_id=p_restaurant AND active AND NOT schedule_only AND (NOT candidate_operations.is_dish_position(p_restaurant,position) OR shift.checkout_profile='dishwasher' AND candidate_operations.is_dish_position(p_restaurant,position)) AND department=shift.department FOR SHARE;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='owner_denied'; END IF;
  IF shift.checkout_profile='dishwasher' THEN
   SELECT timezone INTO restaurant_timezone FROM candidate_identity.restaurants WHERE id=p_restaurant;
@@ -2384,7 +2500,7 @@ BEGIN
  SELECT * INTO scope FROM candidate_identity.restaurants WHERE id=p_restaurant;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='scope_denied'; END IF;
  SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND a.subject=p_subject FOR SHARE OF m,a;
- IF NOT FOUND OR actor.position='Dishwasher' THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
+ IF NOT FOUND OR candidate_operations.is_dish_position(actor.restaurant_id,actor.position) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
  PERFORM 1 FROM candidate_identity.membership_capabilities WHERE membership_id=actor.id ORDER BY capability FOR SHARE;
  SELECT * INTO receipt FROM candidate_operations.command_receipts WHERE restaurant_id=p_restaurant AND actor_id=p_member AND request_id=p_request;
  IF FOUND THEN
@@ -2438,8 +2554,8 @@ BEGIN
    END IF;
   END LOOP;
   setup_json:=setup_json||jsonb_build_object('allJobMembers',coalesce((setup_json->>'allJobMembers')::boolean,false));
-  IF EXISTS(SELECT 1 FROM jsonb_array_elements_text(setup_json->'jobs') j WHERE candidate_operations.dish_only_label(j) OR NOT EXISTS(SELECT 1 FROM candidate_identity.memberships m JOIN candidate_identity.schedule_eligibility e ON e.member_id=m.id AND e.active AND e.job=j WHERE m.restaurant_id=p_restaurant AND m.department=department_name AND (m.active OR m.schedule_only))) THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='station_job_selection_denied'; END IF;
-  IF EXISTS(SELECT 1 FROM jsonb_array_elements_text(setup_json->'memberIds') v WHERE NOT EXISTS(SELECT 1 FROM candidate_identity.memberships m WHERE m.id=v::uuid AND m.restaurant_id=p_restaurant AND m.department=department_name AND (m.active OR m.schedule_only) AND NOT candidate_operations.dish_only_label(m.position) AND EXISTS(SELECT 1 FROM candidate_identity.schedule_eligibility e WHERE e.member_id=m.id AND e.active AND setup_json->'jobs' @> to_jsonb(ARRAY[e.job])))) THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='station_member_selection_denied'; END IF;
+  IF EXISTS(SELECT 1 FROM jsonb_array_elements_text(setup_json->'jobs') j WHERE candidate_operations.dish_only_label(p_restaurant,j) OR NOT EXISTS(SELECT 1 FROM candidate_identity.memberships m JOIN candidate_identity.schedule_eligibility e ON e.member_id=m.id AND e.active AND e.job=j WHERE m.restaurant_id=p_restaurant AND m.department=department_name AND (m.active OR m.schedule_only))) THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='station_job_selection_denied'; END IF;
+  IF EXISTS(SELECT 1 FROM jsonb_array_elements_text(setup_json->'memberIds') v WHERE NOT EXISTS(SELECT 1 FROM candidate_identity.memberships m WHERE m.id=v::uuid AND m.restaurant_id=p_restaurant AND m.department=department_name AND (m.active OR m.schedule_only) AND NOT candidate_operations.dish_only_label(p_restaurant,m.position) AND EXISTS(SELECT 1 FROM candidate_identity.schedule_eligibility e WHERE e.member_id=m.id AND e.active AND setup_json->'jobs' @> to_jsonb(ARRAY[e.job])))) THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='station_member_selection_denied'; END IF;
   IF EXISTS(SELECT 1 FROM jsonb_array_elements_text(setup_json->'standardIds') v WHERE NOT EXISTS(SELECT 1 FROM candidate_operations.standard_references s WHERE s.id=v::uuid AND s.restaurant_id=p_restaurant AND s.department=department_name AND s.status<>'retired')) THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='station_guide_selection_denied'; END IF;
   IF jsonb_typeof(setup_json->'goals') IS DISTINCT FROM 'array' THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_station_goals'; END IF;
   IF jsonb_array_length(setup_json->'goals')>5 THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_station_goals'; END IF;
@@ -2455,7 +2571,7 @@ BEGIN
   IF (SELECT count(DISTINCT g->>'id') FROM jsonb_array_elements(goals) g)<>jsonb_array_length(goals) THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='duplicate_station_goals'; END IF;
   IF setup_json ? 'managerId' AND jsonb_typeof(setup_json->'managerId') IS DISTINCT FROM 'string' THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_station_reviewer'; END IF;
   reviewer:=nullif(setup_json->>'managerId','')::uuid;
-  IF jsonb_array_length(goals)>0 AND (reviewer IS NULL OR NOT EXISTS(SELECT 1 FROM candidate_identity.memberships m JOIN candidate_identity.membership_capabilities c ON c.membership_id=m.id AND c.active AND c.capability='people.manage' WHERE m.id=reviewer AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND NOT candidate_operations.dish_only_label(m.position) AND (m.department=department_name OR EXISTS(SELECT 1 FROM candidate_identity.membership_capabilities WHERE membership_id=m.id AND active AND capability='location.manage'))) OR NOT (setup_json->>'allJobMembers')::boolean AND setup_json->'memberIds' @> to_jsonb(ARRAY[reviewer::text])) THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='station_goal_reviewer_denied'; END IF;
+  IF jsonb_array_length(goals)>0 AND (reviewer IS NULL OR NOT EXISTS(SELECT 1 FROM candidate_identity.memberships m JOIN candidate_identity.membership_capabilities c ON c.membership_id=m.id AND c.active AND c.capability='people.manage' WHERE m.id=reviewer AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND NOT candidate_operations.dish_only_label(p_restaurant,m.position) AND (m.department=department_name OR EXISTS(SELECT 1 FROM candidate_identity.membership_capabilities WHERE membership_id=m.id AND active AND capability='location.manage'))) OR NOT (setup_json->>'allJobMembers')::boolean AND setup_json->'memberIds' @> to_jsonb(ARRAY[reviewer::text])) THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='station_goal_reviewer_denied'; END IF;
   setup_json:=setup_json||jsonb_build_object('managerId',coalesce(reviewer::text,''),'goals',goals);
  ELSE
   IF NOT creating AND rec.configured AND rec.setup_data IS NULL THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='station_setup_reference_only'; END IF;
@@ -2636,7 +2752,7 @@ BEGIN
  'capabilities',(SELECT coalesce(jsonb_agg(capability ORDER BY capability),'[]') FROM candidate_identity.membership_capabilities WHERE membership_id=actor.id AND active),
  'qualifications',(SELECT coalesce(jsonb_agg(job ORDER BY job),'[]') FROM candidate_identity.schedule_eligibility WHERE member_id=actor.id AND active AND source='qualification'),
  'scheduleJobs',(SELECT coalesce(jsonb_agg(job ORDER BY job),'[]') FROM candidate_identity.schedule_eligibility WHERE member_id=actor.id AND active AND source='schedule-job')) INTO me FROM candidate_identity.people p WHERE p.id=actor.person_id;
- RETURN jsonb_build_object('location',jsonb_build_object('id',scope.id,'name',scope.name,'timezone',scope.timezone,'revision',scope.revision),'me',me,'workspaceRevision',scope.revision);
+ RETURN jsonb_build_object('location',jsonb_build_object('id',scope.id,'name',scope.name,'timezone',scope.timezone,'revision',scope.revision,'configuration',jsonb_build_object('operatingDepartments',scope.operating_departments,'dishDepartment',scope.dish_department,'dishPosition',scope.dish_position,'dishAliases',scope.dish_aliases)),'me',me,'workspaceRevision',scope.revision);
 END;
 $function$
 
@@ -2668,7 +2784,7 @@ BEGIN
  SELECT * INTO scope FROM candidate_identity.restaurants WHERE id=p_restaurant;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='scope_denied'; END IF;
  SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND a.subject=p_subject FOR SHARE OF m,a;
- IF NOT FOUND OR actor.position='Dishwasher' THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
+ IF NOT FOUND OR candidate_operations.is_dish_position(actor.restaurant_id,actor.position) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
  PERFORM 1 FROM candidate_identity.membership_capabilities WHERE membership_id=actor.id ORDER BY capability FOR SHARE;
  SELECT * INTO receipt FROM candidate_operations.command_receipts WHERE restaurant_id=p_restaurant AND actor_id=p_member AND request_id=p_request;
  IF FOUND THEN
@@ -2731,7 +2847,7 @@ CREATE OR REPLACE FUNCTION candidate_operations.station_assignment_allowed(p_sta
 AS $function$
  SELECT EXISTS(SELECT 1 FROM candidate_operations.station_references s JOIN candidate_identity.memberships m ON m.id=p_member AND m.restaurant_id=s.restaurant_id AND m.department=s.department
  WHERE s.id=p_station AND s.restaurant_id=p_restaurant AND s.status='active' AND s.configured AND (m.active OR m.schedule_only)
- AND NOT candidate_operations.dish_only_label(m.position) AND NOT candidate_operations.dish_only_label(p_job)
+ AND NOT candidate_operations.dish_only_label(p_restaurant,m.position) AND NOT candidate_operations.dish_only_label(p_restaurant,p_job)
  AND EXISTS(SELECT 1 FROM candidate_operations.station_jobs j WHERE j.station_id=s.id AND j.job=p_job)
  AND EXISTS(SELECT 1 FROM candidate_identity.schedule_eligibility e WHERE e.member_id=m.id AND e.active AND e.job=p_job)
  AND (s.all_job_members OR EXISTS(SELECT 1 FROM candidate_operations.station_members sm WHERE sm.station_id=s.id AND sm.member_id=m.id)));
@@ -2751,7 +2867,7 @@ BEGIN
  SELECT revision INTO scope_revision FROM candidate_identity.restaurants WHERE id=p_restaurant;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='scope_denied'; END IF;
  SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id
- WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND m.position<>'Dishwasher' AND a.subject=p_subject FOR SHARE OF m,a;
+ WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND NOT candidate_operations.is_dish_position(m.restaurant_id,m.position) AND a.subject=p_subject FOR SHARE OF m,a;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
  input:=p_payload->'input';action:=p_payload->>'action';
  IF action IS NULL OR action NOT IN ('close.acknowledge','close.correction.assign') OR jsonb_typeof(input) IS DISTINCT FROM 'object'
@@ -2792,7 +2908,7 @@ BEGIN
   PERFORM 1 FROM candidate_operations.standard_references WHERE id=assigned.standard_id AND restaurant_id=p_restaurant AND status='approved' AND revision=assigned.standard_revision FOR SHARE;
   IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='standard_denied'; END IF;
   IF jsonb_typeof(input->'personId') IS DISTINCT FROM 'string' THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_helper'; END IF;
-  SELECT * INTO helper FROM candidate_identity.memberships WHERE id=(input->>'personId')::uuid AND restaurant_id=p_restaurant AND active AND NOT schedule_only AND position<>'Dishwasher' AND department=assigned.department FOR SHARE;
+  SELECT * INTO helper FROM candidate_identity.memberships WHERE id=(input->>'personId')::uuid AND restaurant_id=p_restaurant AND active AND NOT schedule_only AND NOT candidate_operations.is_dish_position(p_restaurant,position) AND department=assigned.department FOR SHARE;
   IF NOT FOUND OR helper.id=assigned.manager_id OR helper.id IS NOT DISTINCT FROM assigned.verifier_id THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='helper_denied'; END IF;
   PERFORM 1 FROM candidate_identity.station_clearances WHERE member_id=helper.id AND restaurant_id=p_restaurant AND position=assigned.standard_snapshot->>'position' AND active FOR SHARE;
   IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='clearance_denied'; END IF;
@@ -2848,7 +2964,7 @@ DECLARE actor candidate_identity.memberships; task_access boolean; location_acce
 BEGIN
  SELECT * INTO actor FROM candidate_identity.memberships WHERE id=p_member AND restaurant_id=p_restaurant
   AND active AND NOT schedule_only FOR SHARE;
- IF NOT FOUND OR actor.position='Dishwasher' THEN RETURN false; END IF;
+ IF NOT FOUND OR candidate_operations.is_dish_position(actor.restaurant_id,actor.position) THEN RETURN false; END IF;
  -- Lock grants through commit: a concurrent downgrade must wait for this authorized transaction.
  -- Grant administrators must use restaurant-first coordination before changing policy rows.
  PERFORM 1 FROM candidate_identity.membership_capabilities WHERE membership_id=actor.id ORDER BY capability FOR SHARE;
@@ -2869,7 +2985,7 @@ DECLARE actor candidate_identity.memberships; task_access boolean; location_acce
 BEGIN
  SELECT * INTO actor FROM candidate_identity.memberships WHERE id=p_member AND restaurant_id=p_restaurant
   AND active AND NOT schedule_only;
- IF NOT FOUND OR actor.position='Dishwasher' THEN RETURN false; END IF;
+ IF NOT FOUND OR candidate_operations.is_dish_position(actor.restaurant_id,actor.position) THEN RETURN false; END IF;
  -- Read authorization uses the statement snapshot; writes retain the original lock-aware helper.
  -- Grant administrators must use restaurant-first coordination before changing policy rows.
  PERFORM 1 FROM candidate_identity.membership_capabilities WHERE membership_id=actor.id ORDER BY capability;
@@ -3035,7 +3151,7 @@ BEGIN
  SELECT revision INTO scope_revision FROM candidate_identity.restaurants WHERE id=p_restaurant;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='scope_denied'; END IF;
  SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id
- WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND m.position<>'Dishwasher' AND a.subject=p_subject FOR SHARE OF m,a;
+ WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND NOT candidate_operations.is_dish_position(m.restaurant_id,m.position) AND a.subject=p_subject FOR SHARE OF m,a;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
  input:=p_payload->'input';
  IF p_payload->>'action' IS DISTINCT FROM 'close.transition' OR jsonb_typeof(input) IS DISTINCT FROM 'object'
@@ -3126,6 +3242,73 @@ BEGIN
 END;
 $function$
 
+CREATE OR REPLACE FUNCTION candidate_operations.validate_checkout_membership()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+BEGIN
+ IF candidate_operations.dish_only_label(NEW.restaurant_id,NEW.position)
+  AND NOT candidate_operations.is_dish_position(NEW.restaurant_id,NEW.position) THEN
+  RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='checkout_position_not_canonical';
+ END IF;
+ RETURN NEW;
+END;
+$function$
+
+CREATE OR REPLACE FUNCTION candidate_operations.validate_store_configuration()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+BEGIN
+ -- Routine workspace revision writes retain the already validated configuration.
+ -- Avoid enumerating timezone names for every operational command.
+ IF TG_OP='UPDATE' AND ROW(OLD.timezone,OLD.operating_departments,OLD.dish_department,OLD.dish_position,OLD.dish_aliases)
+  IS NOT DISTINCT FROM ROW(NEW.timezone,NEW.operating_departments,NEW.dish_department,NEW.dish_position,NEW.dish_aliases) THEN
+  RETURN NEW;
+ END IF;
+ IF NOT candidate_operations.configuration_timezone_valid(NEW.timezone) THEN
+  RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_store_timezone';
+ END IF;
+ IF NEW.operating_departments IS NULL OR cardinality(NEW.operating_departments) NOT BETWEEN 1 AND 16
+ OR array_ndims(NEW.operating_departments) IS DISTINCT FROM 1
+ OR EXISTS(SELECT 1 FROM unnest(NEW.operating_departments) v WHERE NOT candidate_operations.configuration_label_valid(v))
+ OR (SELECT count(DISTINCT v) FROM unnest(NEW.operating_departments) v)<>cardinality(NEW.operating_departments)
+ OR NEW.dish_department IS NULL OR NOT NEW.dish_department=ANY(NEW.operating_departments)
+ OR NOT candidate_operations.configuration_label_valid(NEW.dish_position)
+ OR NEW.dish_aliases IS NULL OR cardinality(NEW.dish_aliases) NOT BETWEEN 1 AND 64 OR array_ndims(NEW.dish_aliases) IS DISTINCT FROM 1
+ OR EXISTS(SELECT 1 FROM unnest(NEW.dish_aliases) v WHERE NOT candidate_operations.configuration_label_valid(v))
+ OR (SELECT count(DISTINCT lower(regexp_replace(btrim(v),'\s+',' ','g'))) FROM unnest(NEW.dish_aliases) v)<>cardinality(NEW.dish_aliases)
+ OR NOT EXISTS(SELECT 1 FROM unnest(NEW.dish_aliases) v WHERE lower(regexp_replace(v,'\s+',' ','g'))=lower(regexp_replace(NEW.dish_position,'\s+',' ','g'))) THEN
+  RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_store_configuration';
+ END IF;
+ IF TG_OP='UPDATE' AND ROW(OLD.timezone,OLD.operating_departments,OLD.dish_department,OLD.dish_position,OLD.dish_aliases)
+  IS DISTINCT FROM ROW(NEW.timezone,NEW.operating_departments,NEW.dish_department,NEW.dish_position,NEW.dish_aliases) THEN
+  IF OLD.timezone IS DISTINCT FROM NEW.timezone AND candidate_operations.configuration_timezone_in_use(OLD.id) THEN
+   RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='store_timezone_in_use';
+  END IF;
+  IF EXISTS(SELECT 1 FROM unnest(OLD.operating_departments) d WHERE NOT d=ANY(NEW.operating_departments)
+   AND candidate_operations.configuration_department_in_use(OLD.id,d)) THEN
+   RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='store_department_in_use';
+  END IF;
+  -- Changing role interpretation under existing people/history needs a separate explicit port.
+  IF ROW(OLD.dish_department,OLD.dish_position,OLD.dish_aliases) IS DISTINCT FROM ROW(NEW.dish_department,NEW.dish_position,NEW.dish_aliases)
+   AND (EXISTS(SELECT 1 FROM candidate_identity.memberships WHERE restaurant_id=OLD.id)
+    OR EXISTS(SELECT 1 FROM candidate_operations.shift_references WHERE restaurant_id=OLD.id)
+    OR EXISTS(SELECT 1 FROM candidate_operations.dish_cycles WHERE restaurant_id=OLD.id)
+    OR EXISTS(SELECT 1 FROM candidate_operations.station_references WHERE restaurant_id=OLD.id)) THEN
+   RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='store_role_configuration_in_use';
+  END IF;
+  NEW.revision:=greatest(OLD.revision+1,NEW.revision);
+  UPDATE candidate_operations.schedule_input_reviews SET time_off_complete=false,evidence_batch_id=NULL,reviewed_at=NULL WHERE restaurant_id=OLD.id;
+ END IF;
+ RETURN NEW;
+END;
+$function$
+
 CREATE OR REPLACE FUNCTION candidate_operations.weekly_review(p_subject text, p_member uuid, p_restaurant text, p_week text, p_selected jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -3135,7 +3318,7 @@ AS $function$
 DECLARE actor candidate_identity.memberships; week_start timestamptz; week_end timestamptz; tz text; scope_revision integer; ids uuid[]; snapshot jsonb; needs jsonb; stamp text;
 BEGIN
  SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND a.subject=p_subject;
- IF NOT FOUND OR actor.position='Dishwasher' THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
+ IF NOT FOUND OR candidate_operations.is_dish_position(actor.restaurant_id,actor.position) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
  IF p_week IS NULL OR p_week !~ '^\d{4}-\d{2}-\d{2}$' OR to_char(p_week::date,'YYYY-MM-DD')<>p_week OR jsonb_typeof(p_selected) IS DISTINCT FROM 'array' OR jsonb_array_length(p_selected) NOT BETWEEN 1 AND 100 THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_week_selection'; END IF;
  SELECT array_agg(value::uuid ORDER BY value::uuid) INTO ids FROM jsonb_array_elements_text(p_selected);
  IF cardinality(ids)<>(SELECT count(DISTINCT id) FROM unnest(ids) id) THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='duplicate_shift_selection'; END IF;

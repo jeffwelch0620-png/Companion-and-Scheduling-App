@@ -1,9 +1,10 @@
+import {fictionalStoreInsert} from './store-fixture.mjs';
 import test,{after} from 'node:test';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';import pg from 'pg';
 import {connection} from './test-config.mjs';import {PostgresDatabase} from './postgres-driver.ts';import {executeTask} from './task-adapter.ts';import {createTaskHandler} from './task-http.ts';
 import {availabilityConflict} from './runtime/closing-reference/schedule-policy.mjs';
 const admin=new pg.Pool({...connection,user:'candidate_owner',max:2}),db=new PostgresDatabase({...connection,user:'candidate_runtime',max:3});after(async()=>{await admin.end();await db.close();});
 async function fixture(){
- const scope=`availability-${randomUUID()}`;await admin.query('INSERT INTO candidate_identity.restaurants(id,name) VALUES($1,$2)',[scope,'Fictional availability']);const actors=[];
+ const scope=`availability-${randomUUID()}`;await admin.query(fictionalStoreInsert,[scope,'Fictional availability']);const actors=[];
  for(const area of ['BOH','BOH','FOH']){
   const person=randomUUID(),membershipId=randomUUID(),subject=`availability-${randomUUID()}`;
   await admin.query('INSERT INTO candidate_identity.people(id,name) VALUES($1,$2)',[person,'Fictional availability employee']);await admin.query('INSERT INTO candidate_identity.auth_links(subject,person_id) VALUES($1,$2)',[subject,person]);

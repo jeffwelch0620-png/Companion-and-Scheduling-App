@@ -1,3 +1,4 @@
+import {fictionalStoreInsert} from './store-fixture.mjs';
 import test,{after} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -18,7 +19,7 @@ async function fixture(){
  await admin.query('INSERT INTO candidate_identity.auth_links VALUES($1,$2)',[subject,person]);
  for(let i=0;i<2;i++){
   const scope='followup-'+randomUUID(),worker={subject,membershipId:randomUUID()},manager={subject:'fictional-manager-'+randomUUID(),membershipId:randomUUID()},managerPerson=randomUUID();
-  await admin.query('INSERT INTO candidate_identity.restaurants(id,name) VALUES($1,$2)',[scope,'Fictional follow-up store']);
+  await admin.query(fictionalStoreInsert,[scope,'Fictional follow-up store']);
   await admin.query('INSERT INTO candidate_identity.people VALUES($1,$2)',[managerPerson,'Fictional manager']);
   await admin.query('INSERT INTO candidate_identity.auth_links VALUES($1,$2)',[manager.subject,managerPerson]);
   for(const [a,p] of [[worker,person],[manager,managerPerson]]){
@@ -185,8 +186,9 @@ test('PR28 corrective baseline upgrades to PR29 without rewriting or losing its 
  const c=new pg.Client({...connection,database:name,user:'candidate_owner'});await c.connect();
  try{
   await c.query(`GRANT CREATE ON DATABASE "${name}" TO candidate_schema_owner`);await c.query('GRANT USAGE,CREATE ON SCHEMA public TO candidate_schema_owner');await c.query('SET ROLE candidate_schema_owner');
-  for(const file of files.filter(f=>!f.startsWith('038_')&&!f.startsWith('040_')))await c.query(await readFile(new URL(file,import.meta.url),'utf8'));
+  for(const file of files.filter(f=>Number(f.slice(0,3))<=39&&!f.startsWith('038_')))await c.query(await readFile(new URL(file,import.meta.url),'utf8'));
   for(const file of files.filter(f=>f.startsWith('038_')||f.startsWith('040_')))await c.query(await readFile(new URL(file,import.meta.url),'utf8'));
+  for(const file of files.filter(f=>Number(f.slice(0,3))>40))await c.query(await readFile(new URL(file,import.meta.url),'utf8'));
   assert.equal(await functionSnapshot(c),await readFile(new URL('schema-snapshot.sql',import.meta.url),'utf8'));
   assert.equal((await c.query("SELECT count(*)::int n FROM pg_trigger WHERE tgrelid='candidate_operations.shift_references'::regclass AND tgname='ab_check_person_shift_update'")).rows[0].n,1);
  }finally{await c.end();}

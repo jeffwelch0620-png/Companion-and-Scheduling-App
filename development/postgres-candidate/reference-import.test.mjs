@@ -1,3 +1,4 @@
+import {fictionalStoreInsert} from './store-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -10,7 +11,7 @@ async function sql(query, values=[], user='candidate_owner') {
 }
 async function fixture() {
   const restaurantId = `reference-${randomUUID()}`, memberId=randomUUID(), personId=randomUUID(), shiftId=randomUUID(), standardId=randomUUID();
-  await sql('INSERT INTO candidate_identity.restaurants(id,name) VALUES($1,$2)', [restaurantId,'Fictional import test']);
+  await sql(fictionalStoreInsert, [restaurantId,'Fictional import test']);
   return { allow: 'fictional-local-only', batchId: randomUUID(), expectedScopeRevision: 0, reviewNote: 'Fictional identity and reference review', snapshot: {
     restaurantId, members: [{ revision: 2, active: true, member: { id:'legacy-member', locationId:restaurantId, name:'Fictional Person', area:'BOH', position:'Cook', scheduleOnly:false, capabilities:['location.manage'], qualifications:['Cook'] } }],
     records: [
