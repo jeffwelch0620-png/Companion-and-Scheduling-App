@@ -17,16 +17,22 @@ async function fixture() {
 }
 const run=(f,c,a=f.manager)=>executeTask(db,a,f.scope,{requestId:randomUUID(),locationId:f.scope,...c});
 const read=(f,a=f.publisher)=>db.transaction(async c=>(await c.query('SELECT candidate_operations.read_publication_review($1,$2,$3,$4) result',[a.subject,a.membershipId,f.scope,f.draft.recordId])).rows[0].result);
-const certify=f=>admin.query("INSERT INTO candidate_operations.weekly_scope_reviews(restaurant_id,workspace_revision,evidence) SELECT id,revision,'Complete fictional UI fixture only' FROM candidate_identity.restaurants WHERE id=$1 ON CONFLICT(restaurant_id) DO UPDATE SET workspace_revision=excluded.workspace_revision",[f.scope]);
+const certify=f=>admin.query("INSERT INTO candidate_operations.weekly_scope_reviews(restaurant_id,workspace_revision,schedule_revision,evidence) SELECT r.id,r.revision,c.schedule_revision,'Complete fictional UI fixture only' FROM candidate_identity.restaurants r JOIN candidate_operations.scope_coordination c ON c.restaurant_id=r.id WHERE r.id=$1 ON CONFLICT(restaurant_id) DO UPDATE SET workspace_revision=excluded.workspace_revision,schedule_revision=excluded.schedule_revision",[f.scope]);
+
+test('closing progress preserves planning while reassignment invalidates the planning token and source review',async()=>{
+ const f=await fixture(),plan=async()=>(await admin.query('SELECT candidate_operations.weekly_review($1,$2,$3,$4,$5) result',[f.publisher.subject,f.publisher.membershipId,f.scope,'2031-04-28',JSON.stringify([f.draft.recordId])])).rows[0].result,v=await plan();await certify(f);
+ await admin.query("UPDATE candidate_operations.closes SET answers='[true]',phase='manager-confirmation',revision=revision+1 WHERE id=$1",[f.close.recordId]);assert.equal((await plan()).planningReview,v.planningReview);assert.equal((await read(f)).sourceReviewComplete,true);
+ await admin.query('UPDATE candidate_operations.closes SET manager_id=$1,revision=revision+1 WHERE id=$2',[f.publisher.membershipId,f.close.recordId]);assert.notEqual((await plan()).planningReview,v.planningReview);assert.equal((await read(f)).sourceReviewComplete,false);
+});
 test('publication-only reader gets exact active closing snapshots without gaining raw closing access',async()=>{
- const f=await fixture(),r=await read(f);assert.deepEqual(r.closing.map(c=>({id:c.id,revision:c.revision})),[{id:f.close.recordId,revision:f.close.revision}]);assert.equal(r.closing[0].managerId,f.manager.membershipId);assert.equal(r.closing[0].standard.title,'Fictional close');assert.deepEqual(r.closingIssues,[]);
+ const f=await fixture(),r=await read(f);assert.deepEqual(r.closing.map(c=>({id:c.id,revision:c.revision})),[{id:f.close.recordId,revision:f.close.revision}]);assert.equal(r.closing[0].managerId,f.manager.membershipId);assert.equal(r.closing[0].standard.title,'Fictional close');assert.deepEqual(Object.keys(r.closing[0].standard).sort(),['position','title','version']);assert.ok(r.closing[0].standardId);assert.equal(r.closing[0].standardRevision,1);assert.deepEqual(r.closingIssues,[]);
  await assert.rejects(db.transaction(c=>c.query('SELECT * FROM candidate_operations.closes',[])),e=>e.code==='42501');await assert.rejects(read(f,f.worker),e=>e.code==='42501');await assert.rejects(read(f,f.foreign),e=>e.code==='42501');
  await admin.query("UPDATE candidate_operations.closes SET phase='cancelled',revision=revision+1 WHERE id=$1",[f.close.recordId]);assert.deepEqual((await read(f)).closing,[]);
 });
 test('review shows source attestation at the current scope revision and never creates or renews it',async()=>{
  const f=await fixture();assert.equal((await read(f)).sourceReviewComplete,false);await certify(f);assert.equal((await read(f)).sourceReviewComplete,true);
  await run(f,{action:'shift.save',input:{personId:f.worker.membershipId,position:'Cook',start:'2031-05-02T13:00:00Z',end:'2031-05-02T15:00:00Z'}});assert.equal((await read(f)).sourceReviewComplete,false);
- const evidence=(await admin.query('SELECT workspace_revision FROM candidate_operations.weekly_scope_reviews WHERE restaurant_id=$1',[f.scope])).rows[0];assert.notEqual(evidence.workspace_revision,(await read(f)).workspaceRevision);
+ const evidence=(await admin.query('SELECT schedule_revision FROM candidate_operations.weekly_scope_reviews WHERE restaurant_id=$1',[f.scope])).rows[0];assert.notEqual(evidence.schedule_revision,Number((await read(f)).scheduleRevision));
 });
 test('HTTP screen review publishes only selected drafts with exact closing revisions and replayable receipts',async()=>{
  const f=await fixture(),other=await run(f,{action:'shift.save',input:{personId:f.worker.membershipId,position:'Cook',start:'2031-05-02T13:00:00Z',end:'2031-05-02T15:00:00Z'}});await certify(f);

@@ -1,6 +1,6 @@
 # Companion PostgreSQL migration readiness
 
-Accepted Companion preparation baseline: PR31, separately approved and squash-merged at `79f3bf9` from reviewed head `287ceb2`, with 519/519 merged-main CI checks passing. PR30 was previously accepted at `1428e84`. PR29 was previously accepted at `a344421` after PR28 at `0f1aa31`. Source snapshot/checklist entries below retain their historical evidence. The complete Companion app is **not ready for PostgreSQL backend cutover**. Inventory integration remains held until its tested baseline is confirmed. No hosted migration or deployment is authorized by this checklist.
+Accepted Companion preparation baseline: PR32, separately approved and squash-merged at `1b95d8e` from reviewed head `d092dca`, with 538/538 merged-main CI checks passing. PR31 was previously accepted at `79f3bf9`. PR30 was previously accepted at `1428e84`. PR29 was previously accepted at `a344421` after PR28 at `0f1aa31`. Source snapshot/checklist entries below retain their historical evidence. The complete Companion app is **not ready for PostgreSQL backend cutover**. Inventory integration remains held until its tested baseline is confirmed. No hosted migration or deployment is authorized by this checklist.
 
 The source inventory contains **39 WorkRecord kinds, 35 declared SQLite tables and 28 API route files**. These are scope counts, not a completion percentage. Several services and workflows live outside WorkRecord; one kind can have many commands. Candidate workflow tests do not prove migration of the original D1 service or all screen reads.
 
@@ -37,7 +37,7 @@ The candidate outbox is evidence that a message was queued transactionally; it i
 
 | ID | Milestone | Status and acceptance evidence |
 | --- | --- | --- |
-| M01 | Reproducible isolated candidate and Git safeguards | Accepted preparation baseline: PR31 merged at 79f3bf9, 519/519 merged-main CI checks passed; further changes use focused draft PRs |
+| M01 | Reproducible isolated candidate and Git safeguards | Accepted preparation baseline: PR32 merged at 1b95d8e, 538/538 merged-main CI checks passed; further changes use focused draft PRs |
 | M02 | Core employee task/closing/handoff/checkout behavior | Candidate complete for documented slice; production adoption still pending |
 | M03 | Explicit employee/schedule/standard mappings | Candidate complete for narrow new-reference input; no automatic identity or capability inference |
 | M04 | Atomic new-reference import and linked closing rehearsal | Candidate complete with fictional inputs; existing-reference updates and real export fixtures pending |
@@ -54,7 +54,7 @@ No production data currently needs preservation. Empty-database development perm
 
 ## Implementation order
 
-1. Baseline consolidation, coordination, authentication/offline recovery, scheduling safeguards/policies and explicit store configuration are accepted through PR31 at `79f3bf9`. Weekly publication UI is the next focused preparation package; see `STORE_CONFIGURATION_CHECKPOINT.md`. Git acceptance does not enable the candidate in either running application.
+1. Baseline consolidation, coordination, authentication/offline recovery, scheduling safeguards/policies and explicit store configuration are accepted through PR32 at `1b95d8e`. Publication review corrections are the next focused preparation package; see `STORE_CONFIGURATION_CHECKPOINT.md`. Git acceptance does not enable the candidate in either running application.
 2. Complete remaining scheduling screens and workflows: weekly publication/coverage/leadership/batch editing, copy/attendance and reviewed source ingestion completeness. Existing candidate commands are already tested; preserve timezone/DST, exact approvals and linked-work protections during UI adoption.
 3. Complete canonical employee identity/access and standards/training workflows. Keep sign-in provisioning, scheduling eligibility, dated leadership responsibility and training clearance separate.
 4. Reconcile complete workspace/history and supporting modules. Keep each module enabled only after its PostgreSQL read/write/visibility path is complete; any staged deferral must be explicit to the user before cutover.
@@ -138,3 +138,5 @@ Candidate policy definitions now read per-store operational departments and chec
 ## Weekly publication screen preparation (044)
 
 [Weekly publication UI](WEEKLY_PUBLICATION_UI_CHECKPOINT.md) connects exact selected drafts and closing snapshots, authoritative staffing-gap review, explicit confirmations and in-page retry of uncertain original submissions. Migration 044 adds read-only closing selections and current source-attestation status without granting certification or new writes. This preparation starts from accepted PR31 main `79f3bf9` and remains a separate draft; M06 and full backend cutover stay open.
+
+[Publication review follow-up](PUBLICATION_REVIEW_FOLLOWUP_CHECKPOINT.md) adds corrective 045. M06 remains partial: this draft addresses scheduling freshness, batched review and reload recovery; PR33 coverage/replacement UI is prepared separately and still needs acceptance. Real source attestation, shared authz, remaining schedule interfaces and Inventory integration remain open.

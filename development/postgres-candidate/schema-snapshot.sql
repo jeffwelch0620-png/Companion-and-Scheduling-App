@@ -1,4 +1,41 @@
 -- Generated from fresh PostgreSQL 17 candidate migrations; review evidence, not a deployment manifest.
+CREATE OR REPLACE FUNCTION candidate_operations.advance_schedule_revision()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+DECLARE before_row jsonb;after_row jsonb;keys text[];people uuid[];scope text;
+BEGIN
+ before_row:=CASE WHEN TG_OP<>'INSERT' THEN to_jsonb(OLD) END;
+ after_row:=CASE WHEN TG_OP<>'DELETE' THEN to_jsonb(NEW) END;
+ IF TG_OP='UPDATE' AND candidate_operations.schedule_input_projection(TG_TABLE_NAME,before_row)
+  IS NOT DISTINCT FROM candidate_operations.schedule_input_projection(TG_TABLE_NAME,after_row) THEN RETURN NULL; END IF;
+ keys:=ARRAY[before_row->>'restaurant_id',after_row->>'restaurant_id'];
+ IF TG_TABLE_NAME='restaurants' THEN keys:=ARRAY[before_row->>'id',after_row->>'id'];
+ ELSIF TG_TABLE_NAME='memberships' THEN people:=ARRAY[(before_row->>'person_id')::uuid,(after_row->>'person_id')::uuid];
+ ELSIF TG_TABLE_NAME IN ('time_off_references','shift_references') THEN
+  SELECT array_agg(DISTINCT person_id) INTO people FROM candidate_identity.memberships
+  WHERE id IN ((before_row->>'member_id')::uuid,(after_row->>'member_id')::uuid);
+ ELSIF TG_TABLE_NAME IN ('schedule_eligibility','membership_capabilities') THEN
+  SELECT array_agg(DISTINCT restaurant_id) INTO keys FROM candidate_identity.memberships
+  WHERE id IN ((coalesce(before_row->>'member_id',before_row->>'membership_id'))::uuid,(coalesce(after_row->>'member_id',after_row->>'membership_id'))::uuid);
+ ELSIF TG_TABLE_NAME='station_jobs' THEN
+  SELECT array_agg(DISTINCT restaurant_id) INTO keys FROM candidate_operations.station_references
+  WHERE id IN ((before_row->>'station_id')::uuid,(after_row->>'station_id')::uuid);
+ END IF;
+ -- Person-wide leave and booking changes invalidate every affected location's evidence.
+ keys:=keys||ARRAY(SELECT DISTINCT restaurant_id FROM candidate_identity.memberships WHERE person_id=ANY(people));
+ FOR scope IN SELECT DISTINCT k FROM unnest(keys) k WHERE k IS NOT NULL ORDER BY k LOOP
+  -- Preserve the existing whole-transaction 40001 retry contract; never invert row/store waits.
+  PERFORM candidate_operations.lock_scope(scope,true);
+  UPDATE candidate_operations.scope_coordination SET schedule_revision=schedule_revision+1 WHERE restaurant_id=scope;
+ END LOOP;
+ IF TG_WHEN='BEFORE' THEN RETURN OLD; END IF;
+ RETURN NULL;
+END;
+$function$
+
 CREATE OR REPLACE FUNCTION candidate_operations.assign_close(p_subject text, p_member uuid, p_restaurant text, p_request uuid, p_payload jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -2051,7 +2088,7 @@ BEGIN
  SELECT jsonb_agg(d->>'id') INTO ids FROM jsonb_array_elements(input->'drafts') d;
  review:=candidate_operations.weekly_review(p_subject,p_member,p_restaurant,input->>'weekStart',ids);
  IF jsonb_typeof(input->'planningReview') IS DISTINCT FROM 'string' OR input->>'planningReview'<>review->>'planningReview' THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='planning_review_conflict'; END IF;
- IF NOT EXISTS(SELECT 1 FROM candidate_operations.weekly_scope_reviews WHERE restaurant_id=p_restaurant AND workspace_revision=scope.revision) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='weekly_scope_review_required'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM candidate_operations.weekly_scope_reviews WHERE restaurant_id=p_restaurant AND schedule_revision=(review->>'scheduleRevision')::bigint) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='weekly_scope_review_required'; END IF;
  IF (review->>'plannedGapCount')::integer>0 THEN
   IF input->'coverageAcknowledged' IS DISTINCT FROM 'true'::jsonb OR jsonb_typeof(input->'coverageNote') IS DISTINCT FROM 'string' OR length(btrim(input->>'coverageNote')) NOT BETWEEN 1 AND 2000 THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='staffing_gap_plan_required'; END IF;
   coverage_note:=btrim(input->>'coverageNote');
@@ -2186,16 +2223,17 @@ CREATE OR REPLACE FUNCTION candidate_operations.read_publication_review(p_subjec
  STABLE SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-DECLARE actor candidate_identity.memberships; s candidate_operations.shift_references; scope_revision integer; needs jsonb; closing jsonb;
+DECLARE actor candidate_identity.memberships; s candidate_operations.shift_references; scope_revision integer; scheduling_revision bigint; needs jsonb; closing jsonb;
 BEGIN
  SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND a.subject=p_subject;
  IF NOT FOUND OR candidate_operations.is_dish_position(actor.restaurant_id,actor.position) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
  SELECT * INTO s FROM candidate_operations.shift_references WHERE id=p_shift AND restaurant_id=p_restaurant;
  IF NOT FOUND OR NOT (candidate_operations.goal_authorized(actor.id,s.department,'schedule.manage') OR candidate_operations.goal_authorized(actor.id,s.department,'schedule.publish') OR candidate_operations.goal_authorized(actor.id,s.department,'schedule.change')) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='action_denied'; END IF;
  SELECT coalesce(jsonb_agg(jsonb_build_object('id',n.id,'revision',n.revision,'status',n.status,'position',n.position,'minimum',n.minimum) ORDER BY n.id),'[]') INTO needs FROM candidate_operations.staffing_needs n WHERE n.restaurant_id=p_restaurant AND n.department=s.department AND n.starts_at<s.ends_at AND n.ends_at>s.starts_at AND (n.status='approved' OR n.status='draft' AND n.copied_from IS NOT NULL AND n.position=s.position);
- SELECT coalesce(jsonb_agg(jsonb_build_object('id',c.id,'revision',c.revision,'due',c.due,'ownerId',c.owner_id,'managerId',c.manager_id,'verifierId',c.verifier_id,'standard',c.standard_snapshot) ORDER BY c.id),'[]') INTO closing FROM candidate_operations.closes c WHERE c.restaurant_id=p_restaurant AND c.shift_id=s.id AND c.phase<>'cancelled';
+ SELECT coalesce(jsonb_agg(jsonb_build_object('id',c.id,'revision',c.revision,'due',c.due,'ownerId',c.owner_id,'managerId',c.manager_id,'verifierId',c.verifier_id,'standardId',c.standard_id,'standardRevision',c.standard_revision,'standard',jsonb_build_object('title',c.standard_snapshot->>'title','version',c.standard_snapshot->'version','position',c.standard_snapshot->>'position')) ORDER BY c.id),'[]') INTO closing FROM candidate_operations.closes c WHERE c.restaurant_id=p_restaurant AND c.shift_id=s.id AND c.phase<>'cancelled';
  SELECT revision INTO scope_revision FROM candidate_identity.restaurants WHERE id=p_restaurant;
- RETURN jsonb_build_object('shiftId',s.id,'revision',s.revision,'workspaceRevision',scope_revision,'staffing',needs,'closing',closing,'closingIssues',candidate_operations.closing_publication_issues_read(s.id,p_restaurant),'sourceReviewComplete',EXISTS(SELECT 1 FROM candidate_operations.weekly_scope_reviews WHERE restaurant_id=p_restaurant AND workspace_revision=scope_revision),'coverage','candidate-publication-review-only');
+ SELECT schedule_revision INTO scheduling_revision FROM candidate_operations.scope_coordination WHERE restaurant_id=p_restaurant;
+ RETURN jsonb_build_object('shiftId',s.id,'revision',s.revision,'workspaceRevision',scope_revision,'scheduleRevision',scheduling_revision,'staffing',needs,'closing',closing,'closingIssues',candidate_operations.closing_publication_issues_read(s.id,p_restaurant),'sourceReviewComplete',EXISTS(SELECT 1 FROM candidate_operations.weekly_scope_reviews WHERE restaurant_id=p_restaurant AND schedule_revision=scheduling_revision),'coverage','candidate-publication-review-only');
 END;
 $function$
 
@@ -2716,6 +2754,29 @@ BEGIN
 END;
 $function$
 
+CREATE OR REPLACE FUNCTION candidate_operations.schedule_input_projection(p_table text, p_row jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ IMMUTABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+DECLARE fields text[];
+BEGIN
+ IF p_row IS NULL THEN RETURN NULL; END IF;
+ CASE p_table
+ WHEN 'restaurants' THEN fields:=ARRAY['id','timezone','operating_departments','dish_department','dish_position','dish_aliases'];
+ WHEN 'memberships' THEN fields:=ARRAY['id','restaurant_id','department','position','active','schedule_only','person_id'];
+ WHEN 'schedule_eligibility' THEN fields:=ARRAY['member_id','job','source','active'];
+ WHEN 'closes' THEN
+  fields:=ARRAY['id','restaurant_id','shift_id','shift_revision','owner_id','department','standard_id','standard_revision','standard_snapshot','zone','manager_id','verifier_id','due'];
+  RETURN (SELECT jsonb_object_agg(k,p_row->k) FROM unnest(fields) k)||jsonb_build_object('cancelled',p_row->>'phase'='cancelled');
+ WHEN 'schedule_input_reviews' THEN fields:=ARRAY['restaurant_id','time_off_complete'];
+ ELSE RETURN p_row-ARRAY['updated_at'];
+ END CASE;
+ RETURN (SELECT jsonb_object_agg(k,p_row->k) FROM unnest(fields) k);
+END;
+$function$
+
 CREATE OR REPLACE FUNCTION candidate_operations.schedule_plan_allowed(p_member uuid, p_department text)
  RETURNS boolean
  LANGUAGE sql
@@ -2753,7 +2814,7 @@ BEGIN
  'capabilities',(SELECT coalesce(jsonb_agg(capability ORDER BY capability),'[]') FROM candidate_identity.membership_capabilities WHERE membership_id=actor.id AND active),
  'qualifications',(SELECT coalesce(jsonb_agg(job ORDER BY job),'[]') FROM candidate_identity.schedule_eligibility WHERE member_id=actor.id AND active AND source='qualification'),
  'scheduleJobs',(SELECT coalesce(jsonb_agg(job ORDER BY job),'[]') FROM candidate_identity.schedule_eligibility WHERE member_id=actor.id AND active AND source='schedule-job')) INTO me FROM candidate_identity.people p WHERE p.id=actor.person_id;
- RETURN jsonb_build_object('location',jsonb_build_object('id',scope.id,'name',scope.name,'timezone',scope.timezone,'revision',scope.revision,'configuration',jsonb_build_object('operatingDepartments',scope.operating_departments,'dishDepartment',scope.dish_department,'dishPosition',scope.dish_position,'dishAliases',scope.dish_aliases)),'me',me,'workspaceRevision',scope.revision);
+ RETURN jsonb_build_object('location',jsonb_build_object('id',scope.id,'name',scope.name,'timezone',scope.timezone,'revision',scope.revision,'configuration',jsonb_build_object('operatingDepartments',scope.operating_departments,'dishDepartment',scope.dish_department,'dishPosition',scope.dish_position,'dishAliases',scope.dish_aliases)),'me',me,'workspaceRevision',scope.revision,'scheduleRevision',(SELECT schedule_revision FROM candidate_operations.scope_coordination WHERE restaurant_id=p_restaurant));
 END;
 $function$
 
@@ -2764,7 +2825,7 @@ CREATE OR REPLACE FUNCTION candidate_operations.seed_scope_coordination()
  SET search_path TO 'pg_catalog'
 AS $function$
 BEGIN
- INSERT INTO candidate_operations.scope_coordination VALUES(NEW.id);
+ INSERT INTO candidate_operations.scope_coordination(restaurant_id) VALUES(NEW.id);
  RETURN NEW;
 END;
 $function$
@@ -3316,7 +3377,7 @@ CREATE OR REPLACE FUNCTION candidate_operations.weekly_review(p_subject text, p_
  STABLE SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-DECLARE actor candidate_identity.memberships; week_start timestamptz; week_end timestamptz; tz text; scope_revision integer; ids uuid[]; snapshot jsonb; needs jsonb; stamp text;
+DECLARE actor candidate_identity.memberships; week_start timestamptz; week_end timestamptz; tz text; scope_revision integer; scheduling_revision bigint; drafts jsonb; ids uuid[]; snapshot jsonb; needs jsonb; stamp text;
 BEGIN
  SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND a.subject=p_subject;
  IF NOT FOUND OR candidate_operations.is_dish_position(actor.restaurant_id,actor.position) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
@@ -3324,23 +3385,11 @@ BEGIN
  SELECT array_agg(value::uuid ORDER BY value::uuid) INTO ids FROM jsonb_array_elements_text(p_selected);
  IF cardinality(ids)<>(SELECT count(DISTINCT id) FROM unnest(ids) id) THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='duplicate_shift_selection'; END IF;
  SELECT timezone,revision INTO tz,scope_revision FROM candidate_identity.restaurants WHERE id=p_restaurant;
+ SELECT schedule_revision INTO scheduling_revision FROM candidate_operations.scope_coordination WHERE restaurant_id=p_restaurant;
  week_start:=p_week::date::timestamp AT TIME ZONE tz;week_end:=(p_week::date+7)::timestamp AT TIME ZONE tz;
  IF EXISTS(SELECT 1 FROM unnest(ids) AS sel(shift_id) WHERE NOT EXISTS(SELECT 1 FROM candidate_operations.shift_references s WHERE s.id=sel.shift_id AND s.restaurant_id=p_restaurant AND NOT s.published AND NOT s.cancelled AND s.released_at IS NULL AND s.ends_at>statement_timestamp() AND s.starts_at>=week_start AND s.starts_at<week_end AND candidate_operations.goal_authorized(actor.id,s.department,'schedule.publish'))) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='week_selection_denied'; END IF;
- -- The conservative snapshot also detects privileged fixture changes that did not advance a scope revision.
- SELECT jsonb_build_object('week',p_week,'selected',to_jsonb(ids),'workspaceRevision',scope_revision,
- 'members',(SELECT coalesce(jsonb_agg(to_jsonb(m) ORDER BY m.id),'[]') FROM candidate_identity.memberships m WHERE m.restaurant_id=p_restaurant),
- 'jobs',(SELECT coalesce(jsonb_agg(to_jsonb(e) ORDER BY e.member_id,e.job,e.source),'[]') FROM candidate_identity.schedule_eligibility e JOIN candidate_identity.memberships m ON m.id=e.member_id WHERE m.restaurant_id=p_restaurant),
- 'grants',(SELECT coalesce(jsonb_agg(to_jsonb(c) ORDER BY c.membership_id,c.capability),'[]') FROM candidate_identity.membership_capabilities c JOIN candidate_identity.memberships m ON m.id=c.membership_id WHERE m.restaurant_id=p_restaurant),
- 'shifts',(SELECT coalesce(jsonb_agg(to_jsonb(s) ORDER BY s.id),'[]') FROM candidate_operations.shift_references s WHERE s.restaurant_id=p_restaurant),
- 'needs',(SELECT coalesce(jsonb_agg(to_jsonb(n) ORDER BY n.id),'[]') FROM candidate_operations.staffing_needs n WHERE n.restaurant_id=p_restaurant),
- 'stations',(SELECT coalesce(jsonb_agg(to_jsonb(s) ORDER BY s.id),'[]') FROM candidate_operations.station_references s WHERE s.restaurant_id=p_restaurant),
- 'stationJobs',(SELECT coalesce(jsonb_agg(to_jsonb(j) ORDER BY j.station_id,j.job),'[]') FROM candidate_operations.station_jobs j JOIN candidate_operations.station_references s ON s.id=j.station_id WHERE s.restaurant_id=p_restaurant),
- 'stationMembers',(SELECT coalesce(jsonb_agg(to_jsonb(m) ORDER BY m.station_id,m.member_id),'[]') FROM candidate_operations.station_members m WHERE m.restaurant_id=p_restaurant),
- 'availability',(SELECT coalesce(jsonb_agg(to_jsonb(a) ORDER BY a.id),'[]') FROM candidate_operations.availability_references a WHERE a.restaurant_id=p_restaurant),
- 'timeOff',(SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]') FROM candidate_operations.time_off_references t JOIN candidate_identity.memberships peer ON peer.id=t.member_id WHERE EXISTS(SELECT 1 FROM candidate_identity.memberships local_member WHERE local_member.restaurant_id=p_restaurant AND local_member.person_id=peer.person_id)),
- 'closes',(SELECT coalesce(jsonb_agg(to_jsonb(c) ORDER BY c.id),'[]') FROM candidate_operations.closes c WHERE c.restaurant_id=p_restaurant),
- 'standards',(SELECT coalesce(jsonb_agg(to_jsonb(s) ORDER BY s.id),'[]') FROM candidate_operations.standard_references s WHERE s.restaurant_id=p_restaurant),
- 'leadership',(SELECT coalesce(jsonb_agg(to_jsonb(l) ORDER BY l.id),'[]') FROM candidate_operations.leadership_references l WHERE l.restaurant_id=p_restaurant)) INTO snapshot;
+ -- The private counter tracks relevant inputs, including person-wide effects and no-op rules.
+ snapshot:=jsonb_build_object('restaurant',p_restaurant,'week',p_week,'selected',to_jsonb(ids),'scheduleRevision',scheduling_revision);
  stamp:=encode(sha256(convert_to(snapshot::text,'UTF8')),'hex');
  WITH planned AS (
  SELECT s.* FROM candidate_operations.shift_references s JOIN candidate_identity.memberships m ON m.id=s.member_id WHERE s.restaurant_id=p_restaurant AND NOT s.cancelled AND (s.published OR s.id=ANY(ids)) AND s.starts_at<week_end AND s.ends_at>week_start
@@ -3357,7 +3406,9 @@ BEGIN
  gaps AS (SELECT *,CASE WHEN lag(last_at) OVER(PARTITION BY id ORDER BY first_at)=first_at AND lag(scheduled) OVER(PARTITION BY id ORDER BY first_at)=scheduled THEN 0 ELSE 1 END boundary FROM counts WHERE scheduled<minimum),
  grouped AS (SELECT *,sum(boundary) OVER(PARTITION BY id ORDER BY first_at) grp FROM gaps),
  merged AS (SELECT id,min(first_at) first_at,max(last_at) last_at,minimum,scheduled FROM grouped GROUP BY id,grp,minimum,scheduled)
- SELECT coalesce(jsonb_agg(jsonb_build_object('id',n.id,'revision',n.revision,'required',n.minimum,'gaps',coalesce((SELECT jsonb_agg(jsonb_build_object('start',g.first_at,'end',g.last_at,'required',g.minimum,'scheduled',g.scheduled) ORDER BY g.first_at) FROM merged g WHERE g.id=n.id),'[]')) ORDER BY n.id),'[]') INTO needs FROM staffing n;
- RETURN jsonb_build_object('weekStart',p_week,'period',jsonb_build_object('start',week_start,'end',week_end),'planningReview',stamp,'staffing',needs,'plannedGapCount',(SELECT coalesce(sum(jsonb_array_length(n->'gaps')),0) FROM jsonb_array_elements(needs) n),'workspaceRevision',scope_revision,'coverage','candidate-planned-staffing-gaps');
+ SELECT coalesce(jsonb_agg(jsonb_build_object('id',n.id,'revision',n.revision,'required',n.minimum,'record',jsonb_build_object('id',n.id,'kind','staffing','locationId',n.restaurant_id,'area',n.department,'ownerId',n.owner_id,'revision',n.revision,'data',jsonb_build_object('title',n.title,'position',n.position,'start',n.starts_at,'end',n.ends_at,'minimum',n.minimum,'source',n.source,'status',n.status)),'gaps',coalesce((SELECT jsonb_agg(jsonb_build_object('start',g.first_at,'end',g.last_at,'required',g.minimum,'scheduled',g.scheduled) ORDER BY g.first_at) FROM merged g WHERE g.id=n.id),'[]')) ORDER BY n.id),'[]') INTO needs FROM staffing n;
+ -- All selected details share this stable SQL snapshot; there are no per-draft HTTP reads.
+ SELECT jsonb_agg(candidate_operations.read_publication_review(p_subject,p_member,p_restaurant,id) ORDER BY id) INTO drafts FROM unnest(ids) id;
+ RETURN jsonb_build_object('weekStart',p_week,'period',jsonb_build_object('start',week_start,'end',week_end),'planningReview',stamp,'staffing',needs,'plannedGapCount',(SELECT coalesce(sum(jsonb_array_length(n->'gaps')),0) FROM jsonb_array_elements(needs) n),'workspaceRevision',scope_revision,'scheduleRevision',scheduling_revision,'drafts',drafts,'coverage','candidate-planned-staffing-gaps');
 END;
 $function$
