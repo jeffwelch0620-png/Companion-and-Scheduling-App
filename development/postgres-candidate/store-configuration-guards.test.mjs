@@ -93,19 +93,19 @@ test('label contract agrees with PostgreSQL for every forbidden whitespace codep
  assert.equal((await read(scope)).revision,0);
 });
 test('reviewed timezone vocabulary is accepted by both PostgreSQL and the preview runtime',async()=>{
- assert.ok(timezones.length>500);assert.deepEqual(timezones,[...new Set(timezones)].sort());
+ assert.ok(timezones.length>300);assert.deepEqual(timezones,[...new Set(timezones)].sort());
  const source=(await admin.query("SELECT prosrc FROM pg_proc WHERE oid='candidate_operations.configuration_timezone_valid(text)'::regprocedure")).rows[0].prosrc;
  const sqlZones=[...source.match(/ANY\(ARRAY\[(.*?)\]\)/s)[1].matchAll(/'([^']+)'/g)].map(m=>m[1]);assert.deepEqual(sqlZones,timezones);
  const catalogue=new Set((await admin.query('SELECT name FROM pg_timezone_names')).rows.map(r=>r.name));
  for(const zone of timezones){assert.equal(catalogue.has(zone),true,zone);assert.equal(isConfigurationTimezone(zone),true,zone);}
  for(const zone of ['UTC','America/Chicago','Europe/London','Asia/Kolkata'])assert.equal((await admin.query('SELECT candidate_operations.configuration_timezone_valid($1) ok',[zone])).rows[0].ok,true);
- for(const zone of ['Invalid/Place',' UTC','UTC\t','posix/America/New_York']){assert.equal(isConfigurationTimezone(zone),false);await assert.rejects(admin.query(storeSql.replace("'UTC'",'$2'),['guard-'+randomUUID(),zone]),error('invalid_store_timezone'));}
+ for(const zone of ['Invalid/Place',' UTC','UTC\t','posix/America/New_York','Africa/Asmera']){assert.equal(isConfigurationTimezone(zone),false);await assert.rejects(admin.query(storeSql.replace("'UTC'",'$2'),['guard-'+randomUUID(),zone]),error('invalid_store_timezone'));}
 });
 test('new private validators are inaccessible to candidate_runtime',async()=>{
  for(const signature of ['configuration_label_valid(text)','configuration_timezone_valid(text)','configuration_department_in_use(text,text)','configuration_timezone_in_use(text)','validate_checkout_membership()'])
   assert.equal((await admin.query("SELECT has_function_privilege('candidate_runtime',$1,'EXECUTE') ok",['candidate_operations.'+signature])).rows[0].ok,false,signature);
 });
-test('041 to 042 upgrade rejects ambiguous historical roles and whitespace without partially installing guards',async()=>{
+test('041 to 043 upgrade rejects incompatible roles, whitespace and timezone aliases atomically',async()=>{
  const database=connection.database+'_cfg_'+randomUUID().slice(0,8),root=new pg.Client({...connection,database:'postgres',user:'candidate_owner'});await root.connect();
  try{assert.match(database,/^companion_candidate_[a-z0-9_]+$/);assert.ok(database.length<64);await root.query(`CREATE DATABASE "${database}" OWNER candidate_owner`);}finally{await root.end();}
  const client=new pg.Client({...connection,database,user:'candidate_owner'});await client.connect();
@@ -122,5 +122,12 @@ test('041 to 042 upgrade rejects ambiguous historical roles and whitespace witho
   assert.equal((await client.query("SELECT to_regprocedure('candidate_operations.configuration_label_valid(text)') helper")).rows[0].helper,null);
   await client.query("UPDATE candidate_identity.restaurants SET dish_aliases=ARRAY['Steward','Steward PM'] WHERE id=$1",[whitespaceScope]);
   await client.query(migration);await assert.rejects(client.query("UPDATE candidate_identity.memberships SET position='Steward PM' WHERE id=$1",[m]),error('checkout_position_not_canonical'));
+  const oldZoneScope='guard-'+randomUUID();await client.query(storeSql.replace("'UTC'","'Etc/GMT+5'"),[oldZoneScope]);
+  const before=(await client.query("SELECT prosrc FROM pg_proc WHERE oid='candidate_operations.configuration_timezone_valid(text)'::regprocedure")).rows[0].prosrc;
+  const portable=await readFile(new URL('043_portable_store_timezones.sql',import.meta.url),'utf8');await assert.rejects(client.query(portable),error('invalid_store_timezone'));await client.query('ROLLBACK');
+  assert.equal((await client.query("SELECT prosrc FROM pg_proc WHERE oid='candidate_operations.configuration_timezone_valid(text)'::regprocedure")).rows[0].prosrc,before);
+  assert.equal((await client.query('SELECT timezone,revision FROM candidate_identity.restaurants WHERE id=$1',[oldZoneScope])).rows[0].timezone,'Etc/GMT+5');
+  await client.query("UPDATE candidate_identity.restaurants SET timezone='UTC' WHERE id=$1",[oldZoneScope]);await client.query(portable);
+  assert.equal((await client.query("SELECT candidate_operations.configuration_timezone_valid('Etc/GMT+5') ok")).rows[0].ok,false);
  }finally{await client.query('ROLLBACK');await client.end();}
 });
