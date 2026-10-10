@@ -28,6 +28,76 @@ async function waitForLock(pid){
  while(Date.now()<until){if((await admin.query("SELECT wait_event_type='Lock' waiting FROM pg_stat_activity WHERE pid=$1",[pid])).rows[0]?.waiting)return;await new Promise(r=>setTimeout(r,10));}
  throw Error('Expected database lock wait');
 }
+
+// Reviewed dispatchers may read routing metadata, but must not mutate or lock rows.
+const dispatchers={'command/5':['manager_handoff_command/5','dish_command/5','command_before_dish/5'],
+ 'publish_shift/5':['publish_shift_core/6'],'publish_shift_core/6':['publish_shift_core/8'],
+ 'save_shift/5':['change_schedule/5','save_schedule_draft/5'],
+ 'schedule_request_command/5':['schedule_consent_command/5','time_off_command/5']};
+function assertWriteCoordination(rows){
+ const key=row=>row.proname+'/'+row.pronargs,bySignature=new Map(rows.map(row=>[key(row),row]));
+ assert.equal(bySignature.size,rows.length,'Review same-arity overloaded routines explicitly');
+ function coordinated(row,seen=new Set()){
+  assert.ok(row,'Missing coordinated callee');const signature=key(row);assert.ok(!seen.has(signature),'Dispatcher cycle');seen=new Set([...seen,signature]);
+  if(!dispatchers[signature]){
+   assert.match(row.prosrc,/\bBEGIN\s+PERFORM candidate_operations\.lock_scope\(p_restaurant\);/i,signature);return;
+  }
+  assert.doesNotMatch(row.prosrc,/\b(INSERT|UPDATE|DELETE)\b|FOR\s+(UPDATE|SHARE|NO KEY UPDATE|KEY SHARE)/i,signature);
+  const calls=[...new Set([...row.prosrc.matchAll(/candidate_operations\.(\w+)\s*\(([^()]*)\)/g)].map(m=>m[1]+'/'+m[2].split(',').length))].sort();
+  assert.deepEqual(calls,[...dispatchers[signature]].sort(),signature);
+  for(const target of calls)coordinated(bySignature.get(target),seen);
+ }
+ for(const row of rows){
+  assert.doesNotMatch(row.prosrc,/restaurants[^;]*FOR\s+UPDATE/i,row.proname);
+  if(!row.runtime||row.provolatile!=='v')continue;
+  coordinated(row);
+ }
+}
+const coordinationSources=()=>admin.query(`SELECT proname,pronargs,prosrc,provolatile,
+ has_function_privilege('candidate_runtime',p.oid,'EXECUTE') runtime
+ FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+ WHERE n.nspname='candidate_operations' AND p.prokind='f'`);
+test('every runtime write path coordinates before policy/record locks, including reviewed dispatchers',async()=>{
+ const {rows}=await coordinationSources();assertWriteCoordination(rows);
+ assert.ok(rows.filter(r=>r.runtime&&r.provolatile==='v').length>=21);
+});
+test('coordination contract rejects lost helper locks, direct locks and unexpected dispatcher writes',async()=>{
+ const {rows}=await coordinationSources();
+ for(const [name,change] of [
+  ['command_before_dish',s=>s.replace('PERFORM candidate_operations.lock_scope(p_restaurant);','')],
+  ['command',s=>s+' SELECT 1 FROM candidate_identity.restaurants FOR UPDATE;'],
+  ['save_shift',s=>s+' DELETE FROM candidate_operations.tasks;']
+ ])assert.throws(()=>assertWriteCoordination(rows.map(r=>r.proname===name?{...r,prosrc:change(r.prosrc)}:r)),assert.AssertionError);
+});
+test('session insertion competing with an in-flight command retries the entire transaction with the same ID',async()=>{
+ const f=await fixture(),writing=await client('candidate_runtime'),inserting=await client(),id=randomUUID(),c=command(f);
+ try{
+  await writing.query('BEGIN');await writing.query('SELECT candidate_operations.command($1,$2,$3,$4,$5)',[f.manager.subject,f.manager.membershipId,f.scope,c.requestId,JSON.stringify(parseCommand(c,f.scope).payload)]);
+  await inserting.query('BEGIN');
+  await assert.rejects(inserting.query("INSERT INTO candidate_identity.sessions(id,subject,expires_at) VALUES($1,$2,clock_timestamp()+interval '1 hour')",[id,f.employee.subject]),e=>e.code==='40001'&&e.message==='scope_coordination_retry');
+  await assert.rejects(inserting.query('SELECT 1'),e=>e.code==='25P02');
+  await inserting.query('ROLLBACK');await writing.query('COMMIT');
+  await inserting.query('BEGIN');await inserting.query("INSERT INTO candidate_identity.sessions(id,subject,expires_at) VALUES($1,$2,clock_timestamp()+interval '1 hour')",[id,f.employee.subject]);await inserting.query('COMMIT');
+  assert.equal((await admin.query('SELECT id FROM candidate_identity.sessions WHERE id=$1',[id])).rowCount,1);
+ }finally{await cleanup(writing,inserting);}
+});
+test('policy and parent deletes coordinate; membership children restrict rather than silently cascade',async()=>{
+ const f=await fixture(),holding=await client();
+ const foreignKeys=await admin.query("SELECT confdeltype FROM pg_constraint WHERE contype='f' AND confrelid='candidate_identity.memberships'::regclass");
+ assert.ok(foreignKeys.rowCount>0);for(const fk of foreignKeys.rows)assert.notEqual(fk.confdeltype,'c','Review new cascade paths before adoption');
+ try{
+  await holding.query('BEGIN');await holding.query('SELECT candidate_operations.lock_scope($1)',[f.scope]);
+  for(const [table,column,id] of [['membership_capabilities','membership_id',f.manager.membershipId],['schedule_eligibility','member_id',f.employee.membershipId],['memberships','id',f.employee.membershipId]])
+   await assert.rejects(admin.query(`DELETE FROM candidate_identity.${table} WHERE ${column}=$1`,[id]),e=>e.code==='40001'&&e.message==='scope_coordination_retry');
+  await holding.query('ROLLBACK');
+  await assert.rejects(admin.query('DELETE FROM candidate_identity.memberships WHERE id=$1',[f.employee.membershipId]),e=>e.code==='23503');
+  await privilegedScopeTransaction(admin,[f.scope],async c=>{
+   await c.query('DELETE FROM candidate_identity.schedule_eligibility WHERE member_id=$1',[f.employee.membershipId]);
+   await c.query('DELETE FROM candidate_identity.memberships WHERE id=$1',[f.employee.membershipId]);
+  });
+  assert.equal((await admin.query('SELECT 1 FROM candidate_identity.memberships WHERE id=$1',[f.employee.membershipId])).rowCount,0);
+ }finally{await cleanup(holding);}
+});
 test('HTTP reads do not wait for Companion write coordination and allow a concurrent same-location command',async()=>{
  const f=await fixture(),holding=await client();let writer;
  try{
