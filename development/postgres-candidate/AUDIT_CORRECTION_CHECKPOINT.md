@@ -1,0 +1,23 @@
+# PR 25 audit correction checkpoint
+
+PR: https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/pull/25
+Branch: `codex/companion-candidate-consolidation`. Original consolidation head: `a637ee2`.
+
+The audit corrections remain isolated preparation. No merge, hosted application, Inventory changes or active backend switch is authorized. All published migration bytes/hashes 001–034 are preserved; 035 is a new corrective migration registered in the manifest.
+
+## Part 1 disposition
+
+1. **Done — weekly publication safety.** Replace the ambiguous nested selection with `sel.shift_id`. The private publication core now accepts and validates batch bounds and rejects out-of-week starts independently. Its old signature rejects batch use; single publication remains compatible. Tests cover mixed in/out-of-week selections, valid and forged tokens, absent bounds, legacy bypass attempts, no partial publication, and denied runtime access to both private overloads. A scan of all migration `unnest` expressions found no other matching nested-alias collision; the historical expression in 030 is preserved and superseded by 035.
+2. **Done — migration-owned runtime access.** Grant schema usage and base command/read access in 035, remove grants from test fixture setup. A separate new fictional database applies only migrations, with no actor/session fixture. It verifies effective execution access on every explicitly runtime-granted operations entry, no runtime table privileges in either candidate schema, no execution access to either private core, and direct command/read/session calls reaching validation/authorization rather than failing on missing privileges. This is not production onboarding or hosted access validation.
+3. **Done — conditional required CI.** A changes job checks the candidate plus its application, database, shared UI, package/configuration and build dependencies. Validation runs when these inputs change; an always-running `candidate-validation` gate passes only for successful validation or a deliberate unrelated-change skip. Detection/validation failures and cancellation fail the gate. Checkout and setup-node are pinned to verified upstream v4 commit IDs, and concurrency cancels superseded runs. The dependency filter is intentionally broader than the audit proposal because readiness reads database schema/API paths and previews consume build configuration and packages.
+4. **Done — isolation and documentation.** Exclude development from root lint and Tailwind scanning. Align current branch references in root README/workflow documentation and retain separate concrete merge/deployment approval. Add postgres-driver.ts to candidate strict type checking.
+
+## Validation
+
+Fresh fictional loopback bootstrap, serial regression checks, candidate types/previews and root application lint/build are required on the corrected source. The first run passed 390/391; its only failure was the historical migration manifest test still expecting 34 files. That expectation was updated for 035 and the complete suite rerun on another fresh database. The fresh rerun passed all **391** tests. Candidate types (including driver), source inventory, previews and root application build passed. Root lint reported **23 errors and 192 warnings**, with error-bearing source files unchanged from main and candidate preview exclusion verified. Existing root lint issues are retained as a separate limitation. CI outcomes are recorded in the PR on its exact pushed head.
+
+## Remaining adoption work and audit follow-up
+
+The audit's later items are tracked review proposals, not an accepted blanket implementation plan. Prioritize restaurant/global grant locks and lock ordering; non-locking read authorization; person-level cross-location scheduling; roster invalidation/recertification; operational policy for leadership self-assignment, past-shift changes and department-changing swaps; snapshot consistency; authentication/offline error classification and queue recovery; position/department/timezone configuration; deterministic pagination and durable draft retry IDs; migration ledger, recovery paths, independent handoff verification, employment status and retention.
+
+Preserve current authorization checks when replaying receipts. The trusted backend identity boundary must not be exposed as direct client RPC; real hosted identity/RLS integration remains a separate design gate. Shared authz, commissary/labor allocation and external identity crosswalk proposals require the tested Inventory baseline and schema-owner agreement. Do not assume a mandatory fresh schema rewrite or overwrite published migration history.

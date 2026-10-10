@@ -1,0 +1,11 @@
+import {connection} from './test-config.mjs';
+import pg from 'pg';import fs from 'node:fs';
+const f=JSON.parse(fs.readFileSync(new URL('runtime/checkout-preview-fixture.json',import.meta.url)));
+const pool=new pg.Pool({...connection,user:'candidate_owner'});
+const manager=f.members.find(m=>m.actor==='checkout-manager'),subject=f.sessions[manager.actor].subject;
+const close=(await pool.query('SELECT candidate_operations.read_close($1,$2,$3,$4) result',[subject,manager.id,'fictional-a',f.closeId])).rows[0].result;
+const cycle=(await pool.query('SELECT id FROM candidate_operations.dish_cycles WHERE restaurant_id=$1 AND business_date=$2',['fictional-a',f.date])).rows[0];
+const dish=(await pool.query('SELECT candidate_operations.read_dish_cycle($1,$2,$3,$4) result',[subject,manager.id,'fictional-a',cycle.id])).rows[0].result;
+const shifts=(await pool.query('SELECT id,revision,released_at FROM candidate_operations.shift_references WHERE id=ANY($1::uuid[])',[f.shifts.map(s=>s.id)])).rows;
+fs.writeFileSync(new URL('runtime/checkout-browser-database-evidence.json',import.meta.url),JSON.stringify({close,dish,shifts},null,2));
+console.log(JSON.stringify({closePhase:close.data.phase,checkouts:dish.records.filter(r=>r.data.dishCheckout).map(r=>r.data.phase),incomingWork:dish.records.filter(r=>r.data.dishHandoff).map(r=>({phase:r.data.phase,accepted:!!r.data.dishHandoff.acceptedBy})),releasedShifts:shifts.filter(s=>s.released_at).length}));await pool.end();

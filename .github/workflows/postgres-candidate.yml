@@ -1,0 +1,90 @@
+name: PostgreSQL candidate
+on:
+  pull_request:
+  push:
+    branches: [main, 'codex/**']
+permissions:
+  contents: read
+concurrency:
+  group: postgres-candidate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      required: ${{ steps.impact.outputs.required }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - id: impact
+        env:
+          CANDIDATE_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CANDIDATE_DIFF_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node development/postgres-candidate/ci-impact.mjs >> "$GITHUB_OUTPUT"
+  validate:
+    needs: changes
+    if: needs.changes.outputs.required == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: public.ecr.aws/docker/library/postgres@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3 # PostgreSQL 17; Docker verified publisher
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 127.0.0.1:55461:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      CANDIDATE_TEST_DATABASE: companion_candidate_ci
+      CANDIDATE_ALLOW_BOOTSTRAP: fictional-local-only
+      CANDIDATE_BOOTSTRAP_USER: postgres
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            development/postgres-candidate/package-lock.json
+      - name: Install project dependencies
+        run: npm ci --ignore-scripts
+      - name: Install isolated candidate dependencies
+        run: npm ci --prefix development/postgres-candidate --ignore-scripts
+      - name: Check workflow coverage inventory
+        run: node development/postgres-candidate/readiness-inventory.mjs
+      - name: Install PostgreSQL test client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Apply ordered migrations to empty candidate database
+        run: npm run bootstrap --prefix development/postgres-candidate
+      - name: Run PostgreSQL and offline-queue regression checks
+        run: npm test --prefix development/postgres-candidate
+      - name: Validate candidate TypeScript
+        run: npm run check:types --prefix development/postgres-candidate
+      - name: Build original-form previews
+        run: npm run build:preview --prefix development/postgres-candidate
+  candidate-validation:
+    needs: [changes, validate]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report validation or intentional skip
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          REQUIRED: ${{ needs.changes.outputs.required }}
+          VALIDATION_RESULT: ${{ needs.validate.result }}
+        run: |
+          if [ "$CHANGES_RESULT" != success ]; then exit 1; fi
+          if [ "$REQUIRED" = true ]; then
+            test "$VALIDATION_RESULT" = success
+          elif [ "$REQUIRED" = false ]; then
+            test "$VALIDATION_RESULT" = skipped
+            echo "No candidate dependencies changed."
+          else
+            exit 1
+          fi
