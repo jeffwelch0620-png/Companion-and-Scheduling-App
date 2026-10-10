@@ -140,6 +140,10 @@
     {
       "sha256": "8184fa9c9db684c5a7a03d881736de512133a8d71fdc85556cec9d7c2858902d",
       "file": "035_publication_runtime_safety.sql"
+    },
+    {
+      "file": "036_database_coordination.sql",
+      "sha256": "4540eba7afe3a9120cabdadbc6341b70a6fa7c2e48bf5331b6ad0624e65323ac"
     }
   ]
 }

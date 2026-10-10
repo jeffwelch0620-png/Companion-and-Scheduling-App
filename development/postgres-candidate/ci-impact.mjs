@@ -3,7 +3,7 @@ import {pathToFileURL} from 'node:url';
 // Include both candidate files and every class of source/configuration consumed by its checks.
 export function candidateAffected(paths){
  return paths.some(p=>/^(development\/|app\/|db\/|scripts\/|shared-ui\/|public\/|docs\/|\.github\/workflows\/postgres-candidate\.yml$)/.test(p)
-  || /^(package(?:-lock)?\.json|tsconfig[^/]*\.json|eslint\.config\.[^/]+|[^/]*(?:vite|vinext|postcss|tailwind)[^/]*|AGENTS\.md|README\.md)$/.test(p));
+  || /^(package(?:-lock)?\.json|tsconfig[^/]*\.json|eslint\.config\.[^/]+|[^/]*(?:vite|vinext|postcss|tailwind)[^/]*|AGENTS\.md|README\.md|\.gitattributes)$/.test(p));
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  const {CANDIDATE_DIFF_BASE:base,CANDIDATE_DIFF_HEAD:head}=process.env;

@@ -6,14 +6,17 @@ import {PostgresDatabase} from './postgres-driver.ts';
 import {executeTask,parseCommand} from './task-adapter.ts';
 import {createTaskHandler} from './task-http.ts';
 import {connection as config} from './test-config.mjs';
+import {privilegedScopeTransaction} from './privileged-scope-transaction.mjs';
 const db=new PostgresDatabase({...config,user:'candidate_runtime',max:3}),owner=new pg.Pool({...config,user:'candidate_owner',max:2});
 after(async()=>{await db.close();await owner.end();});
 const creator={subject:'manager',membershipId:'10000000-0000-0000-0000-000000000001'};
 async function member(capabilities=[],position='Cook'){
  const person=randomUUID(),membershipId=randomUUID(),subject='closing-fixture-'+randomUUID();
- await owner.query('INSERT INTO candidate_identity.people(id,name) VALUES($1,$2)',[person,'Fictional closing fixture']);await owner.query('INSERT INTO candidate_identity.auth_links(subject,person_id) VALUES($1,$2)',[subject,person]);
- await owner.query("INSERT INTO candidate_identity.memberships(id,person_id,restaurant_id,department,position) VALUES($1,$2,'fictional-a','BOH',$3)",[membershipId,person,position]);
- for(const cap of capabilities)await owner.query('INSERT INTO candidate_identity.membership_capabilities(membership_id,capability) VALUES($1,$2)',[membershipId,cap]);return {subject,membershipId};
+ return privilegedScopeTransaction(owner,['fictional-a'],async client=>{
+  await client.query('INSERT INTO candidate_identity.people(id,name) VALUES($1,$2)',[person,'Fictional closing fixture']);await client.query('INSERT INTO candidate_identity.auth_links(subject,person_id) VALUES($1,$2)',[subject,person]);
+  await client.query("INSERT INTO candidate_identity.memberships(id,person_id,restaurant_id,department,position) VALUES($1,$2,'fictional-a','BOH',$3)",[membershipId,person,position]);
+  for(const cap of capabilities)await client.query('INSERT INTO candidate_identity.membership_capabilities(membership_id,capability) VALUES($1,$2)',[membershipId,cap]);return {subject,membershipId};
+ });
 }
 async function fixture({published=true,mode='manager',leadership=true,location=false}={}){
  const worker=await member(),manager=await member(['close.confirm',...(location?['location.manage']:[])]),verifier=await member(['close.verify']);const shift=randomUUID(),standard=randomUUID();

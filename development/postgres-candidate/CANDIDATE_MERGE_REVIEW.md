@@ -2,7 +2,9 @@
 
 The isolated candidate is far enough along to begin controlled merge preparation. This means saving reviewed preparation into the Companion repository's shared baseline, not switching either running app to PostgreSQL or merging Companion into Inventory.
 
-## Current evidence
+PR 25 was subsequently approved and squash-merged as `4a15a70`, with main CI passing. PRs 1–24 are closed as superseded, with their branches/history retained. The following consolidation evidence is historical; new work starts from accepted main on a focused branch.
+
+## Historical consolidation evidence
 
 On October 9, 2026, remote `main` is `01de083`. PRs 1–23 are open drafts in a dependency chain; PR 1 targets `main`, and each later PR targets the preceding candidate branch. PR 1 reports mergeable and both of its candidate checks passed. The latest request-screen checkpoint `959836f` passed both GitHub validations and 384 fresh-database checks. The next board checkpoint adds candidate-only UI work and requires its own fresh checks. No final whole-diff review or merge has occurred.
 

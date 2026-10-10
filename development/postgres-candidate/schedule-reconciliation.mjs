@@ -32,7 +32,7 @@ export async function rehearseScheduleReconciliation({snapshot,batchId,expectedS
  const hash=createHash('sha256').update(JSON.stringify(stable({source,expectedScopeRevision,reviewNote}))).digest('hex');
  const client=new pg.Client({...connection,user:'candidate_owner'});await client.connect();
  try{
-  await client.query('BEGIN');const scope=(await client.query('SELECT revision,timezone FROM candidate_identity.restaurants WHERE id=$1 FOR UPDATE',[source.restaurantId])).rows[0];if(!scope)throw Error('restaurant_mapping_required');
+  await client.query('BEGIN');await client.query('SELECT candidate_operations.lock_scope($1)',[source.restaurantId]);const scope=(await client.query('SELECT revision,timezone FROM candidate_identity.restaurants WHERE id=$1',[source.restaurantId])).rows[0];if(!scope)throw Error('restaurant_mapping_required');
   const prior=(await client.query('SELECT source_hash,result FROM candidate_operations.schedule_reconciliation_receipts WHERE batch_id=$1',[batchId])).rows[0];
   if(prior){if(prior.source_hash!==hash)throw Error('reconciliation_batch_conflict');await client.query('COMMIT');return {...prior.result,replayed:true};}
   if(scope.revision!==expectedScopeRevision)throw Error('target_scope_revision_conflict');if(scope.timezone!==source.timezone)throw Error('timezone_conflict');
@@ -55,5 +55,5 @@ export async function rehearseScheduleReconciliation({snapshot,batchId,expectedS
   await client.query('INSERT INTO candidate_operations.schedule_reconciliation_receipts(batch_id,restaurant_id,source_hash,source_snapshot,target_time_off,review_note,expected_scope_revision,result) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[batchId,source.restaurantId,hash,JSON.stringify(source),JSON.stringify(archived),reviewNote,expectedScopeRevision,JSON.stringify(result)]);
   await client.query('INSERT INTO candidate_operations.schedule_input_reviews(restaurant_id,time_off_complete,reviewed_at,evidence_batch_id) VALUES($1,true,clock_timestamp(),$2) ON CONFLICT(restaurant_id) DO UPDATE SET time_off_complete=true,reviewed_at=excluded.reviewed_at,evidence_batch_id=excluded.evidence_batch_id',[source.restaurantId,batchId]);
   await client.query('COMMIT');return {...result,replayed:false};
- }catch(error){await client.query('ROLLBACK');throw error;}finally{await client.end();}
+ }catch(error){await client.query('ROLLBACK');if(error.code==='42501'&&error.message==='scope_denied')throw Error('restaurant_mapping_required');throw error;}finally{await client.end();}
 }
