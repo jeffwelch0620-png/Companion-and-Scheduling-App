@@ -22,6 +22,7 @@ async function fixture() {
   await admin.query("INSERT INTO candidate_identity.memberships(id,person_id,restaurant_id,department,position,schedule_only) VALUES($1,$2,$3,$4,'Cook',true)",[other,otherPerson,scope,area]);
   for(const ownerId of area==='BOH'?[id,other]:[other]) for(const published of [false,true]) {
    const record={id:randomUUID(),locationId:scope,ownerId,area,revision:3,kind:'shift',data:{personId:ownerId,position:'Cook',start:'2031-11-02T01:15:00-04:00',end:'2031-11-02T02:15:00-05:00',published,cancelled:false}};
+   if(!published){record.data.start='2031-10-26T01:15:00-04:00';record.data.end='2031-10-26T03:15:00-04:00';}
    await admin.query(`INSERT INTO candidate_operations.shift_references(id,restaurant_id,member_id,department,position,starts_at,ends_at,revision,published)
     VALUES($1,$2,$3,$4,'Cook',$5,$6,3,$7)`,[record.id,scope,ownerId,area,record.data.start,record.data.end,published]); records.push(record);
   }
@@ -48,7 +49,7 @@ test('pagination filters before page size, retains reference fields and real ins
  const f=await fixture(); await grant(f,['schedule.manage','location.manage']);
  const ids=[];let cursor=null;
  do {const page=await list(f,cursor,2); assert.equal(page.coverage,'shift-references-only');assert.equal(page.timezone,'America/New_York');
-  for(const record of page.items){ids.push(record.id);assert.equal(record.revision,3);assert.equal(Date.parse(record.data.start),Date.parse(f.records[0].data.start));assert.equal(Date.parse(record.data.end),Date.parse(f.records[0].data.end));}
+  for(const record of page.items){ids.push(record.id);assert.equal(record.revision,3);const expected=f.records.find(r=>r.id===record.id);assert.equal(Date.parse(record.data.start),Date.parse(expected.data.start));assert.equal(Date.parse(record.data.end),Date.parse(expected.data.end));}
   cursor=page.nextCursor;
  }while(cursor);
  assert.deepEqual(ids,f.records.map(r=>r.id).sort()); assert.equal(new Set(ids).size,6);

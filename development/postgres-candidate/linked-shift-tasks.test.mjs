@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {test,after} from 'node:test';
+import {test,after,beforeEach} from 'node:test';
 import {randomUUID} from 'node:crypto';
 import pg from 'pg';
 import {PostgresDatabase} from './postgres-driver.ts';
@@ -8,7 +8,9 @@ import {canManageClosing} from './runtime/closing-reference/closing-access.mjs';
 import {connection as config} from './test-config.mjs';
 const db=new PostgresDatabase({...config,user:'candidate_runtime',max:3}),owner=new pg.Pool({...config,user:'candidate_owner',max:2});
 after(async()=>{await db.close();await owner.end();});
-const manager={subject:'manager',membershipId:'10000000-0000-0000-0000-000000000001'},employee={subject:'employee',membershipId:'10000000-0000-0000-0000-000000000002'},peer={subject:'peer',membershipId:'10000000-0000-0000-0000-000000000003'};
+const manager={subject:'manager',membershipId:'10000000-0000-0000-0000-000000000001'};
+let employee,peer;
+beforeEach(async()=>{employee=await member();peer=await member();});
 async function member(capabilities=[],department='BOH',restaurant='fictional-a'){
  const person=randomUUID(),membershipId=randomUUID(),subject='shift-fixture-'+randomUUID();
  await owner.query('INSERT INTO candidate_identity.people(id,name) VALUES($1,$2)',[person,'Fictional shift fixture']);await owner.query('INSERT INTO candidate_identity.auth_links(subject,person_id) VALUES($1,$2)',[subject,person]);
@@ -41,7 +43,10 @@ test('due range is inclusive and compared as instants across timezone offsets',a
  for(const due of ['2026-10-09T11:59:59-04:00','2026-10-09T20:00:01-04:00'])await assert.rejects(run(manager,create(reference,employee,due)),denied(403));
 });
 test('assignment rejects unpublished, cancelled, released, mismatched and dedicated dishwasher shifts',async()=>{
- for(const options of [{published:false},{cancelled:true},{released:'2026-10-09T15:00:00Z'},{member:peer.membershipId},{department:'FOH'},{position:'Dishwasher'}])await assert.rejects(run(manager,create(await shift(options))),denied(403));
+ for(const options of [{published:false},{cancelled:true},{released:'2026-10-09T15:00:00Z'},{member:peer.membershipId},{department:'FOH'},{position:'Dishwasher'}]){
+  const reference=await shift(options);await assert.rejects(run(manager,create(reference)),denied(403));
+  await owner.query('DELETE FROM candidate_operations.shift_references WHERE id=$1',[reference.id]);
+ }
  const foreign=await member([],'BOH','fictional-b');await assert.rejects(run(manager,create(await shift({restaurant:'fictional-b',member:foreign.membershipId}))),denied(403));
 });
 test('operations-store grant covers linked FOH work without widening ordinary FOH tasks',async()=>{
