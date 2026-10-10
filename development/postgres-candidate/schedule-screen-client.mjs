@@ -1,4 +1,4 @@
-import {configuredLocation} from './ui-store-configuration.mjs';
+import {configuredLocation,assertCanonicalCheckoutMembership} from './ui-store-configuration.mjs';
 // Isolated request-screen client. Partial reads never become a displayed workspace.
 export async function loadScheduleScreen(call) {
  for(let attempt=0;attempt<3;attempt++) {
@@ -20,6 +20,7 @@ export async function loadScheduleScreen(call) {
   const last=await call('/schedule-viewer');
   if(last.status!==200)throw Error('Scheduling access changed. Reload to continue.');
   if(changed||JSON.stringify(last.body)!==JSON.stringify(viewer))continue;
+  for(const member of [...sets.roster,viewer.me])assertCanonicalCheckoutMembership({location:viewer.location},member);
   const stations=sets.stations.map(r=>({...r,data:{...r.data,...(r.data.setup?{setup:{...r.data.setup,standardIds:r.data.setup.standardIds??[],goals:r.data.setup.goals??[]}}:{})}}));
   return {location:viewer.location,me:viewer.me,members:sets.roster.map(m=>({...m,capabilities:m.id===viewer.me.id?viewer.me.capabilities:[]})),records:[...sets.availability,...sets.requests,...sets.shifts,...stations]};
  }

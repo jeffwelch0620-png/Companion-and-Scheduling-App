@@ -23,6 +23,14 @@ The initial foundation PR contains the accumulated, interdependent candidate mig
 
 The `candidate-validation` GitHub check installs an empty fictional PostgreSQL database, applies all ordered candidate migrations, runs regression tests, checks adapter types and builds original-form previews. It does not deploy anything. Local test results and historical browser checks are documented separately from GitHub CI results.
 
+## Candidate UI source gate
+
+The required `candidate-validation` check runs the source-copy gate during candidate test preparation and preview builds. `ui-source-baseline.json` fingerprints only the three copied shared components (`schedule-board`, `shift-editor`, `dish-checkouts`) plus the body of `dishCheckoutCycleStatus` from `app/shared/domain.ts`. Unrelated domain changes do not require renewing that fingerprint.
+
+If an application PR changes one of these sources and the gate fails, its author must review and reconcile the candidate copy with the changed original, run the relevant rendered regression/type/preview checks, and update the corresponding baseline fingerprint in the **same PR**. The required check blocks until that reconciliation is complete. Updating a hash without reconciling its copy is not a resolution. Preserve unrelated fingerprints and do not disable the gate to pass CI.
+
+During shared/PostgreSQL UI adoption, fold the reviewed configuration changes into the original `app/team/*` components and `domain.ts`, validate the unified implementation, then delete the copied `ui-*` components/projection and their baseline file, checker and build/test hooks. Track this retirement in the migration readiness checklist.
+
 ## Inventory handoff and merge
 
 When Inventory's existing merge is complete, record its tested commit and create an integration branch in that repository from that exact baseline. Bring in selected, reviewed Companion components in stages: shared identity and permissions, employee operational workflows, then Inventory prep/food service connections. Preserve canonical Inventory catalogs and stock writers. Reconcile schema ownership and use one reviewed deployment manifest.

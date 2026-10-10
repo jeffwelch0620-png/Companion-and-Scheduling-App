@@ -1,14 +1,16 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import React from 'react';import {renderToStaticMarkup} from 'react-dom/server';
-import {configuredLocation,isCheckoutPosition,isCheckoutLabel,checkoutPeople,operationsManager,departmentOrder} from './ui-store-configuration.mjs';
+import {configuredLocation,assertCanonicalCheckoutMembership,isCheckoutPosition,isCheckoutLabel,checkoutPeople,operationsManager,departmentOrder} from './ui-store-configuration.mjs';
 import {stationAssignmentIssue,selectableStations} from './runtime/ui-reference/ui-station-assignment.mjs';
 import {dishCheckoutCycleStatus} from './runtime/ui-reference/ui-checkout-cycle-status.mjs';
 import {DishCheckoutCycles,DishCheckoutDetail} from './runtime/ui-reference/ui-dish-checkouts.mjs';
 import {ScheduleBoard} from './runtime/ui-reference/ui-schedule-board.mjs';
 import {ShiftEditor} from './runtime/ui-reference/ui-shift-editor.mjs';
 import {loadScheduleScreen} from './schedule-screen-client.mjs';
+import whitespace from './configuration-whitespace.json' with {type:'json'};
+import timezones from './store-timezones.json' with {type:'json'};
 const member=(id,position='Cook',area='Kitchen',capabilities=[])=>({id,name:id,position,area,capabilities,locationId:'configured',qualifications:[],scheduleJobs:[position]});
-const workspace=()=>({location:{id:'configured',name:'Configured fictional store',revision:1,timezone:'Europe/London',configuration:{operatingDepartments:['Service','Kitchen'],dishDepartment:'Kitchen',dishPosition:'Steward',dishAliases:['Steward','Steward PM']}},me:member('manager','Manager','Kitchen',['tasks.manage','schedule.manage']),members:[member('AM','Steward'),member('PM1','Steward'),member('PM2','Steward'),member('alias','Steward PM'),member('ordinary','Dishwasher'),{...member('no-login','Steward'),scheduleOnly:true},member('foreign','Steward','Service')],records:[]});
+const workspace=()=>({location:{id:'configured',name:'Configured fictional store',revision:1,timezone:'Europe/London',configuration:{operatingDepartments:['Service','Kitchen'],dishDepartment:'Kitchen',dishPosition:'Steward',dishAliases:['Steward','Steward PM']}},me:member('manager','Manager','Kitchen',['tasks.manage','schedule.manage']),members:[member('AM','Steward'),member('PM1','Steward'),member('PM2','Steward'),member('mixed','Steward / Prep'),member('ordinary','Dishwasher'),{...member('no-login','Steward'),scheduleOnly:true},member('foreign','Steward','Service')],records:[]});
 const render=(component,props)=>renderToStaticMarkup(React.createElement(component,props));
 const inert=()=>{};
 test('configuration requires explicit valid timezone and store mapping without fallback',()=>{
@@ -19,7 +21,7 @@ test('primary checkout role remains exact while explicit station aliases normali
  const w=workspace();assert.equal(isCheckoutPosition(w,'Steward'),true);assert.equal(isCheckoutPosition(w,'steward'),false);assert.equal(isCheckoutPosition(w,'Steward PM'),false);
  assert.equal(isCheckoutLabel(w,'STEWARD   PM'),true);assert.equal(isCheckoutLabel(w,'  Steward PM  '),true);for(const job of ['Dishwasher','Dish','Steward / Prep','\tSteward'])assert.equal(isCheckoutLabel(w,job),false);
 });
-test('checkout selector excludes aliases, other departments, schedule-only and foreign-store members',()=>{
+test('checkout selector excludes unrelated positions, other departments, schedule-only and foreign-store members',()=>{
  const w=workspace();w.members.push({...member('other-store','Steward'),locationId:'other'});assert.deepEqual(checkoutPeople(w).map(m=>m.id),['AM','PM1','PM2']);
 });
 test('configured names grant no management access and store operations retain capability and department scope',()=>{
@@ -63,4 +65,29 @@ test('shift editor interprets saved shift clocks using the supplied store timezo
 });
 test('schedule loader rejects absent configuration before reading any records',async()=>{
  let calls=0;await assert.rejects(loadScheduleScreen(async()=>{calls++;return {status:200,body:{location:{id:'configured',revision:1,timezone:'UTC'}}};}),/configuration/);assert.equal(calls,1);
+});
+test('UI rejects ambiguous primary checkout aliases instead of silently excluding them or granting manager controls',()=>{
+ const w=workspace();for(const position of ['steward','Steward PM',' Steward ','steward   PM','Steward\tPM']){
+  const alias=member('ambiguous',position,'Kitchen',['tasks.manage','location.manage']);assert.throws(()=>assertCanonicalCheckoutMembership(w,alias),/roster correction/);
+  assert.throws(()=>checkoutPeople({...w,members:[alias]}),/roster correction/);assert.throws(()=>operationsManager(w,alias),/roster correction/);
+ }
+ for(const position of ['Steward','Dishwasher','Steward / Prep'])assert.doesNotThrow(()=>assertCanonicalCheckoutMembership(w,member('valid',position)));
+ const legacy={location:{...w.location,configuration:{...w.location.configuration,dishPosition:'Dishwasher',dishAliases:['Dishwasher','Dish PM']}}};
+ for(const position of ['dishwasher','Dish PM','  Dishwasher  '])assert.throws(()=>assertCanonicalCheckoutMembership(legacy,member('alias',position)),/roster correction/);
+ assert.doesNotThrow(()=>assertCanonicalCheckoutMembership(w,{...member('foreign','Steward PM'),locationId:'other'}));
+});
+test('UI configuration forbids non-space whitespace and matches PostgreSQL Unicode codepoint lengths',()=>{
+ const w=workspace();for(const code of whitespace){const label='Extra'+String.fromCodePoint(code);
+  for(const configuration of [{...w.location.configuration,operatingDepartments:['Kitchen',label]},{...w.location.configuration,dishAliases:['Steward',label]},{...w.location.configuration,dishPosition:label,dishAliases:[label]}])assert.throws(()=>configuredLocation({...w.location,configuration}),/configuration/);
+ }
+ const configure=label=>({...w.location,configuration:{...w.location.configuration,dishPosition:label,dishAliases:[label]}});
+ assert.doesNotThrow(()=>configuredLocation(configure('😀'.repeat(100))));assert.throws(()=>configuredLocation(configure('😀'.repeat(101))),/configuration/);
+});
+test('UI accepts the reviewed timezone contract and refuses unsupported or padded names',()=>{
+ const w=workspace();for(const timezone of timezones)assert.doesNotThrow(()=>configuredLocation({...w.location,timezone}));
+ for(const timezone of ['posix/America/New_York','localtime',' UTC','UTC\t'])assert.throws(()=>configuredLocation({...w.location,timezone}),/configuration|timezone/);
+});
+test('schedule loader fails closed when its scoped roster contains a noncanonical checkout membership',async()=>{
+ const w=workspace(),viewer={location:w.location,me:w.me,workspaceRevision:1};
+ await assert.rejects(loadScheduleScreen(async path=>({status:200,body:path==='/schedule-viewer'?viewer:{workspaceRevision:1,items:path.startsWith('/schedule-roster')?[member('alias','Steward PM')]:[],nextCursor:null}})),/roster correction/);
 });

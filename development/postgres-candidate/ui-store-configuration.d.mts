@@ -5,6 +5,7 @@ export function configuredLocation(location:unknown):ConfiguredLocation;
 export function storeConfiguration(w:{location:unknown}):StoreConfiguration;
 export function isCheckoutPosition(w:{location:unknown},position:string):boolean;
 export function isCheckoutLabel(w:{location:unknown},value:string):boolean;
+export function assertCanonicalCheckoutMembership(w:{location:unknown},member:Pick<Member,'locationId'|'position'>):void;
 export function checkoutPeople(w:Workspace):Member[];
 export function operationsManager(w:Workspace,member:Member,area?:string):boolean;
 export function departmentOrder(w:{location:unknown},area:string):number;

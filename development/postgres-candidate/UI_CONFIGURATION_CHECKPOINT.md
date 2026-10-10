@@ -1,6 +1,6 @@
 # Store configuration in candidate forms
 
-This dependent preparation starts at PR30 head `9a319c6`, on top of accepted PR29 main `a344421`. PR30 is a draft dependency, not an accepted baseline. Both packages require separate review and merge approval. Inventory integration still requires its tested baseline commit.
+This dependent preparation tracks PR30 follow-up head `56cd02b`, on top of accepted PR29 main `a344421`. PR30 is a draft dependency, not an accepted baseline. Both packages require separate review and merge approval. Inventory integration still requires its tested baseline commit.
 
 ## Scope and policy
 
@@ -8,19 +8,31 @@ Candidate schedule board, individual shift editor, station choices and employee 
 
 Primary checkout membership remains an exact job comparison. Station exclusions use only the current store's explicit case/whitespace-normalized aliases. Alias membership does not make someone eligible for primary checkout assignment. Mixed jobs and old English labels keep their actual meaning at each store. Person selection also requires this store, its configured checkout department, and sign-in access. Management checks preserve existing capabilities and department scope; configuration names grant nothing. Complete checkout status still requires the original three participants, independent manager checks and every linked incoming acknowledgment/check.
 
-Schedule department ordering follows the configured list. Job labels remain unchanged and displayed shift clocks use the actual store timezone. Command IDs, revisions, uncertain-delivery recovery and authoritative database checks retain their existing contract. This package adds no commands or database migration. Published migrations 001–041, their manifest and function snapshot are unchanged.
+Schedule department ordering follows the configured list. Job labels remain unchanged and displayed shift clocks use the actual store timezone. Command IDs, revisions, uncertain-delivery recovery and authoritative database checks retain their existing contract. This UI package adds no commands or additional migration beyond PR30's corrective 042–043 dependency. Published 001–041 stay unchanged; the manifest and function snapshot include 042–043 from that dependency.
 
 ## Isolation and source maintenance
 
-The active app source and backend are unchanged. Small candidate derivatives of `schedule-board.tsx`, `shift-editor.tsx`, `dish-checkouts.tsx`, and the checkout-cycle projection in `domain.ts` provide reviewable configuration-aware forms. Other helpers and styles continue to be imported from shared source. `ui-source-baseline.json` pins the LF-normalized source hashes; both test preparation and preview builds fail if that source changes, requiring an explicit review of the derivatives. There is no runtime text rewriting of the forms.
+The active app source and backend are unchanged. Small candidate derivatives of `schedule-board.tsx`, `shift-editor.tsx`, `dish-checkouts.tsx`, and the checkout-cycle projection in `domain.ts` provide reviewable configuration-aware forms. Other helpers and styles continue to be imported from shared source. `ui-source-baseline.json` pins the LF-normalized hashes of the three copied components and checkout projection body; test preparation and preview builds fail when those guarded inputs change, requiring reconciliation of the derivatives. There is no runtime text rewriting of the forms.
 
 `build-ui-reference.mjs` compiles those actual candidate components into ignored runtime output for rendered regression checks. It does not alter the original shared-module references used by existing parity tests. Candidate UI type checking includes the existing Cloudflare declarations needed by shared data types and runs as part of `check:types`.
 
 Fictional scheduling now uses Service/Kitchen departments and America/Chicago. Fictional checkout uses Service/Kitchen, Steward/Steward PM and Europe/London in a separate restaurant. Neither seed renames or remaps a store with existing history. Runtime fixture sessions and build outputs stay ignored.
 
+## Follow-up source gate and copy retirement
+
+The baseline now fingerprints only `app/team/schedule-board.tsx`, `shift-editor.tsx` and `dish-checkouts.tsx` in full, plus the TypeScript-parsed **body** of `dishCheckoutCycleStatus` in `app/shared/domain.ts`. Other domain implementations and surrounding comments do not invalidate that copied projection. Missing/duplicate/bodyless projection definitions fail closed. LF normalization remains portable. The required `candidate-validation` check enforces the gate through both test preparation and preview builds.
+
+When an app PR changes a guarded source, its author must reconcile the candidate derivative with the original, run affected rendered regressions/types/previews, and update that source's entry in `ui-source-baseline.json` in the same PR. The required check remains blocked until this is done. Do not merely renew a fingerprint or disable the gate. See [Git workflow](../../docs/GIT_WORKFLOW.md).
+
+Before adopting the shared or PostgreSQL UI, fold these configuration changes into the original `app/team/*` components and `domain.ts`, test the unified forms, then delete the copied `ui-*` components/projection and retire `ui-source-baseline.json`, its checker/tests and build hooks. This is an explicit tracked readiness item, not a permanent second UI implementation.
+
+The UI now shares 042–043's whitespace, Unicode codepoint-length and reviewed timezone contract. Scoped primary membership aliases stop roster/checkout loading with a correction message; they are not silently rewritten or granted ordinary management access. Exact primary titles and unrelated titles retain their store-specific meaning. Checkout's IndexedDB queue name derives from its `jmax-fictional-checkout-config-v2` prefix, so older fictional queues are not shown by this preview. No prior database is deleted.
+
 ## Evidence and remaining work
 
-Thirteen new checks cover explicit metadata, primary/alias distinctions, scoped employee choices, narrow permissions, station restrictions, independent checkout completion, rendered manager/employee forms, neutral handoff labels, actual timezone clocks, department ordering and configuration rejection before reads. Fresh-database, complete regression, types, preview and browser results are recorded in the PR after validation.
+Follow-up local validation on 2026-10-10 repeated **33/33** focused UI, rendered-form, loader and source-gate cases after taking PR30's 042–043 correction. Backend/UI types, preview build, readiness inventory and the matching fresh 001–043 function snapshot passed. All three fictional preview seeds succeeded on `companion_candidate_portable1`, including the configured checkout and scheduling stores with canonical primary positions. Six source-gate checks and four new configuration/canonical-roster cases supplement the initial thirteen UI cases and ten loader cases. No new live browser exercise was performed in this follow-up; prior browser results below remain historical. The final full 519-case suite is verified separately in exact-head CI. Both PRs remain draft, with no main merge, hosted application or Inventory changes.
+
+The initial thirteen UI checks cover explicit metadata, primary/alias distinctions, scoped employee choices, narrow permissions, station restrictions, independent checkout completion, rendered manager/employee forms, neutral handoff labels, actual timezone clocks, department ordering and configuration rejection before reads. Fresh-database, complete regression, types, preview and browser results are recorded in the PR after validation.
 
 Local validation on 2026-10-10 applied all 41 unchanged migrations to `companion_candidate_uiconfig1` and passed 481/481 serial regression checks. Candidate backend/UI types, matching function snapshot, source inventory and preview build passed. Final focused form/loader checks are repeated after preview fixes; exact-head CI is verified separately. A second fresh database, `companion_candidate_uipreview2`, successfully seeded the custom fixtures for browser exercise. No databases were reset or dropped.
 
