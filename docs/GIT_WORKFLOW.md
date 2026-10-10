@@ -1,6 +1,6 @@
 # Git workflow for Companion and Inventory integration
 
-The Companion repository keeps reviewed source on `main`. PostgreSQL preparation uses focused `codex/` branches from accepted main at `a344421` (PR29). PR28 was squash-merged at `0f1aa31`; PR29 was separately approved and squash-merged at `a344421`, with 457/457 post-merge tests and CI passing. Inventory's merge is complete and its baseline is undergoing testing. Integration remains separate until the user confirms its tested baseline commit. Pushing saves versioned source remotely. Merging updates a shared baseline. Deployment and database application require a separate, explicit step.
+The Companion repository keeps reviewed source on `main`. PostgreSQL preparation uses focused `codex/` branches from accepted main at `1428e84` (PR30). PR28 was squash-merged at `0f1aa31`; PR29 was separately approved and squash-merged at `a344421`, with 457/457 post-merge tests and CI passing. Inventory's merge is complete and its baseline is undergoing testing. Integration remains separate until the user confirms its tested baseline commit. Pushing saves versioned source remotely. Merging updates a shared baseline. Deployment and database application require a separate, explicit step.
 
 ## Routine development
 
@@ -13,13 +13,23 @@ The Companion repository keeps reviewed source on `main`. PostgreSQL preparation
 
 ## Candidate package
 
-PR26 database coordination was accepted by squash merge at `14e9193`; PR27 authentication/offline recovery was accepted at `2193afc`, with 426 post-merge tests passing. PR28 adds person-level cross-location conflicts and whole-store roster-review regression coverage, with 439 tests and exact-head CI passing; PR28 was accepted by squash merge at `0f1aa31`. PR29 accepted the scheduling policies and corrections at `a344421`, with 457/457 post-merge tests and CI passing. New readiness work starts from that accepted main and remains a draft until separately approved. Keep dependent drafts based on their dependency until accepted, then merge updated main normally and retarget. Do not treat a dependent branch as an accepted baseline.
+PR26 database coordination was accepted by squash merge at `14e9193`; PR27 authentication/offline recovery was accepted at `2193afc`, with 426 post-merge tests passing. PR28 adds person-level cross-location conflicts and whole-store roster-review regression coverage, with 439 tests and exact-head CI passing; PR28 was accepted by squash merge at `0f1aa31`. PR29 accepted the scheduling policies and corrections at `a344421`, with 457/457 post-merge tests and CI passing. PR30 store configuration was separately approved and squash-merged at `1428e84` from reviewed head `56cd02b`, whose exact-head CI passed 496/496 cases. New readiness work starts from the current accepted main and remains a draft until separately approved. Keep dependent drafts based on their dependency until accepted, then merge updated main normally and retarget. Do not treat a dependent branch as an accepted baseline.
+
+PR31 candidate form configuration adoption incorporates accepted PR30 main `1428e84` through a normal merge without force-pushing and targets `main`. Preserve its configured preview fixtures when reconciling dependency conflicts. Repeat fresh-database regressions, snapshot comparison, types and preview build after refresh. PR31 stays draft and unmerged until its separate merge approval.
 
 `development/postgres-candidate` is the tracked, isolated migration source. It is not imported by the running application. The `work/` folder remains ignored for private working files; the earlier local candidate is historical evidence, not the source for new changes. Do not develop competing copies. Candidate runtime data is always ignored.
 
 The initial foundation PR contains the accumulated, interdependent candidate migrations. Subsequent changes should use smaller PRs around individual workflows or contracts. Keep migration numbers and order stable once shared; add corrective migrations instead of rewriting shared/applied migration history. Candidate migrations are not automatically adopted into Inventory's deployment manifest.
 
 The `candidate-validation` GitHub check installs an empty fictional PostgreSQL database, applies all ordered candidate migrations, runs regression tests, checks adapter types and builds original-form previews. It does not deploy anything. Local test results and historical browser checks are documented separately from GitHub CI results.
+
+## Candidate UI source gate
+
+The required `candidate-validation` check runs the source-copy gate during candidate test preparation and preview builds. `ui-source-baseline.json` fingerprints only the three copied shared components (`schedule-board`, `shift-editor`, `dish-checkouts`) plus the body of `dishCheckoutCycleStatus` from `app/shared/domain.ts`. Unrelated domain changes do not require renewing that fingerprint.
+
+If an application PR changes one of these sources and the gate fails, its author must review and reconcile the candidate copy with the changed original, run the relevant rendered regression/type/preview checks, and update the corresponding baseline fingerprint in the **same PR**. The required check blocks until that reconciliation is complete. Updating a hash without reconciling its copy is not a resolution. Preserve unrelated fingerprints and do not disable the gate to pass CI.
+
+During shared/PostgreSQL UI adoption, fold the reviewed configuration changes into the original `app/team/*` components and `domain.ts`, validate the unified implementation, then delete the copied `ui-*` components/projection and their baseline file, checker and build/test hooks. Track this retirement in the migration readiness checklist.
 
 ## Inventory handoff and merge
 

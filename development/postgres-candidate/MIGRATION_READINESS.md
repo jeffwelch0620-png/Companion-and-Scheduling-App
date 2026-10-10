@@ -1,6 +1,6 @@
 # Companion PostgreSQL migration readiness
 
-Accepted Companion preparation baseline: PR29, squash-merged at `a344421`, with 457/457 post-merge checks and CI passing after PR28 at `0f1aa31`. Source snapshot/checklist entries below retain their historical evidence. The complete Companion app is **not ready for PostgreSQL backend cutover**. Inventory integration remains held until its tested baseline is confirmed. No hosted migration or deployment is authorized by this checklist.
+Accepted Companion preparation baseline: PR30, separately approved and squash-merged at `1428e84` from reviewed head `56cd02b` with 496/496 exact-head CI checks passing. PR29 was previously accepted at `a344421` after PR28 at `0f1aa31`. Source snapshot/checklist entries below retain their historical evidence. The complete Companion app is **not ready for PostgreSQL backend cutover**. Inventory integration remains held until its tested baseline is confirmed. No hosted migration or deployment is authorized by this checklist.
 
 The source inventory contains **39 WorkRecord kinds, 35 declared SQLite tables and 28 API route files**. These are scope counts, not a completion percentage. Several services and workflows live outside WorkRecord; one kind can have many commands. Candidate workflow tests do not prove migration of the original D1 service or all screen reads.
 
@@ -37,7 +37,7 @@ The candidate outbox is evidence that a message was queued transactionally; it i
 
 | ID | Milestone | Status and acceptance evidence |
 | --- | --- | --- |
-| M01 | Reproducible isolated candidate and Git safeguards | Accepted preparation baseline: PR29 merged at a344421, 457/457 checks and main CI passed; further changes use focused draft PRs |
+| M01 | Reproducible isolated candidate and Git safeguards | Accepted preparation baseline: PR30 merged at 1428e84, reviewed head passed 496/496 exact-head CI checks; further changes use focused draft PRs |
 | M02 | Core employee task/closing/handoff/checkout behavior | Candidate complete for documented slice; production adoption still pending |
 | M03 | Explicit employee/schedule/standard mappings | Candidate complete for narrow new-reference input; no automatic identity or capability inference |
 | M04 | Atomic new-reference import and linked closing rehearsal | Candidate complete with fictional inputs; existing-reference updates and real export fixtures pending |
@@ -54,7 +54,7 @@ No production data currently needs preservation. Empty-database development perm
 
 ## Implementation order
 
-1. Baseline consolidation, coordination, authentication/offline recovery and scheduling safeguards/policies are accepted through PR29 at `a344421`. Explicit store configuration is the next focused candidate readiness PR; see `STORE_CONFIGURATION_CHECKPOINT.md`. Git acceptance does not enable the candidate in either running application.
+1. Baseline consolidation, coordination, authentication/offline recovery, scheduling safeguards/policies and explicit store configuration are accepted through PR30 at `1428e84`. Configuration-aware UI preparation in PR31 remains draft pending separate approval; see `STORE_CONFIGURATION_CHECKPOINT.md`. Git acceptance does not enable the candidate in either running application.
 2. Complete remaining scheduling screens and workflows: weekly publication/coverage/leadership/batch editing, copy/attendance and reviewed source ingestion completeness. Existing candidate commands are already tested; preserve timezone/DST, exact approvals and linked-work protections during UI adoption.
 3. Complete canonical employee identity/access and standards/training workflows. Keep sign-in provisioning, scheduling eligibility, dated leadership responsibility and training clearance separate.
 4. Reconcile complete workspace/history and supporting modules. Keep each module enabled only after its PostgreSQL read/write/visibility path is complete; any staged deferral must be explicit to the user before cutover.
@@ -127,6 +127,10 @@ Keep open: optional leadership self-assignment awareness and original-department
 
 PR28 was accepted on 2026-10-10 at main `0f1aa31`. PR29 incorporated accepted main normally, was separately approved and accepted at `a344421`, with 457/457 post-merge checks and CI passing. Inventory integration still waits for the tested Inventory commit.
 
-## Explicit store configuration preparation (041)
+## Explicit store configuration preparation (041–043)
 
-Candidate policy definitions now read per-store operational departments and checkout job mappings, with an explicit validated timezone required for new stores. 041 preserves existing candidate mappings once without installing provisioning defaults. Relevant configuration changes advance the workspace revision and invalidate reviewed schedule inputs; role reinterpretation under existing people/history is held for a separate explicit migration. See [configuration checkpoint](STORE_CONFIGURATION_CHECKPOINT.md). Full original UI/service adoption, real provisioning and shared-authz identity remain open.
+Candidate policy definitions now read per-store operational departments and checkout job mappings, with an explicit validated timezone required for new stores. 041 preserves existing candidate mappings once without installing provisioning defaults. Relevant configuration changes advance the workspace revision and invalidate reviewed schedule inputs; role reinterpretation under existing people/history is held for a separate explicit migration. 042–043 additionally guard in-use departments/timezones, canonical primary checkout memberships and portable configuration values. See [configuration checkpoint](STORE_CONFIGURATION_CHECKPOINT.md). Full original UI/service adoption, real provisioning and shared-authz identity remain open.
+
+[Candidate UI configuration adoption](UI_CONFIGURATION_CHECKPOINT.md) prepares mapped station choices, schedule department order/time displays and independent employee checkout forms in a separate dependent draft. Actual candidate components have rendered regressions and dedicated type checking; source hashes guard drift from their shared-form baselines. Original D1/shared forms, remaining scheduling workflows and the Inventory port are still open. PR30 is accepted at `1428e84`; PR31 incorporates that main normally, targets main and remains draft pending its own approval.
+
+- [ ] **Retire copied UI during shared/PostgreSQL adoption:** fold the configuration changes into the original `app/team/schedule-board.tsx`, `shift-editor.tsx`, `dish-checkouts.tsx` and `app/shared/domain.ts`; test the unified forms; delete the corresponding copied `ui-*` components/projection, `ui-source-baseline.json`, the baseline checker/tests and their build hooks. Keep the gate until that reviewed adoption is complete.
