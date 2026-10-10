@@ -25,6 +25,7 @@ Only use an isolated disposable server with local trust authentication for these
 
 ```sh
 npm run bootstrap --prefix development/postgres-candidate
+npm run schema:check --prefix development/postgres-candidate
 npm test --prefix development/postgres-candidate
 npm run check:types --prefix development/postgres-candidate
 npm run build:preview --prefix development/postgres-candidate

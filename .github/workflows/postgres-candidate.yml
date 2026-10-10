@@ -62,6 +62,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Apply ordered migrations to empty candidate database
         run: npm run bootstrap --prefix development/postgres-candidate
+      - name: Check migrated function snapshot before regression fixtures
+        run: npm run schema:check --prefix development/postgres-candidate
       - name: Run PostgreSQL and offline-queue regression checks
         run: npm test --prefix development/postgres-candidate
       - name: Validate candidate TypeScript
