@@ -85,7 +85,7 @@ test('signed tokens require correct signature, issuer, audience, expiry, role an
  for(const claims of [{iss:'https://wrong.invalid'},{aud:'wrong'},{exp:1},{role:'service_role'},
   {is_anonymous:true},{session_id:randomUUID()}]){
   const result=await call('employee','/tasks',undefined,await token('employee',claims));
-  assert.equal(result.status,claims.session_id?403:401,JSON.stringify(claims));
+  assert.equal(result.status,401,JSON.stringify(claims));
  }
  const other=await generateKeyPair('ES256');
  assert.equal((await call('employee','/tasks',undefined,await token('employee',{},other.privateKey))).status,401);
@@ -107,7 +107,7 @@ test('authenticated identity resolves on server; scoped reads and bounded pagina
 test('database session revocation denies an otherwise valid signed token',async()=>{
  const signed=await token('employee');
  await owner.query('UPDATE candidate_identity.sessions SET active=false WHERE id=$1',[sessions.employee]);
- try{assert.equal((await call('employee','/tasks',undefined,signed)).status,403);}
+ try{assert.equal((await call('employee','/tasks',undefined,signed)).status,401);}
  finally{await owner.query('UPDATE candidate_identity.sessions SET active=true WHERE id=$1',[sessions.employee]);}
 });
 test('queue persists through storage reopen, excludes tokens and other actors, then applies',async()=>{

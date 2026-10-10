@@ -13,6 +13,8 @@ The Companion repository keeps reviewed source on `main`. PostgreSQL preparation
 
 ## Candidate package
 
+The authorized authentication/offline follow-up is isolated on `codex/companion-auth-offline-recovery` and depends on draft PR 26's `a3bf7c6` coordination checkpoint. Keep its draft PR based on the coordination branch so its review diff stays focused. Accept PR 26 first; then bring updated `main` into the follow-up without force-pushing and retarget its PR to `main`. Verify its final diff and successful checks again before separate merge approval. Do not treat a dependent branch as an accepted baseline.
+
 `development/postgres-candidate` is the tracked, isolated migration source. It is not imported by the running application. The `work/` folder remains ignored for private working files; the earlier local candidate is historical evidence, not the source for new changes. Do not develop competing copies. Candidate runtime data is always ignored.
 
 The initial foundation PR contains the accumulated, interdependent candidate migrations. Subsequent changes should use smaller PRs around individual workflows or contracts. Keep migration numbers and order stable once shared; add corrective migrations instead of rewriting shared/applied migration history. Candidate migrations are not automatically adopted into Inventory's deployment manifest.

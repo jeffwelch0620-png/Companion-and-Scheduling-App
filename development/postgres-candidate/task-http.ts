@@ -8,16 +8,30 @@ const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function makeJwtVerifier(options:{issuer:string;audience:string;getKey:JWTVerifyGetKey}) {
  return async(token:string):Promise<VerifiedSession>=>{
   try{
-   const {payload}=await jwtVerify(token,options.getKey,{
+   const {payload}=await jwtVerify(token,async(header,jwt)=>{
+    try{return await options.getKey(header,jwt);}
+    catch(error){
+     if((error as {code?:string}).code==='ERR_JWKS_NO_MATCHING_KEY')throw error;
+     throw new CommandError(503,'authentication_service_unavailable');
+    }
+   },{
     issuer:options.issuer,audience:options.audience,algorithms:['ES256','RS256'],
     requiredClaims:['sub','exp','iat','session_id'],clockTolerance:0
    });
    if(payload.role!=='authenticated'||payload.is_anonymous===true
     ||typeof payload.sub!=='string'||!payload.sub
     ||typeof payload.session_id!=='string'||!uuid.test(payload.session_id))
-    throw new Error('invalid_session');
+    throw new CommandError(401,'authentication_required');
    return {subject:payload.sub,sessionId:payload.session_id};
-  }catch{throw new CommandError(401,'authentication_required');}
+  }catch(error){
+   if(error instanceof CommandError)throw error;
+   // Credential failures require login. Key-service/network/configuration failures are retryable.
+   const code=(error as {code?:string}).code;
+   if(code&&['ERR_JWT_EXPIRED','ERR_JWT_CLAIM_VALIDATION_FAILED','ERR_JWS_SIGNATURE_VERIFICATION_FAILED',
+    'ERR_JWS_INVALID','ERR_JWT_INVALID','ERR_JOSE_ALG_NOT_ALLOWED','ERR_JOSE_NOT_SUPPORTED',
+    'ERR_JWKS_NO_MATCHING_KEY'].includes(code))throw new CommandError(401,'authentication_required');
+   throw new CommandError(503,'authentication_service_unavailable');
+  }
  };
 }
 export function supabaseJwtVerifier(projectUrl:string) {
@@ -75,10 +89,17 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
     throw new CommandError(400,'invalid_pagination');
    const data=await database.transaction(async connection=>{
     if(resource!=='commands')await connection.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY',[]);
-    const identity=result((await connection.query(
+    let identity:TrustedIdentity;
+    try{identity=result((await connection.query(
      resource==='commands'?'SELECT candidate_operations.resolve_identity($1,$2::uuid,$3) AS result'
       :'SELECT candidate_operations.resolve_identity_read($1,$2::uuid,$3) AS result',
      [session.subject,session.sessionId,scope])).rows[0]) as TrustedIdentity;
+    }catch(error){
+     // Only the resolver's session failure becomes 401; membership/action denials remain 403.
+     const failure=error as {code?:string;message?:string};
+     if(failure.code==='42501'&&failure.message==='session_denied')throw new CommandError(401,'authentication_required');
+     throw error;
+    }
     if(resource==='commands'){
      const sameTransaction:Database={transaction:operation=>operation(connection)};
      return executeTask(sameTransaction,identity,scope,command);

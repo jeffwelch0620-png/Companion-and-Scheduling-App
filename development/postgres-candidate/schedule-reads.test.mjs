@@ -71,5 +71,5 @@ test('HTTP schedule paging resolves a database session and rejects malformed or 
  const response=await handler(request('?limit=2'));assert.equal(response.status,200);const page=await response.json();assert.equal(page.items.length,2);assert.ok(page.nextCursor);
  for(const suffix of ['?limit=0','?limit=101','?limit=2&limit=3','?after=bad','?department=FOH',`/${randomUUID()}`])assert.equal((await handler(request(suffix))).status,400);
  assert.equal((await handler(request('','POST'))).status,405);
- await admin.query('UPDATE candidate_identity.sessions SET active=false WHERE id=$1',[f.session]);assert.equal((await handler(request())).status,403);
+ await admin.query('UPDATE candidate_identity.sessions SET active=false WHERE id=$1',[f.session]);assert.equal((await handler(request())).status,401);
 });

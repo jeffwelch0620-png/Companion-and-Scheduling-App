@@ -48,6 +48,18 @@ export class IndexedDbQueueStorage {
   });
  }
  async close(){if(this.opening){(await this.opening).close();this.opening=null;}}
+ async clearSubject(subject,now){
+  const db=await this.open();
+  return new Promise((resolve,reject)=>{
+   const tx=db.transaction('entries','readwrite'),store=tx.objectStore('entries'),request=store.getAll();let error;
+   request.onsuccess=()=>{try{
+    const selected=request.result.filter(e=>e.subject===subject);
+    if(selected.some(e=>e.status==='sending'&&e.lease?.until>now))throw new QueueError('submission_in_progress');
+    for(const entry of selected)store.delete(entry.key);
+   }catch(e){error=e;tx.abort();}};
+   tx.oncomplete=()=>resolve();tx.onabort=tx.onerror=()=>reject(error??tx.error??new QueueError('storage_failure'));
+  });
+ }
 }
 
 export class OfflineTaskQueue {
@@ -85,6 +97,26 @@ export class OfflineTaskQueue {
   return (await this.storage.all()).filter(e=>e.subject===subject&&e.scope===scope)
    .sort((a,b)=>a.createdAt-b.createdAt||a.key.localeCompare(b.key));
  }
+ async retry(subject,scope,requestId){
+  return this.storage.mutate(entryKey(subject,scope,requestId),current=>{
+   if(!current)throw new QueueError('saved_submission_not_found');
+   if(current.status==='sending'&&current.lease?.until>this.now())throw new QueueError('submission_in_progress');
+   if(current.status==='applied'||current.status==='rejected')throw new QueueError('submission_not_retryable');
+   // Explicit review permits another attempt, never edits the intent, revision or request ID.
+   const entry={...current,status:'pending',error:null,lease:null,reviewedAt:this.now()};
+   return {entry,value:entry};
+  });
+ }
+ async discard(subject,scope,requestId){
+  return this.storage.mutate(entryKey(subject,scope,requestId),current=>{
+   if(current?.status==='sending'&&current.lease?.until>this.now())throw new QueueError('submission_in_progress');
+   return {remove:true,value:null};
+  });
+ }
+ async clearSubject(subject){
+  if(typeof subject!=='string'||!subject)throw new QueueError('identity_required');
+  await this.storage.clearSubject(subject,this.now());
+ }
  async flush(subject,scope,send){
   const entries=await this.list(subject,scope);
   for(const entry of entries){
@@ -93,7 +125,7 @@ export class OfflineTaskQueue {
     if(!current||!['pending','needs_auth','sending'].includes(current.status))
      return {value:null};
     if(current.status==='sending'&&current.lease?.until>now)return {value:null};
-    if(now-current.createdAt>this.maxAgeMs){
+    if(now-(current.reviewedAt??current.createdAt)>this.maxAgeMs){
      const expired={...current,status:'needs_review',error:'queue_age_exceeded',lease:null};
      return {entry:expired,value:null};
     }
@@ -117,7 +149,12 @@ export class OfflineTaskQueue {
     else if(response.status===409)update={status:'needs_review',error:response.body?.error?.code??'record_changed'};
     else if(response.status>=500||[408,429].includes(response.status))update={status:'pending',error:'temporarily_unavailable'};
     else update={status:'rejected',error:'invalid_submission'};
-   }catch{update={status:'pending',error:'delivery_uncertain'};}
+   }catch(error){
+    // The current identity provider may fail before an HTTP command response exists.
+    update=error?.status===401?{status:'needs_auth',error:'authentication_required'}
+     :error?.status===403?{status:'blocked',error:'access_denied'}
+     :{status:'pending',error:'delivery_uncertain'};
+   }
    await this.storage.mutate(entry.key,current=>{
     if(current?.lease?.id!==lease)return {value:null};
     const next={...current,...update,lease:null};return {entry:next,value:next};

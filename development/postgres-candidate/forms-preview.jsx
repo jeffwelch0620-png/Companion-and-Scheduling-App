@@ -5,13 +5,14 @@ import {FollowForm,FollowDetail} from '../../app/team/followthrough-forms';
 import '../../app/team/workspace.css';
 import {IndexedDbQueueStorage,OfflineTaskQueue} from './offline-task-queue.mjs';
 const scope='fictional-a';
+import {SavedSubmissionReview} from './saved-submission-review.jsx';
 const members=[['manager','001','Fictional manager','Kitchen manager',['tasks.manage']],['employee','002','Fictional employee','Cook',[]]]
  .map(([actor,end,name,position,capabilities])=>({actor,id:'10000000-0000-0000-0000-000000000'+end,locationId:scope,name,position,capabilities,area:'BOH',qualifications:[]}));
 const queue=new OfflineTaskQueue(new IndexedDbQueueStorage('jmax-candidate-companion-forms'),{maxAgeMs:86400000});
 const shiftFixture={id:'30000000-0000-0000-0000-000000000001',locationId:scope,ownerId:members[1].id,area:'BOH',kind:'shift',revision:1,updatedAt:'2026-10-08T12:00:00Z',data:{personId:members[1].id,start:'2026-10-09T12:00:00-04:00',end:'2026-10-09T20:00:00-04:00',position:'Cook',published:true,cancelled:false}};
 async function call(actor,path,command){
  const tokenResponse=await fetch('/fixture-token?actor='+actor);
- if(!tokenResponse.ok)throw Error('Preview identity unavailable.');
+ if(!tokenResponse.ok)return {status:tokenResponse.status===401||tokenResponse.status===403?tokenResponse.status:503,body:{error:{code:'preview_identity_unavailable'}}};
  const {token}=await tokenResponse.json();
  const response=await fetch('/api/operations/'+scope+path,{method:command?'POST':'GET',headers:{Authorization:'Bearer '+token,...(command?{'Content-Type':'application/json'}:{})},...(command?{body:JSON.stringify(command)}:{})});
  return {status:response.status,body:await response.json()};
@@ -25,7 +26,7 @@ function Preview(){
   do{const result=await call(who,'/tasks?limit=100'+(after?'&after='+after:''));if(result.status!==200)throw Error('Cannot load tasks: '+(result.body.error?.code??result.status));all.push(...result.body.items);after=result.body.nextCursor;}while(after);
   setRecords(all);setEntries(await queue.list(who,scope));
  }
- useEffect(()=>{let active=true;setRecords([]);setSelected(null);setMessage('');(async()=>{try{const all=[];let after=null;do{const result=await call(actor,'/tasks?limit=100'+(after?'&after='+after:''));if(result.status!==200)throw Error('Task loading failed');all.push(...result.body.items);after=result.body.nextCursor;}while(after);const saved=await queue.list(actor,scope);if(active){setRecords(all);setEntries(saved);}}catch(e){if(active)setMessage(e.message);}})();return()=>{active=false;};},[actor]);
+ useEffect(()=>{let active=true;setRecords([]);setSelected(null);setEntries([]);setMessage('');(async()=>{try{const all=[];let after=null;do{const result=await call(actor,'/tasks?limit=100'+(after?'&after='+after:''));if(result.status!==200)throw Error('Task loading failed');all.push(...result.body.items);after=result.body.nextCursor;}while(after);const saved=await queue.list(actor,scope);if(active){setRecords(all);setEntries(saved);}}catch(e){if(active)setMessage(e.message);}})();return()=>{active=false;};},[actor]);
  async function send(action,input,record){
   if(busy)throw Error('Please wait for the current submission.');
   if(action==='task.create'&&(!['task','issue','handoff'].includes(input.kind)||input.kind==='handoff'&&input.shiftId)||!['task.create','task.transition','task.reassign'].includes(action))throw Error('Linked handoffs, full shift checkout and overnight manager handoffs still need migration.');
@@ -48,6 +49,8 @@ function Preview(){
    if(!offline)await refresh();
   }finally{setBusy(false);}
  }
+ async function recover(entry,discard=false){setBusy(true);try{if(discard)await queue.discard(actor,scope,entry.requestId);else{await queue.retry(actor,scope,entry.requestId);if(!offline)await queue.flush(actor,scope,c=>call(actor,'/commands',c));}setEntries(await queue.list(actor,scope));setMessage(discard?'Device copy removed. This does not cancel server work.':'Original submission retained. Review its delivery status.');if(!discard&&!offline)await refresh();}catch(e){setMessage(e.message);}finally{setBusy(false);}}
+ async function clearDevice(){setBusy(true);try{await queue.clearSubject(actor);setEntries([]);setRecords([]);setSelected(null);setOffline(true);setMessage('Employee device data cleared. Connect to reload assignments.');}catch(e){setMessage(e.message);}finally{setBusy(false);}}
  async function reconnect(){setBusy(true);try{await queue.flush(actor,scope,c=>call(actor,'/commands',c));setOffline(false);await refresh();setMessage('Reconnected. Review the saved submission status below.');}catch(e){setMessage(e.message);}finally{setBusy(false);}}
  const record=records.find(r=>r.id===selected);
  return <main style={{maxWidth:1080,margin:'24px auto',padding:24,fontFamily:'system-ui'}} className="shared-workspace">
@@ -61,7 +64,7 @@ function Preview(){
     <h2>Tasks</h2><label>Find task <input aria-label="Find task" value={filter} onChange={e=>setFilter(e.target.value)}/></label><ul>{records.filter(r=>r.data.title.toLowerCase().includes(filter.toLowerCase())).map(r=><li key={r.id}><button onClick={()=>setSelected(r.id)}>{r.data.title} · {r.data.phase}</button></li>)}</ul></section>
    <section><h2>{record?.data.title??'Select a task'}</h2>{record&&<FollowDetail key={record.id+':'+record.revision+':'+actor} record={record} w={w} send={send} onError={setMessage}/>}</section>
   </div>
-  <section><h2>Saved submissions for this employee</h2><ul>{entries.map(e=><li key={e.requestId}>{e.status} · {e.command.input.note} · attempts {e.attempts}</li>)}</ul></section>
+  <SavedSubmissionReview key={actor} entries={entries} busy={busy} onRetry={e=>recover(e)} onDiscard={e=>recover(e,true)} onClear={clearDevice}/>
  </main>;
 }
 createRoot(document.getElementById('root')).render(<Preview/>);

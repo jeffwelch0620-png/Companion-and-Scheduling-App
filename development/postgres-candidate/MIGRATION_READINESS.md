@@ -108,3 +108,5 @@ PR 25 now includes corrective migration 035 and passes 391 fresh-database checks
 ## Database coordination checkpoint
 
 Corrective migration 036 and HTTP read transactions address the first post-merge reliability package. See [database coordination checkpoint](DATABASE_COORDINATION_CHECKPOINT.md) for per-location write coordination, retryable policy changes, consistent read snapshots and evidence. Authentication/offline error recovery is the next separate package; schema/workflow policy decisions and Inventory integration remain open.
+
+[Authentication/offline recovery checkpoint](AUTH_OFFLINE_RECOVERY_CHECKPOINT.md) adds candidate session/service error classification and saved-intent review/retry/discard with scoped device cleanup. It depends on the unmerged PR 26 database coordination package. M05/M10/M11 remain open: real authentication lifecycle, shared-device security/retention, prep delivery and hosted recovery are not completed by fictional candidate checks.

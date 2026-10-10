@@ -80,5 +80,5 @@ test('HTTP roster and availability routes resolve sessions, validate paging and 
   for(const suffix of ['?limit=0','?limit=1&limit=2','?after=bad','?department=FOH',`/${randomUUID()}`])assert.equal((await handler(request(kind,suffix))).status,400);
  }
  await admin.query('UPDATE candidate_identity.sessions SET active=false WHERE id=$1',[f.session]);
- assert.equal((await handler(request('roster'))).status,403);assert.equal((await handler(request('availability'))).status,403);
+ assert.equal((await handler(request('roster'))).status,401);assert.equal((await handler(request('availability'))).status,401);
 });
