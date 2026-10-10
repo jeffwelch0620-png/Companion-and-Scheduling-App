@@ -118,3 +118,9 @@ Corrective migration 036 and HTTP read transactions address the first post-merge
 ## Confirmed scheduling policies
 
 The user selected eligible publisher self-assignment, authorized manager edits of active shifts with required reasons and manager-approved department changes during swaps. [The dependent policy checkpoint](SCHEDULING_POLICY_CHECKPOINT.md) preserves those permissions and adds migration 038's ended-shift cutoff, including draft edits/cancellation and time-off-driven cancellations. PR28 remains unmerged; this package is based on its tested draft head. M06 remains partial: a separately audited completed-record correction workflow, remaining scheduling UI, copying/attendance and production source adoption are open.
+
+## Approved scheduling follow-up and next gates (2026-10-10)
+
+Corrective 039 preserves unchanged roster sync review and narrows overlap preflight. Corrective 040 implements person-wide approved leave, store-local availability, restricted active time edits, retrospective leave flags, consistent ended-shift errors and expired-draft exclusion. See SCHEDULING_POLICY_CHECKPOINT.md for exact boundaries and validation.
+
+Keep open: optional leadership self-assignment awareness and original-department staffing warnings; configurable hard-coded job/department names and timezone; case-by-case receipt replay audit with current authorization; prior low-priority audit items; shared-authz identity port; attended/worked-time correction and flag-resolution UI; full scheduling UI and notification delivery. Inventory's merged baseline is undergoing testing and has not been accepted for integration here. Obtain its tested commit before a separate port. PR28/29 remain draft and require explicit, sequential merge approvals.

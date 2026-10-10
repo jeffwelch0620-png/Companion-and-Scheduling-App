@@ -84,7 +84,7 @@ test('active cross-department swaps require replacement consent and manager auth
 
 test('ended draft and published shifts reject edits and cancellation atomically, including sanitized HTTP',async()=>{
  for(const published of [false,true]){
-  const f=await fixture();f.end=new Date(Date.parse(f.start)+1800000).toISOString();let r=await draft(f);if(published)r=await publish(f,r);
+  const f=await fixture();const past=new Date(Date.parse(f.start)+1800000).toISOString();let r=await draft(f);if(published)r=await publish(f,r);await admin.query('UPDATE candidate_operations.shift_references SET ends_at=$2 WHERE id=$1',[r.recordId,past]);f.end=past;
   const before=await row(r),command=edit(f,r),cancel=action(f,r,'shift.cancel',{note:'Fictional historical cancellation',closeTransfers:[]});
   await assert.rejects(run(f,command),ended);await assert.rejects(run(f,cancel),ended);
   const sessionId=randomUUID();await admin.query("INSERT INTO candidate_identity.sessions(id,subject,expires_at) VALUES($1,$2,clock_timestamp()+interval '1 hour')",[sessionId,f.manager.subject]);
@@ -99,21 +99,21 @@ test('completed-command replay remains idempotent after shift end, while new cha
  // Privileged historical fixture only: advance the stored period without a runtime correction endpoint.
  const past=new Date(Date.parse(f.start)+1800000).toISOString();await admin.query('UPDATE candidate_operations.shift_references SET ends_at=$2 WHERE id=$1',[r.recordId,past]);
  assert.equal((await run(f,command)).replayed,true);await assert.rejects(run(f,edit(f,changed)),ended);
- await assert.rejects(run(f,swap(f,changed),f.worker),e=>e.status===409&&e.code==='offer_changed');
+ await assert.rejects(run(f,swap(f,changed),f.worker),ended);
  const fakeOffer={shift_id:r.recordId,restaurant_id:f.scope,owner_id:f.worker.membershipId,department:'BOH',mode:'swap',status:'pending'};
  assert.equal((await admin.query('SELECT candidate_operations.offer_issue(jsonb_populate_record(NULL::candidate_operations.schedule_offers,$1::jsonb)) reason',[fakeOffer])).rows[0].reason,'offer_shift_ended');
  await admin.query("UPDATE candidate_identity.membership_capabilities SET active=false WHERE membership_id=$1 AND capability='schedule.change'",[f.manager.membershipId]);await assert.rejects(run(f,command),e=>e.status===403);
 });
 
-test('time-off review can cancel an active draft with a reason but cannot cancel an ended draft',async()=>{
+test('time-off review cancels active drafts and flags ended drafts without changing their history',async()=>{
  for(const complete of [false,true]){
   const f=await fixture();if(complete)f.end=new Date(Date.parse(f.start)+1800000).toISOString();
   const r=await draft(f),request=await run(f,{requestId:randomUUID(),locationId:f.scope,action:'request.create',input:{type:'time-off',start:f.start,end:f.end,note:'Fictional leave request'}},f.worker);
   const command=action(f,request,'request.review',{approve:true,note:'Fictional independently reviewed leave',affectedShifts:[{id:r.recordId,revision:r.revision}]}),before=await row(r);
   if(complete){
-   await assert.rejects(run(f,command),ended);assert.deepEqual(await row(r),before);
-   assert.equal((await admin.query('SELECT status,revision FROM candidate_operations.time_off_references WHERE id=$1',[request.recordId])).rows[0].status,'pending');
-   assert.equal((await admin.query('SELECT count(*)::int n FROM candidate_operations.command_receipts WHERE request_id=$1',[command.requestId])).rows[0].n,0);
+   const result=await run(f,command);assert.deepEqual(result.flaggedShifts,[{id:r.recordId,revision:r.revision,reason:'ended_shift',reviewStatus:'pending'}]);assert.deepEqual(await row(r),before);
+   assert.equal((await admin.query('SELECT status,revision FROM candidate_operations.time_off_references WHERE id=$1',[request.recordId])).rows[0].status,'approved');
+   assert.equal((await admin.query('SELECT count(*)::int n FROM candidate_operations.command_receipts WHERE request_id=$1',[command.requestId])).rows[0].n,1);
   }else{
    await run(f,command);assert.equal((await row(r)).cancelled,true);
    assert.equal((await admin.query('SELECT data FROM candidate_operations.schedule_draft_events WHERE shift_id=$1 AND revision=2',[r.recordId])).rows[0].data.note,command.input.note);

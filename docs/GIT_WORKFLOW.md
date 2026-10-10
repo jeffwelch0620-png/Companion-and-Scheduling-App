@@ -1,6 +1,6 @@
 # Git workflow for Companion and Inventory integration
 
-The Companion repository keeps reviewed source on `main`. PostgreSQL preparation is developed on focused `codex/` branches, from the accepted PR27 baseline at `2193afc`. PR28 (`codex/companion-scheduling-safeguards`) remains draft at `a045dca`. The next dependent package, `codex/companion-scheduling-policy`, implements confirmed operating choices and completed-shift protection from that draft head. Inventory's merge is complete and its baseline is undergoing testing. Integration remains separate until the user supplies its tested baseline commit. Pushing saves versioned source remotely. Merging updates a shared baseline. Deployment and database application require a separate, explicit step.
+The Companion repository keeps reviewed source on `main`. PostgreSQL preparation is developed on focused `codex/` branches, from the accepted PR27 baseline at `2193afc`. PR28 (`codex/companion-scheduling-safeguards`) remains draft at `72214f2`. The next dependent package, `codex/companion-scheduling-policy`, implements confirmed operating choices and completed-shift protection from that draft head. Inventory's merge is complete and its baseline is undergoing testing. Integration remains separate until the user supplies its tested baseline commit. Pushing saves versioned source remotely. Merging updates a shared baseline. Deployment and database application require a separate, explicit step.
 
 ## Routine development
 
@@ -13,7 +13,7 @@ The Companion repository keeps reviewed source on `main`. PostgreSQL preparation
 
 ## Candidate package
 
-PR26 database coordination was accepted by squash merge at `14e9193`; PR27 authentication/offline recovery was accepted at `2193afc`, with 426 post-merge tests passing. PR28 adds person-level cross-location conflicts and whole-store roster-review regression coverage, with 437 tests and exact-head CI passing; its draft targets main and still requires concrete merge approval. The scheduling-policy draft targets PR28's branch so its review shows only the new policy package. Keep dependent drafts based on their dependency until accepted, then merge updated main normally and retarget. Do not treat a dependent branch as an accepted baseline.
+PR26 database coordination was accepted by squash merge at `14e9193`; PR27 authentication/offline recovery was accepted at `2193afc`, with 426 post-merge tests passing. PR28 adds person-level cross-location conflicts and whole-store roster-review regression coverage, with 439 tests and exact-head CI passing; its draft targets main and still requires concrete merge approval. The scheduling-policy draft targets PR28's branch so its review shows only the new policy package. Keep dependent drafts based on their dependency until accepted, then merge updated main normally and retarget. Do not treat a dependent branch as an accepted baseline.
 
 `development/postgres-candidate` is the tracked, isolated migration source. It is not imported by the running application. The `work/` folder remains ignored for private working files; the earlier local candidate is historical evidence, not the source for new changes. Do not develop competing copies. Candidate runtime data is always ignored.
 
