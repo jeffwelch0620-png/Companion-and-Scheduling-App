@@ -155,7 +155,7 @@ test('read-only authorization and data use one snapshot; the next request observ
   await reading.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');await reading.query('SELECT candidate_operations.resolve_identity_read($1,$2,$3)',[f.manager.subject,f.manager.sessionId,f.scope]);
   await admin.query('UPDATE candidate_identity.sessions SET active=false WHERE id=$1',[f.manager.sessionId]);
   const result=(await reading.query('SELECT candidate_operations.list_tasks($1,$2,$3)',[f.manager.subject,f.manager.membershipId,f.scope])).rows[0].list_tasks;assert.deepEqual(result.items,[]);
-  await reading.query('COMMIT');assert.equal((await handler(f)(request(f,'tasks'))).status,403);
+  await reading.query('COMMIT');assert.equal((await handler(f)(request(f,'tasks'))).status,401);
  }finally{await cleanup(reading);}
 });
 test('HTTP read snapshot keeps items and workspace revision consistent across a concurrent staffing update',async()=>{

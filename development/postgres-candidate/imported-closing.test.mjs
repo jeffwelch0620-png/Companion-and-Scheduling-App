@@ -63,7 +63,7 @@ test('imported closing uses signed sessions and original form commands with inde
     return {status:response.status,body:await response.json()};
   }
   const assignment=()=>formCommand('close.assign',{shiftId:f.shift,standardId:f.standard,managerId:manager.id,verifierId:verifier.id,due:'2031-05-01T17:00:00-04:00',note:'Fictional imported close'},null,f.scope);
-  assert.equal((await call(manager,'commands',assignment())).status,403);
+  assert.equal((await call(manager,'commands',assignment())).status,401);
   // Separate fictional access setup; importer has no such authority.
   for(const a of f.actors) {
     await admin.query('INSERT INTO candidate_identity.auth_links(subject,person_id) VALUES($1,$2)',[a.subject,a.person]);

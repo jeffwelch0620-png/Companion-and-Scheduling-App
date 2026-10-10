@@ -85,6 +85,6 @@ test('HTTP draft writes require a valid scoped session and deny raw runtime writ
  const f=await fixture(),sessionId=randomUUID();await admin.query("INSERT INTO candidate_identity.sessions(id,subject,expires_at) VALUES($1,$2,clock_timestamp()+interval '1 hour')",[sessionId,f.manager.subject]);
  const handler=createTaskHandler(db,async()=>({subject:f.manager.subject,sessionId}));
  const request=()=>new Request(`http://candidate.invalid/api/operations/${f.scope}/commands`,{method:'POST',headers:{Authorization:'Bearer fictional','Content-Type':'application/json'},body:JSON.stringify(command(f))});
- assert.equal((await handler(request())).status,200);await admin.query('UPDATE candidate_identity.sessions SET active=false WHERE id=$1',[sessionId]);assert.equal((await handler(request())).status,403);
+ assert.equal((await handler(request())).status,200);await admin.query('UPDATE candidate_identity.sessions SET active=false WHERE id=$1',[sessionId]);assert.equal((await handler(request())).status,401);
  await assert.rejects(db.transaction(c=>c.query('UPDATE candidate_operations.shift_references SET published=true',[])),e=>e.code==='42501');
 });

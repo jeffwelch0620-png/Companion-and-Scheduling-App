@@ -7,6 +7,8 @@ import {generateKeyPair,exportJWK,createLocalJWKSet,SignJWT} from 'jose';
 import {PostgresDatabase} from './postgres-driver.ts';
 import {createTaskHandler,makeJwtVerifier} from './task-http.ts';
 const db=new PostgresDatabase({...connection,user:'candidate_runtime'});
+const port=Number(process.env.CANDIDATE_PREVIEW_PORT||6610);
+if(!Number.isInteger(port)||port<1024||port>65535)throw Error('Invalid fictional preview port');
 const {privateKey,publicKey}=await generateKeyPair('ES256');
 const jwk=await exportJWK(publicKey);jwk.kid='fictional-browser-key';
 const issuer='https://fictional.invalid/auth/v1';
@@ -25,8 +27,8 @@ files['/checkout-offline-worker.js']=['runtime/forms-dist/checkout-offline-worke
 files['/checkout-shell.json']=['runtime/forms-dist/checkout-shell.json','application/json'];
 const server=createServer(async(req,res)=>{
  try{
-  const origin='http://127.0.0.1:6610',url=new URL(req.url,origin);
-  if(req.headers.host!=='127.0.0.1:6610'){res.writeHead(400);res.end();return;}
+  const origin='http://127.0.0.1:'+port,url=new URL(req.url,origin);
+  if(req.headers.host!=='127.0.0.1:'+port){res.writeHead(400);res.end();return;}
   if(req.method==='GET'&&/^\/assets\/[a-zA-Z0-9_-]+\.(js|css)$/.test(url.pathname)){
    res.writeHead(200,{'Content-Type':url.pathname.endsWith('.css')?'text/css':'text/javascript','Cache-Control':'no-store'});
    res.end(await readFile(new URL('runtime/forms-dist'+url.pathname,import.meta.url)));return;
@@ -50,6 +52,6 @@ const server=createServer(async(req,res)=>{
   res.end(await response.text());
  }catch{res.writeHead(503,{'Content-Type':'application/json'});res.end(JSON.stringify({error:{code:'harness_unavailable'}}));}
 });
-server.listen(6610,'127.0.0.1',()=>console.log('Fictional browser harness: http://127.0.0.1:6610'));
+server.listen(port,'127.0.0.1',()=>console.log('Fictional browser harness: http://127.0.0.1:'+port));
 async function close(){await new Promise(resolve=>server.close(resolve));await db.close();process.exit();}
 process.on('SIGINT',close);process.on('SIGTERM',close);
