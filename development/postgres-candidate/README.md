@@ -37,6 +37,8 @@ The GitHub `candidate-validation` gate performs this sequence when candidate dep
 
 ## Optional original-form preview
 
+The scheduling and checkout previews use isolated configuration-aware candidate derivatives. See [UI configuration checkpoint](UI_CONFIGURATION_CHECKPOINT.md) for scope, source drift checks and remaining shared-form work. Other previews retain their original forms. Custom fictional store mappings do not provision real stores.
+
 After bootstrap and preview build, run:
 
 ```sh

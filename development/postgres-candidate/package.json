@@ -18,10 +18,11 @@
   "scripts": {
     "schema:check": "node schema-snapshot.mjs --check",
     "schema:update": "node schema-snapshot.mjs --write",
-    "check:types": "node ../../node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck --target ES2022 --module nodenext --moduleResolution nodenext --allowImportingTsExtensions task-adapter.ts task-http.ts postgres-driver.ts",
+    "check:types": "node ../../node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck --target ES2022 --module nodenext --moduleResolution nodenext --allowImportingTsExtensions task-adapter.ts task-http.ts postgres-driver.ts && npm run check:ui-types",
+    "check:ui-types": "node ../../node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck --target ES2022 --module esnext --moduleResolution bundler --jsx react-jsx ../../worker-env.d.ts ui-store-configuration.d.mts ui-station-assignment.ts ui-checkout-cycle-status.ts ui-schedule-board.tsx ui-shift-editor.tsx ui-dish-checkouts.tsx",
     "test": "npm run test:prepare && node run-tests.mjs",
     "preview:seed": "node seed-overnight-preview.mjs && node seed-checkout-preview.mjs && node seed-schedule-preview.mjs",
-    "test:prepare": "node build-closing-reference.mjs",
+    "test:prepare": "node build-closing-reference.mjs && node build-ui-reference.mjs",
     "bootstrap": "node bootstrap.mjs",
     "build:preview": "node build-forms-preview.mjs",
     "preview:serve": "node browser-harness-server.mjs"

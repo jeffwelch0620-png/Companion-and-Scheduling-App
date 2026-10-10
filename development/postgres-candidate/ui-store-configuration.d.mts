@@ -1,0 +1,10 @@
+import type {Location,Member,Workspace} from '../../app/shared/types';
+export type StoreConfiguration={operatingDepartments:string[];dishDepartment:string;dishPosition:string;dishAliases:string[]};
+export type ConfiguredLocation=Location&{configuration:StoreConfiguration};
+export function configuredLocation(location:unknown):ConfiguredLocation;
+export function storeConfiguration(w:{location:unknown}):StoreConfiguration;
+export function isCheckoutPosition(w:{location:unknown},position:string):boolean;
+export function isCheckoutLabel(w:{location:unknown},value:string):boolean;
+export function checkoutPeople(w:Workspace):Member[];
+export function operationsManager(w:Workspace,member:Member,area?:string):boolean;
+export function departmentOrder(w:{location:unknown},area:string):number;

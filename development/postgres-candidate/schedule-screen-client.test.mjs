@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {loadScheduleScreen,ScheduleScreenSender} from './schedule-screen-client.mjs';
-const viewer=()=>({location:{id:'fictional-screen',timezone:'America/New_York',revision:1},me:{id:'worker',capabilities:[]},workspaceRevision:1});
+const viewer=()=>({location:{id:'fictional-screen',timezone:'America/New_York',revision:1,configuration:{operatingDepartments:['BOH','FOH'],dishDepartment:'BOH',dishPosition:'Dishwasher',dishAliases:['Dishwasher']}},me:{id:'worker',capabilities:[]},workspaceRevision:1});
 const ok=body=>({status:200,body});
 test('request workspace loads every page, carries only current viewer permissions and retains scoped shifts',async()=>{
  const calls=[];const w=await loadScheduleScreen(async path=>{calls.push(path);if(path==='/schedule-viewer')return ok(viewer());const roster=path.startsWith('/schedule-roster');return ok({workspaceRevision:1,items:roster?[{id:path.includes('after')?'worker':'other'}]:[{id:path,kind:path.startsWith('/schedule-stations')?'station':'shift',data:{}}],nextCursor:roster&&!path.includes('after')?'next':null});});
