@@ -1,23 +1,28 @@
 // Presentation checks complement, but never replace, server eligibility and consent.
 import {configuredLocation} from './ui-store-configuration.mjs';
 const instant=value=>typeof value==='string'&&Number.isFinite(Date.parse(value));
+export const offerReviewMessage='This request needs review. Reload or contact a manager.';
 export const isOffer=r=>r?.kind==='coverage'||r?.kind==='request'&&r?.data?.type==='swap';
 export function checkedOffer(w,r) {
  configuredLocation(w.location);
  const statuses=r?.kind==='coverage'?['open','approved','withdrawn','invalidated']:['pending','accepted-by-replacement','approved','declined','invalidated'];
  if(!isOffer(r)||!r?.data||r.locationId!==w.location.id||!Number.isSafeInteger(r.revision)||r.revision<1||!r.id||!r.ownerId||!r.data.shiftId||!w.location.configuration.operatingDepartments.includes(r.area)||!statuses.includes(r.data.status)||!instant(r.data.start)||!instant(r.data.end)||Date.parse(r.data.start)>=Date.parse(r.data.end)||!Array.isArray(r.data.duties)||!Array.isArray(r.data.volunteers)||!Array.isArray(r.data.history)||r.kind==='request'&&!r.data.replacementId)throw Error('Coverage details are incomplete. Reload current records before responding.');
- for(const d of r.data.duties)if(!d.id||!d.title||!d.zone||!instant(d.due)||!Array.isArray(d.criteria)||d.criteria.some(c=>typeof c!=='string'))throw Error('Closing duties are incomplete. Reload before consenting.');
+ if([r.id,r.ownerId,r.data.shiftId,r.data.position,r.data.note].some(v=>typeof v!=='string')||r.data.decision!==undefined&&typeof r.data.decision!=='string')throw Error('Coverage details are incomplete. Reload current records.');
+ for(const d of r.data.duties)if(!d||[d.id,d.title,d.zone].some(v=>typeof v!=='string'||!v)||!instant(d.due)||!Array.isArray(d.criteria)||d.criteria.some(c=>typeof c!=='string'))throw Error('Closing duties are incomplete. Reload before consenting.');
+ const a=r.data.actions;
+ if(!a||['canVolunteer','canWithdraw','canWithdrawVolunteer','canConsent','canApprove','canDecline','canReview','departmentChange','isCurrent'].some(k=>typeof a[k]!=='boolean')||!Array.isArray(a.approvalTargetIds)||a.approvalTargetIds.some(id=>typeof id!=='string'||!id)||new Set(a.approvalTargetIds).size!==a.approvalTargetIds.length||a.replacementDepartment!==null&&typeof a.replacementDepartment!=='string')throw Error('Coverage actions are incomplete. Reload current records.');
+ if(a.canApprove&&!a.approvalTargetIds.length||a.departmentChange&&!a.replacementDepartment||r.data.history.some(h=>!h||typeof h.action!=='string'||!instant(h.at)||typeof h.note!=='string'))throw Error('Coverage details are incomplete. Reload current records.');
+ if(r.data.volunteers.some(v=>!v||typeof v.personId!=='string'||!instant(v.at)))throw Error('Coverage volunteers are incomplete. Reload current records.');
  return r;
 }
-export function canReviewDepartment(w,area,period) {
- const me=w.me,caps=me.capabilities;
- return me.locationId===w.location.id&&!me.scheduleOnly&&caps.includes('schedule.change')&&(caps.includes('location.manage')||me.area===area&&w.records.some(r=>r.kind==='leadership'&&r.locationId===w.location.id&&r.area===area&&r.data.personId===me.id&&r.data.active&&Date.parse(r.data.start)<=Date.parse(period.start)&&Date.parse(r.data.end)>=Date.parse(period.end)));
+export function validOffers(w) {
+ const valid=[];let invalid=Number.isSafeInteger(w.offerReviewNotices)?w.offerReviewNotices:0;
+ for(const record of w.records.filter(isOffer))try{valid.push(checkedOffer(w,record));}catch{invalid++;}
+ return {valid,invalid};
 }
 export function offerActions(w,record,now) {
- const r=checkedOffer(w,record),d=r.data,own=r.ownerId===w.me.id,swap=r.kind==='request',current=!d.unavailableReason&&Date.parse(d.end)>Date.parse(now)&&(swap?['pending','accepted-by-replacement'].includes(d.status):d.status==='open'&&Date.parse(d.start)>Date.parse(now));
- const volunteered=d.volunteers.some(v=>v.personId===w.me.id),replacement=w.members.find(m=>m.id===d.replacementId);
- const review=current&&!own&&w.me.id!==d.replacementId&&canReviewDepartment(w,r.area,d);
- return {current,volunteer:!swap&&current&&!own&&!volunteered&&d.eligible===true,withdrawVolunteer:!swap&&d.status==='open'&&volunteered,withdraw:!swap&&d.status==='open'&&own,consent:swap&&current&&d.status==='pending'&&w.me.id===d.replacementId,review,approve:review&&(!swap||d.status==='accepted-by-replacement'&&!!replacement&&canReviewDepartment(w,replacement.area,d)),departmentChange:swap&&!!replacement&&replacement.area!==r.area,replacement};
+ const a=checkedOffer(w,record).data.actions;
+ return {current:a.isCurrent,volunteer:a.canVolunteer,withdrawVolunteer:a.canWithdrawVolunteer,withdraw:a.canWithdraw,consent:a.canConsent,review:a.canReview,approve:a.canApprove,decline:a.canDecline,departmentChange:a.departmentChange,replacementDepartment:a.replacementDepartment,approvalTargetIds:a.approvalTargetIds};
 }
 export function replacementCandidates(w,shift) {
  // A roster suggestion is not clearance. The server checks every candidate again.
@@ -32,6 +37,7 @@ export function replacementInput(w,shift,type,fields,now) {
   return {shiftId:shift.id,shiftRevision:shift.revision,note};
  }
  if(type!=='swap'||!replacementCandidates(w,shift).some(m=>m.id===fields.replacementId))throw Error('Choose a current coworker with the scheduled job. Eligibility will be checked by the server.');
+ if(validOffers(w).valid.some(r=>r.kind==='coverage'&&r.data.shiftId===shift.id&&r.data.status==='open')&&fields.openCoverageConfirmed!==true)throw Error('An open coverage offer exists. Confirm you reviewed it before requesting a named replacement.');
  return {type:'swap',shiftId:shift.id,shiftRevision:shift.revision,start:shift.data.start,end:shift.data.end,replacementId:fields.replacementId,note};
 }
 export function offerCommandInput(w,r,action,fields,now) {
@@ -43,11 +49,11 @@ export function offerCommandInput(w,r,action,fields,now) {
  if(!a.review||!note||note.length>2000)throw Error('This decision requires an independent assigned reviewer and a reason. Reload current records.');
  if(action==='request.review'&&r.kind==='request'&&typeof fields.approve==='boolean') {
   if(fields.approve&&(!a.approve||!confirmed||a.departmentChange&&fields.departmentConfirmed!==true))throw Error('Review the replacement, duties and any department change before approval.');
-  return {approve:fields.approve,note};
+  if(!fields.approve&&!a.decline)throw Error('This response is unavailable. Reload current records.');
+  return {approve:fields.approve,note,...(fields.approve&&a.departmentChange?{departmentConfirmed:true}:{})};
  }
  if(action==='coverage.approve'&&r.kind==='coverage'&&confirmed) {
-  const target=w.members.find(m=>m.id===fields.personId);
-  if(target&&target.id!==w.me.id&&target.id!==r.ownerId&&target.area===r.area&&r.data.volunteers.some(v=>v.personId===target.id)&&canReviewDepartment(w,target.area,r.data))return {personId:target.id,confirmed:true,note};
+  if(a.approve&&a.approvalTargetIds.includes(fields.personId))return {personId:fields.personId,confirmed:true,note};
  }
  throw Error('This response is unavailable or needs explicit consent. Reload current records.');
 }

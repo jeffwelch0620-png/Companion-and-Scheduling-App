@@ -71,7 +71,7 @@ test('editing a started draft also requires a nonempty audit reason',async()=>{
 
 test('active cross-department swaps require replacement consent and manager authority for both departments',async()=>{
  const f=await fixture(),r=await publish(f,await draft(f)),o=await run(f,swap(f,r),f.worker);
- const review=record=>action(f,record,'request.review',{approve:true,note:'Fictional manager-approved department change'});
+ const review=record=>action(f,record,'request.review',{approve:true,departmentConfirmed:true,note:'Fictional manager-approved department change'});
  await assert.rejects(run(f,review(o)),e=>e.code==='replacement_consent_required');
  const accepted=await run(f,action(f,o,'request.consent',{accept:true}),f.foreign);
  await assert.rejects(run(f,review(accepted),f.foreign),e=>e.status===403);

@@ -57,7 +57,7 @@ function Preview(){
    {!view&&screen==='requests'&&<ScheduleRequests w={{...w,records:w.records.filter(r=>!isOffer(r))}} now={now} busy={busy} onBack={()=>setScreen('schedule')} onTimeOff={()=>setView({kind:'time-off'})} onAvailability={()=>setView({kind:'availability'})} onOpen={r=>setView({id:r.id})}/>}
    {!view&&screen==='coverage'&&<CoverageSwapBoard w={w} onOpen={r=>setView({id:r.id})} onBack={()=>setScreen('schedule')}/>}
    {!view&&screen==='schedule'&&<section className="schedule-week">
-    <button onClick={()=>setScreen('coverage')}>Coverage and replacement requests</button>
+    <button onClick={()=>setScreen('coverage')}>Coverage and replacement requests</button>{w.offerReviewNotices>0&&<p role="status">Some replacement requests need review. Open coverage requests to review the notice or contact a manager.</p>}
     {canDraft&&<button className="shared-primary" onClick={()=>{setDraftDay(days.includes(draftDay)?draftDay:days.includes(day)?day:weekStart);setView({kind:'draft'});}}>Create shift draft</button>}
     {eligible.length>0&&!publicationReview&&<div className="schedule-draft-actions"><p>{selectedIds.length} selected drafts; up to 100 per publication.</p><div className="shared-actions"><button onClick={()=>setSelectedIds(eligible.slice(0,100).map(r=>r.id))}>Select eligible drafts</button><button disabled={!selectedIds.length} onClick={()=>setSelectedIds([])}>Clear selection</button><button disabled={!selectedIds.length} onClick={reviewSelection}>Review selected drafts</button></div></div>}
     {publicationReview&&<WeeklyPublicationReview w={w} review={publicationReview} now={now} busy={busy} send={send} onError={setError} onBack={()=>setPublicationReview(null)}/>}
