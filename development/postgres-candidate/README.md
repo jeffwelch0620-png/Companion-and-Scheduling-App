@@ -52,7 +52,7 @@ Open `http://127.0.0.1:6610/schedule-forms`, `/checkout-forms`, `/overnight-form
 
 See [migration readiness and remaining workflow coverage](MIGRATION_READINESS.md) for the current checklist and implementation order. The source inventory/classification check runs with `node development/postgres-candidate/readiness-inventory.mjs` from the repository root. Tested candidate slices do not establish whole-app PostgreSQL readiness.
 
-The [attendance and completed shift correction design](ATTENDANCE_CORRECTION_DESIGN.md) defines the next manager workflow port and the proposed historical correction ledger. It is documentation only; correction authority and independent approval remain pending policy selections. Attendance, correction and retrospective flag-resolution commands/forms are not implemented by this design.
+The [attendance and completed shift correction design](ATTENDANCE_CORRECTION_DESIGN.md) defines the next manager workflow port and the proposed historical correction ledger. It is documentation only; correction authority, independent approval and employee attendance visibility remain pending owner selections. Attendance, correction and retrospective flag-resolution commands/forms are not implemented by this design.
 
 The [schedule shift read checkpoint](SCHEDULE_READ_CHECKPOINT.md) adds paged reference reads with original shift visibility parity. [Roster/job eligibility and availability references](SCHEDULE_CONTEXT_CHECKPOINT.md) add the next scoped read slice. Production ingestion, complete schedule workspace adoption and remaining scheduling writes are pending.
 
