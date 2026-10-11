@@ -1,6 +1,6 @@
 # Coverage and named replacement screen preparation
 
-PR33 normally incorporates accepted Companion main `e0479d1` (PR34, tested head `078946e`). The refreshed coverage package targets main and remains a draft for separate review and merge approval. Candidate preparation remains separate from the active backend, Inventory and hosted services.
+PR33 normally incorporated accepted Companion main `e0479d1` (PR34, tested head `078946e`), then was separately approved and squash-merged at `2d8d3cc` from reviewed head `75ad4e1`. Merged-main CI passed 587/587 tests. The sections below record its preparation evidence. Candidate preparation remains separate from the active backend, Inventory and hosted services.
 
 ## Consent and independent decisions
 
@@ -45,7 +45,7 @@ Cross-department swap approval now requires a boolean `departmentConfirmed: true
 
 Named replacement remains available alongside an open coverage offer, with an explicit local acknowledgement and explanation that approval resolves competing offers. This local acknowledgement is not added to the server payload. Server invalidation and the original employee's responsibility until approval remain unchanged.
 
-All published migrations 001–046 are preserved byte-for-byte. Only 047 is new; manifest and generated snapshot include it. The package remains draft and separate from hosted application, active backend adoption and Inventory. Exact-head CI is recorded in the PR description.
+All published migrations 001–046 are preserved byte-for-byte. Only 047 was new in this follow-up; manifest and generated snapshot include it. The package remained draft until separate merge approval and stays separate from hosted application, active backend adoption and Inventory. Exact-head CI is recorded in the PR description.
 
 Fresh fictional bootstrap through 047 and generated snapshot comparison passed. The full serial suite passed 587/587 tests, with zero failures/skips; 12 new regressions cover isolated malformed offers, server actions, current authority, acknowledgements, replay and private helper/audit denial. Strict backend/UI types, source-copy gate, preview build and readiness inventory passed.
 

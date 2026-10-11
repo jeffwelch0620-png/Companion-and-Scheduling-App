@@ -2,6 +2,7 @@
 import React,{useState,useEffect,useRef} from 'react';
 import {createRoot} from 'react-dom/client';
 import {WorkspaceForm,RecordDetail} from '../../app/team/workspace-forms';
+import {LeadershipBoard,LeadershipEditor,LeadershipDetail} from './ui-leadership';
 import {CoverageSwapBoard,ShiftReplacementForm,CoverageSwapDetail} from './ui-coverage-swap';
 import {isOffer} from './coverage-swap-client.mjs';
 import {ScheduleRequests} from '../../app/team/schedule-requests';
@@ -46,7 +47,7 @@ function Preview(){
  function changeWeek(next){setMessage('');setError('');setWeek(next);setSelectedIds([]);setPublicationReview(null);setView(null);}
  function selectDraft(r,checked){setPublicationReview(null);setSelectedIds(old=>checked?old.includes(r.id)?old:[...old,r.id].slice(0,100):old.filter(id=>id!==r.id));}
  return <main className="shared-ui jmax-combined" style={{maxWidth:960,margin:'24px auto',padding:24}}>
-  <h1>Companion scheduling | local preview</h1><p>Fictional records. Schedule board, individual drafts, weekly publication review, availability and time-off requests. Coverage and named replacement requests include explicit consent and independent approval. Copying and attendance remain separate preparation steps.</p>
+  <h1>Companion scheduling | local preview</h1><p>Fictional records. Schedule board, individual drafts, weekly publication review, availability and time-off requests. Coverage and named replacement requests include explicit consent and independent approval. Dated leadership includes assignment, edits and revocation. Copying and attendance remain separate preparation steps.</p>
   <label>Preview employee <select aria-label="Preview employee" value={actor} disabled={busy||!!sender.current.pending} onChange={e=>setActor(e.target.value)}><option value="schedule-worker">Fictional employee</option><option value="schedule-replacement">Fictional replacement employee</option><option value="schedule-manager">Fictional schedule manager</option><option value="schedule-publisher">Fictional schedule publisher</option><option value="schedule-foreign">Fictional other-department manager</option></select></label>
   <button disabled={busy||!!sender.current.pending} onClick={()=>{setView(null);setError('');refresh();}}>Reload current records</button>
   {error&&<p role="alert" className="shared-error">{error}</p>}<p role="status">{message}</p>
@@ -55,21 +56,25 @@ function Preview(){
   {sender.current.pending&&!busy&&<button disabled={busy} onClick={retrySubmission}>Retry original submission</button>}
   {w?<fieldset disabled={busy||!!sender.current.pending} style={{border:0,padding:0}}>
    {!view&&screen==='requests'&&<ScheduleRequests w={{...w,records:w.records.filter(r=>!isOffer(r))}} now={now} busy={busy} onBack={()=>setScreen('schedule')} onTimeOff={()=>setView({kind:'time-off'})} onAvailability={()=>setView({kind:'availability'})} onOpen={r=>setView({id:r.id})}/>}
+   {!view&&screen==='leadership'&&<LeadershipBoard w={w} onOpen={r=>setView({id:r.id})} onCreate={()=>setView({kind:'leadership'})} onBack={()=>setScreen('schedule')}/>}
    {!view&&screen==='coverage'&&<CoverageSwapBoard w={w} onOpen={r=>setView({id:r.id})} onBack={()=>setScreen('schedule')}/>}
    {!view&&screen==='schedule'&&<section className="schedule-week">
+    <button onClick={()=>setScreen('leadership')}>Dated shift leadership</button>
     <button onClick={()=>setScreen('coverage')}>Coverage and replacement requests</button>{w.offerReviewNotices>0&&<p role="status">Some replacement requests need review. Open coverage requests to review the notice or contact a manager.</p>}
     {canDraft&&<button className="shared-primary" onClick={()=>{setDraftDay(days.includes(draftDay)?draftDay:days.includes(day)?day:weekStart);setView({kind:'draft'});}}>Create shift draft</button>}
     {eligible.length>0&&!publicationReview&&<div className="schedule-draft-actions"><p>{selectedIds.length} selected drafts; up to 100 per publication.</p><div className="shared-actions"><button onClick={()=>setSelectedIds(eligible.slice(0,100).map(r=>r.id))}>Select eligible drafts</button><button disabled={!selectedIds.length} onClick={()=>setSelectedIds([])}>Clear selection</button><button disabled={!selectedIds.length} onClick={reviewSelection}>Review selected drafts</button></div></div>}
     {publicationReview&&<WeeklyPublicationReview w={w} review={publicationReview} now={now} busy={busy} send={send} onError={setError} onBack={()=>setPublicationReview(null)}/>}
     <ScheduleBoard key={actor+weekStart} w={w} now={now} days={days} shifts={shifts} selected={selectedIds} onSelect={selectDraft} onOpen={r=>setView({id:r.id})} busy={busy} onRequests={()=>setScreen('requests')} pendingRequests={w.records.filter(r=>!isOffer(r)&&['request','availability'].includes(r.kind)&&r.data.status==='pending').length} onDayChange={setDraftDay} view={boardView} onViewChange={setBoardView} weekNavigation={<div className="shared-actions"><button onClick={()=>changeWeek(nextDate(weekStart,-7))}>Previous week</button><span>Week of {weekStart}</span><button onClick={()=>changeWeek(nextDate(weekStart,7))}>Next week</button></div>}/>
    </section>}
-   {view&&<button disabled={!!sender.current.pending} onClick={()=>setView(null)}>Back to {screen==='requests'?'requests':screen==='coverage'?'replacement requests':'schedule'}</button>}
-   {view?.kind&&view.kind!=='draft'&&<WorkspaceForm key={actor+view.kind} kind={view.kind} w={w} day={day} send={send} onError={setError}/>}
+   {view&&<button disabled={!!sender.current.pending} onClick={()=>setView(null)}>Back to {screen==='requests'?'requests':screen==='coverage'?'replacement requests':screen==='leadership'?'leadership':'schedule'}</button>}
+   {view?.kind&&view.kind!=='draft'&&view.kind!=='leadership'&&<WorkspaceForm key={actor+view.kind} kind={view.kind} w={w} day={day} send={send} onError={setError}/>}
+   {(view?.kind==='leadership'||view?.leadershipEdit)&&<LeadershipEditor key={actor+':leader:'+selected?.id} w={w} record={view?.leadershipEdit?selected:undefined} day={day} send={send} onError={setError}/>}
+   {selected?.kind==='leadership'&&!view?.leadershipEdit&&<LeadershipDetail w={w} record={selected} onEdit={()=>setView({id:selected.id,leadershipEdit:true})} send={send} onError={setError}/>}
    {(view?.kind==='draft'||view?.edit)&&<ShiftEditor key={actor+':'+(selected?.id??'new')} w={w} day={draftDay||weekStart} shift={view?.edit?selected:undefined} send={send} onError={setError}/>}
    {selected?.kind==='shift'&&!view?.edit&&<section><h2>{selected.data.stationName??selected.data.position}</h2><p>{w.members.find(m=>m.id===selected.ownerId)?.name??'Unavailable employee'} | {selected.data.published?'Published':'Draft'}</p><p>{displayTime(selected.data.start,w.location.timezone)} → {displayTime(selected.data.end,w.location.timezone)}</p>{!selected.data.published&&manages(w.me,selected.area,'schedule.manage')&&<><p>Only command-created, unlinked candidate drafts can be edited. Imported references remain protected.</p><button onClick={()=>setView({id:selected.id,edit:true})}>Edit draft</button></>}<p>Select eligible drafts on the schedule board to review weekly publication and attached closing responsibilities. Other published edits and attendance controls remain separate.</p><ShiftReplacementForm key={selected.id+':'+selected.revision} w={w} shift={selected} send={send} now={now} onOpen={r=>{setScreen('coverage');setView({id:r.id});}} onError={setError}/></section>}
    {selected?.kind==='request'&&selected.data.type==='time-off'&&<p>This candidate can approve time off with no affected shifts or with eligible, unlinked drafts. Published or linked work must be resolved separately before approval.</p>}
    {selected&&isOffer(selected)&&<CoverageSwapDetail key={selected.id+':'+selected.revision} w={w} record={selected} send={send} now={now} onError={setError}/>}
-   {selected&&selected.kind!=='shift'&&!isOffer(selected)&&<RecordDetail key={selected.id+':'+selected.revision} record={selected} w={w} now={now} send={async(...args)=>{try{return await send(...args);}catch{return false;}}} onError={setError} onOpen={r=>setView({id:r.id})} onWeek={()=>setScreen('schedule')} onGuides={()=>{}} onAskWeek={()=>{}}/>}
+   {selected&&selected.kind!=='shift'&&selected.kind!=='leadership'&&!isOffer(selected)&&<RecordDetail key={selected.id+':'+selected.revision} record={selected} w={w} now={now} send={async(...args)=>{try{return await send(...args);}catch{return false;}}} onError={setError} onOpen={r=>setView({id:r.id})} onWeek={()=>setScreen('schedule')} onGuides={()=>{}} onAskWeek={()=>{}}/>}
   </fieldset>:<p>Current records are not loaded. Reload to continue.</p>}
  </main>;
 }

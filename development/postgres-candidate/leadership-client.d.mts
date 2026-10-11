@@ -1,0 +1,10 @@
+import type {Workspace,RecordOf} from '../../app/shared/types';
+export type LeadershipOption={area:string;leaders:{id:string;name:string}[]};
+export type LeadershipWorkspace=Workspace & {leadershipOptions?:LeadershipOption[]};
+export type LeadershipRecord=RecordOf<'leadership'> & {data:RecordOf<'leadership'>['data'] & {actions:{canEdit:boolean;canRevoke:boolean}}};
+export const leadershipReviewMessage:string;
+export function leadershipOptions(w:LeadershipWorkspace):LeadershipOption[];
+export function checkedLeadership(w:LeadershipWorkspace,r:unknown):LeadershipRecord;
+export function leadershipFields(w:LeadershipWorkspace,r:LeadershipRecord):Record<string,string>;
+export function leadershipInput(w:LeadershipWorkspace,fields:Record<string,unknown>,r?:LeadershipRecord):{personId:string;area:string;start:string;end:string;note:string};
+export function leadershipRevokeInput(w:LeadershipWorkspace,r:LeadershipRecord,note:unknown,confirmed:boolean):{note:string};
