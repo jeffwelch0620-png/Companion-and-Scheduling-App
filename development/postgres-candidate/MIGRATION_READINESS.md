@@ -158,3 +158,7 @@ PR36 leadership follow-up is accepted at `1c536d1` with 614/614 merged-main CI t
 ## Closing-transfer cancellation screen preparation (051)
 
 PR37 is an unmerged draft at `c27cca1`; its exact-head CI passed 629/629. [Closing-transfer UI checkpoint](CLOSING_TRANSFER_UI_CHECKPOINT.md) adds current, server-filtered covering choices, an explicit per-assignment review and atomic cancellation through the existing command. The new branch depends on PR37 and requires its own review and merge approval after that dependency is accepted and incorporated normally. M06 remains partial: attendance/audited corrections are next, followed by copying/batch editing, source completeness/ingestion, shared authz, notification delivery and copied-component retirement. Inventory remains separate until its tested baseline is confirmed.
+
+## Published editing and transfer review corrections (052)
+
+PR37's client follow-up is normally merged into dependent PR38. Shared migrations 050 and 051 remain immutable; corrective 052 minimizes published-action metadata for non-editors and skips helper reads without schedule.change. Transfer review accepts newer workspace snapshots while preserving exact record-version checks. Eligibility read/command parity, every listed option, receiving-shift revision preservation and unrelated workspace writes have dedicated regressions. These drafts remain unmerged preparation; attendance/reporting, source ingestion, shared identity, notifications and Inventory integration are still open.

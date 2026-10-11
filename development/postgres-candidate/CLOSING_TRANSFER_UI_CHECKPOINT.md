@@ -33,3 +33,13 @@ Acceptance order: review and separately approve PR37 first. Merge accepted main 
 - Retirement of copied candidate components during shared/PostgreSQL UI adoption.
 - Optional leadership notification/badge/history polish.
 - Inventory integration from its confirmed tested baseline commit.
+
+## Pre-merge review follow-up
+
+PR37's DST follow-up is incorporated by a normal branch merge. Published 050 and 051 and their manifest hashes are unchanged. Corrective 052 changes published_shift_actions and list_schedule_shifts: viewers without schedule.change bypass per-shift action reads; viewers without published-change authority receive false actions, zero closing count, false linked/completed flags, empty edit areas and authority. Authorized editor metadata remains available.
+
+Cancellation reviews accept a valid workspace revision at least as new as the loaded workspace, while still binding the exact source shift revision and unfinished closing count. Commands bind exact source, closing and covering revisions and recheck current policy under coordination. Unrelated store activity must not force a reload. A transfer updates the closing revision and global workspace revision; it does not increment the receiving shift revision. Shared adoption should consider an index on shift_references(restaurant_id,department,starts_at,ends_at) WHERE published AND NOT cancelled, validated against its actual query plan and write workload.
+
+Eligibility parity regressions cover changed instructions, unavailable managers/verifiers, position/station mismatch and zone conflicts: each hides the option and refuses a submitted transfer. Each listed option is also exercised independently with unchanged reviewed versions. Notification delivery, durable reload recovery and shared adoption remain separate.
+
+Follow-up validation: the full serial local suite passed 660/660 with fresh 001–052 migrations and a matching post-regression snapshot. The final per-row capability cache refinement and strict parity error assertions then passed 47/47 focused checks on another freshly bootstrapped 001–052 database, with matching pre/post snapshots. Strict backend/UI types, rendered UI checks, preview build and readiness inventory passed. Exact final-head full GitHub counts are recorded in the PR description. All 001–051 bytes/hashes remain unchanged; only 052 adds a manifest entry. This evidence remains fictional candidate preparation.

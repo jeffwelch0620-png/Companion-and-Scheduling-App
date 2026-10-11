@@ -16,12 +16,74 @@ async function covering(f){const r=await publish(f,await draft(f,f.second));awai
 const mapping=(c,r)=>({closeId:c.recordId,closingRevision:c.revision,shiftId:r.recordId,expectedRevision:r.revision});
 
 async function http(f,actor=f.manager){const sessionId=randomUUID();await admin.query("INSERT INTO candidate_identity.sessions(id,subject,expires_at) VALUES($1,$2,clock_timestamp()+interval '1 hour')",[sessionId,actor.subject]);const h=createTaskHandler(db,async()=>({subject:actor.subject,sessionId}));return async(path,command)=>{const response=await h(new Request('http://candidate.invalid/api/operations/'+f.scope+path,{method:command?'POST':'GET',headers:{Authorization:'Bearer fictional','Content-Type':'application/json'},...(command?{body:JSON.stringify(command)}:{})}));return {status:response.status,body:await response.json()};};}
-const reference=async(f,r,actor=f.manager)=>(await loadScheduleScreen(await http(f,actor))).records.find(s=>s.id===r.recordId);
+const reference=async(f,r,actor=f.manager)=>(await loadScheduleScreen(await http(f,actor))).records.find(s=>s.id===(r.recordId??r.id));
 const now='2031-05-01T12:00:00Z';
 const fields=(w,r)=>({...publishedShiftFields(w,r),note:'Fictional reviewed change'});
 
-async function reviewFixture(){const f=await withClose(),target=await covering(f),call=await http(f),w=await loadScheduleScreen(call),r=w.records.find(s=>s.id===f.r.recordId),review=await loadCancellationReview(call,w,r);return {...f,target,call,w,r,review};}
+async function reviewFixture(stationAssigned=false){const f=await withClose();let target;
+ if(stationAssigned){f.station=randomUUID();await admin.query("INSERT INTO candidate_operations.station_references(id,restaurant_id,department,title,revision,status,configured,all_job_members,setup_data) VALUES($1,$2,'BOH','Cook',1,'active',true,true,'{}')",[f.station,f.scope]);await admin.query("INSERT INTO candidate_operations.station_jobs VALUES($1,'Cook')",[f.station]);await admin.query('UPDATE candidate_operations.schedule_input_reviews SET time_off_complete=true,reviewed_at=clock_timestamp() WHERE restaurant_id=$1',[f.scope]);
+  target=await run(f,{requestId:randomUUID(),locationId:f.scope,action:'shift.save',input:{personId:f.second.membershipId,position:'Cook',start:'2031-05-01T13:00:00Z',end:'2031-05-01T15:00:00Z',stationId:f.station}});target=await publish(f,target);await admin.query('INSERT INTO candidate_operations.shift_standard_links(shift_id,standard_id,restaurant_id) VALUES($1,$2,$3)',[target.recordId,f.standard,f.scope]);
+ }else target=await covering(f);
+ const call=await http(f),w=await loadScheduleScreen(call),r=w.records.find(s=>s.id===f.r.recordId),review=await loadCancellationReview(call,w,r);return {...f,target,call,w,r,review};}
 const input=f=>cancellationTransferInput(f.w,f.r,f.review,{[f.c.recordId]:f.target.recordId},{confirmed:true,note:'Fictional coverage reviewed'});
+
+const deniedActions={canEdit:false,canChangeStructure:false,canChangeStation:false,canCancel:false,unfinishedClosingCount:0,hasLinkedTasks:false,hasCompletedClosing:false,editAreas:[],blockedReason:'authority'};
+test('shift list skips the action helper when schedule.change is absent',async()=>{
+ const f=await reviewFixture(),client=await admin.connect();try{await client.query('BEGIN');
+  await client.query("CREATE OR REPLACE FUNCTION candidate_operations.published_shift_actions(p_member uuid,p_restaurant text,p_shift uuid) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$ BEGIN RAISE EXCEPTION 'fictional_action_helper_called'; END; $$");
+  const result=(await client.query('SELECT candidate_operations.list_schedule_shifts($1,$2,$3) result',[f.worker.subject,f.worker.membershipId,f.scope])).rows[0].result;
+  assert.deepEqual(result.items.find(s=>s.id===f.r.id).data.publishedActions,deniedActions);
+  await assert.rejects(client.query('SELECT candidate_operations.list_schedule_shifts($1,$2,$3)',[f.manager.subject,f.manager.membershipId,f.scope]),e=>e.message==='fictional_action_helper_called');
+ }finally{await client.query('ROLLBACK');client.release();}
+});
+test('non-editors see no work-state metadata on their own or a coworkers published shift',async()=>{
+ const f=await reviewFixture();await run(f,{requestId:randomUUID(),locationId:f.scope,action:'task.create',input:{kind:'task',ownerId:f.worker.membershipId,title:'Private linked work',detail:'Fictional',due:'2031-05-01T14:00:00Z',shiftId:f.r.id}});
+ await admin.query("INSERT INTO candidate_identity.membership_capabilities VALUES($1,'close.confirm',true)",[f.second.membershipId]);
+ for(const actor of [f.worker,f.second])assert.deepEqual((await reference(f,f.r,actor)).data.publishedActions,deniedActions);
+ await admin.query("DELETE FROM candidate_identity.membership_capabilities WHERE membership_id=$1 AND capability='location.manage'",[f.manager.membershipId]);
+ assert.deepEqual((await reference(f,f.r)).data.publishedActions,deniedActions);
+ await admin.query("UPDATE candidate_operations.closes SET phase='closed' WHERE id=$1",[f.c.recordId]);
+ assert.deepEqual((await reference(f,f.r,f.second)).data.publishedActions,deniedActions);
+});
+test('a newer cancellation snapshot survives an unrelated store write but exact source and closing counts remain bound',async()=>{
+ const f=await reviewFixture();const task=await run(f,{requestId:randomUUID(),locationId:f.scope,action:'task.create',input:{kind:'task',ownerId:f.worker.membershipId,title:'Unrelated employee activity',detail:'Fictional',due:'2031-05-02T14:00:00Z'}});
+ const review=await loadCancellationReview(f.call,f.w,f.r);assert.ok(review.workspaceRevision>f.w.location.revision);
+ const command=cancellationTransferInput(f.w,f.r,review,{[f.c.recordId]:f.target.recordId},{confirmed:true,note:'Reviewed after unrelated write'});
+ assert.throws(()=>checkedCancellationReview(f.w,{...f.r,revision:f.r.revision+1},review));
+ assert.throws(()=>checkedCancellationReview(f.w,{...f.r,data:{...f.r.data,publishedActions:{...f.r.data.publishedActions,unfinishedClosingCount:2}}},review));
+ await new ScheduleScreenSender().send(f.call,f.scope,'shift.cancel',command,f.r);
+ assert.equal((await row('tasks',task.recordId)).shift_id,null);assert.equal((await row('shift_references',f.target.recordId)).revision,f.target.revision);
+});
+for(const issue of ['instruction_changed','manager_unavailable','verifier_unavailable','position_mismatch','station_mismatch','zone_conflict'])test('transfer read and command reject '+issue,async()=>{
+ const f=await reviewFixture(issue==='station_mismatch');
+ if(issue==='instruction_changed')await admin.query('UPDATE candidate_operations.standard_references SET revision=revision+1 WHERE id=$1',[f.standard]);
+ if(issue==='manager_unavailable')await admin.query("UPDATE candidate_identity.membership_capabilities SET active=false WHERE membership_id=$1 AND capability='close.confirm'",[f.manager.membershipId]);
+ if(issue==='verifier_unavailable') {
+  await admin.query("UPDATE candidate_operations.closes SET standard_snapshot=jsonb_set(standard_snapshot,'{verification}','\"senior-then-manager\"'::jsonb),verifier_id=$2 WHERE id=$1",[f.c.recordId,f.foreign.membershipId]);
+ }
+ if(issue==='position_mismatch')await admin.query("UPDATE candidate_operations.standard_references SET position='Other job' WHERE id=$1",[f.standard]);
+ if(issue==='station_mismatch')await admin.query("UPDATE candidate_operations.station_references SET title='Other station',setup_data='{\"standardIds\":[]}'::jsonb WHERE id=$1",[f.station]);
+ if(issue==='zone_conflict')await run(f,{requestId:randomUUID(),locationId:f.scope,action:'close.assign',input:{shiftId:f.target.recordId,standardId:f.standard,managerId:f.manager.membershipId,due:'2031-05-01T14:30:00Z',note:'Occupied zone'}});
+ const w=await loadScheduleScreen(f.call),r=w.records.find(s=>s.id===f.r.id),review=await loadCancellationReview(f.call,w,r);assert.deepEqual(review.closing[0].options,[],issue);
+ const expected=issue==='zone_conflict'?'closing_zone_conflict':'closing_publication_review_required';
+ await assert.rejects(run(f,cancel(f,f.r,[mapping(f.c,f.target)])),e=>e.status===409&&e.code===expected);
+ assert.equal((await row('shift_references',f.r.id)).cancelled,false);assert.equal((await row('closes',f.c.recordId)).shift_id,f.r.id);
+});
+test('each listed covering option succeeds independently with the same reviewed versions',async()=>{
+ const f=await reviewFixture(),person=randomUUID(),membershipId=randomUUID();
+ await admin.query('INSERT INTO candidate_identity.people VALUES($1,$2)',[person,'Fictional other covering employee']);
+ await admin.query("INSERT INTO candidate_identity.memberships(id,person_id,restaurant_id,department,position) VALUES($1,$2,$3,'BOH','Cook')",[membershipId,person,f.scope]);
+ await admin.query("INSERT INTO candidate_identity.schedule_eligibility VALUES($1,'Cook','schedule-job',true)",[membershipId]);
+ await admin.query("INSERT INTO candidate_identity.station_clearances VALUES($1,$2,'Cook',true)",[membershipId,f.scope]);
+ await admin.query('UPDATE candidate_operations.schedule_input_reviews SET time_off_complete=true,reviewed_at=clock_timestamp() WHERE restaurant_id=$1',[f.scope]);
+ const target2=await publish(f,await draft(f,{membershipId}));
+ await admin.query('INSERT INTO candidate_operations.shift_standard_links(shift_id,standard_id,restaurant_id) VALUES($1,$2,$3)',[target2.recordId,f.standard,f.scope]);
+ const w=await loadScheduleScreen(f.call),r=w.records.find(s=>s.id===f.r.id),review=await loadCancellationReview(f.call,w,r);
+ assert.equal(review.closing[0].options.length,2);
+ const client=await admin.connect();try{for(const o of review.closing[0].options){await client.query('BEGIN');const payload=cancel(f,f.r,[mapping(f.c,{recordId:o.shiftId,revision:o.revision})]);delete payload.requestId;delete payload.locationId;
+  const result=await client.query('SELECT candidate_operations.change_schedule($1,$2,$3,$4,$5::jsonb) result',[f.manager.subject,f.manager.membershipId,f.scope,randomUUID(),JSON.stringify(payload)]);assert.equal(result.rows[0].result.revision,3);assert.equal((await client.query('SELECT shift_id FROM candidate_operations.closes WHERE id=$1',[f.c.recordId])).rows[0].shift_id,o.shiftId);await client.query('ROLLBACK');
+ }}finally{await client.query('ROLLBACK');client.release();}
+});
 test('cancellation review returns one coherent minimal snapshot with eligible choices and private helper',async()=>{const f=await reviewFixture();assert.equal(f.review.canCancel,true);assert.deepEqual(f.review.closing[0].standard,{id:f.standard,title:'Fictional close',version:1,position:'Cook'});assert.deepEqual(f.review.closing[0].options.map(o=>[o.shiftId,o.revision,o.ownerId]),[[f.target.recordId,2,f.second.membershipId]]);assert.doesNotMatch(JSON.stringify(f.review),/criteria|answers|correction|helperId/);await assert.rejects(db.pool.query('SELECT candidate_operations.closing_transfer_issue(NULL,NULL,NULL,true)'),e=>e.code==='42501');assert.deepEqual(input(f).closeTransfers,[mapping(f.c,f.target)]);});
 test('reviewed transfer cancels atomically, resets physical readiness and replays without duplicate events or intents',async()=>{const f=await reviewFixture();await admin.query("UPDATE candidate_operations.closes SET phase='correction',answers='[0]',helper_id=$2,correction=jsonb_build_object('note','Fictional correction') WHERE id=$1",[f.c.recordId,f.foreign.membershipId]);const sender=new ScheduleScreenSender();await assert.rejects(sender.send(async(path,c)=>{assert.equal((await f.call(path,c)).status,200);throw Error('Fictional lost response');},f.scope,'shift.cancel',input(f),f.r),/lost response/);const replay=await sender.retry(f.call);assert.equal(replay.replayed,true);const c=await row('closes',f.c.recordId);assert.equal(c.shift_id,f.target.recordId);assert.equal(c.owner_id,f.second.membershipId);assert.equal(c.phase,'open');assert.deepEqual(c.answers,[]);assert.equal(c.helper_id,null);assert.equal(c.correction,null);assert.equal(c.revision,3);assert.equal((await row('shift_references',f.r.id)).cancelled,true);assert.equal((await admin.query("SELECT count(*)::int n FROM candidate_operations.close_events WHERE close_id=$1 AND action='reassigned'",[c.id])).rows[0].n,1);assert.equal((await admin.query('SELECT count(*)::int n FROM candidate_operations.close_notification_outbox WHERE close_id=$1 AND revision=3',[c.id])).rows[0].n,3);});
 test('server denies employee, cross-store, expired session and invalid route access without exposing closing choices',async()=>{const f=await reviewFixture();for(const actor of [f.worker,f.foreign])assert.equal((await (await http(f,actor))('/cancellation-review/'+f.r.id)).status,403);const other=await fixture();assert.equal((await (await http(other))('/cancellation-review/'+f.r.id)).status,403);assert.equal((await f.call('/cancellation-review')).status,400);assert.equal((await f.call('/cancellation-review/'+f.r.id+'?limit=100')).status,400);const expired=await http(f);await admin.query("UPDATE candidate_identity.sessions SET expires_at=clock_timestamp()-interval '1 second' WHERE subject=$1",[f.manager.subject]);assert.equal((await expired('/cancellation-review/'+f.r.id)).status,401);});
