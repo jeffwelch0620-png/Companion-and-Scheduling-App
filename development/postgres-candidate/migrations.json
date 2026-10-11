@@ -196,6 +196,10 @@
     {
       "file": "049_leadership_visibility_and_checkout_eligibility.sql",
       "sha256": "6a0a63bceacec4418eb2b37043497f38bf8fb29271e7e827eb498631bc626f5e"
+    },
+    {
+      "file": "050_published_shift_ui_projection.sql",
+      "sha256": "5500f56aa97a1c236aeaa02268a1439588c496bc8afecb7ad96e7fc3e21d2450"
     }
   ]
 }
