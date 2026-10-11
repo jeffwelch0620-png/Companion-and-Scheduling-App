@@ -192,6 +192,10 @@
     {
       "file": "048_leadership_ui_projection.sql",
       "sha256": "213d5cf6f517ff53f2416b45333c4759a34ab842ce428d9e50a22c95f8b9d1e3"
+    },
+    {
+      "file": "049_leadership_visibility_and_checkout_eligibility.sql",
+      "sha256": "6a0a63bceacec4418eb2b37043497f38bf8fb29271e7e827eb498631bc626f5e"
     }
   ]
 }

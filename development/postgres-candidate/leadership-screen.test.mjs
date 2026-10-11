@@ -11,6 +11,77 @@ function http(f,actor=f.publisher){const h=createTaskHandler(db,async()=>({subje
 const form=(f,person=f.publisher.id,area='Kitchen')=>({personId:person,area,startDate:'2031-05-01',startTime:'09:00',endDate:'2031-05-01',endTime:'17:00',startOccurrence:'',endOccurrence:'',note:'Fictional dated responsibility'});
 async function assign(f,person=f.publisher.id,area='Kitchen',record,actor=f.publisher){const call=http(f,actor),w=await loadScheduleScreen(call),input=leadershipInput(w,form(f,person,area),record);return new ScheduleScreenSender().send(call,f.scope,'leadership.assign',input,record);}
 const reference=async(f,id,actor=f.publisher)=>(await loadScheduleScreen(http(f,actor))).records.find(r=>r.id===id);
+const command=(f,person=f.publisher.id,record)=>({requestId:randomUUID(),locationId:f.scope,action:'leadership.assign',...(record?{recordId:record.id,expectedRevision:record.revision}:{}),input:{personId:person,area:'Kitchen',start:'2031-05-01T14:00:00Z',end:'2031-05-01T22:00:00Z',note:'Fictional responsibility review'}});
+const recipients=async(id,revision)=>(await admin.query('SELECT recipient_id FROM candidate_operations.leadership_outbox WHERE leadership_id=$1 AND revision=$2 ORDER BY recipient_id',[id,revision])).rows.map(r=>r.recipient_id);
+async function extraPublisher(f,{area='Kitchen',active=true,scheduleOnly=false,locationManage=false}={}){
+ const id=randomUUID(),person=randomUUID();await admin.query('INSERT INTO candidate_identity.people VALUES($1,$2)',[person,'Fictional notification publisher']);
+ await admin.query("INSERT INTO candidate_identity.memberships(id,person_id,restaurant_id,department,position,active,schedule_only) VALUES($1,$2,$3,$4,'Cook',$5,$6)",[id,person,f.scope,area,active,scheduleOnly]);
+ await admin.query("INSERT INTO candidate_identity.membership_capabilities VALUES($1,'schedule.publish',true)",[id]);
+ if(locationManage)await admin.query("INSERT INTO candidate_identity.membership_capabilities VALUES($1,'location.manage',true)",[id]);return id;
+}
+
+test('self-assignment follows the latest assign/edit actor, not the viewer or revocation actor',async()=>{
+ const f=await fixture();await admin.query("INSERT INTO candidate_identity.membership_capabilities VALUES($1,'schedule.publish',true)",[f.closer.id]);
+ const created=await assign(f);let r=await reference(f,created.recordId);assert.equal(r.data.selfAssigned,true);
+ const edited=await http(f,f.closer)('/commands',command(f,f.publisher.id,r));assert.equal(edited.status,200);r=await reference(f,r.id);assert.equal(r.data.selfAssigned,false);assert.equal((await reference(f,r.id,f.closer)).data.selfAssigned,false);
+ await assign(f,f.publisher.id,'Kitchen',r);r=await reference(f,r.id);assert.equal(r.data.selfAssigned,true);
+ assert.equal((await http(f,f.closer)('/commands',{requestId:randomUUID(),locationId:f.scope,action:'leadership.revoke',recordId:r.id,expectedRevision:r.revision,input:{note:'Fictional revocation by another publisher'}})).status,200);
+ assert.equal((await reference(f,r.id)).data.selfAssigned,true);
+});
+
+test('self-assignment recipients include only other active authorized publishers in the store',async()=>{
+ const f=await fixture(),same=await extraPublisher(f),cross=await extraPublisher(f,{area:'Service',locationManage:true});
+ await extraPublisher(f,{active:false});await extraPublisher(f,{scheduleOnly:true});await extraPublisher(f,{area:'Service'});await fixture();
+ await admin.query("INSERT INTO candidate_identity.membership_capabilities VALUES($1,'schedule.publish',false)",[f.employee.id]);
+ const result=await assign(f);assert.deepEqual(await recipients(result.recordId,result.revision),[f.publisher.id,same,cross].sort());
+});
+
+test('self-assignment and edits notify each recipient once even with concurrent receipt replay',async()=>{
+ const f=await fixture(),other=await extraPublisher(f),call=http(f),cmd=command(f);
+ const outcomes=await Promise.all([call('/commands',cmd),call('/commands',cmd)]);assert.ok(outcomes.every(r=>r.status===200));assert.deepEqual(outcomes.map(r=>r.body.replayed).sort(),[false,true]);
+ const id=outcomes[0].body.recordId;assert.deepEqual(await recipients(id,1),[f.publisher.id,other].sort());
+ const r=await reference(f,id),edit=command(f,f.publisher.id,r);assert.equal((await call('/commands',edit)).status,200);assert.equal((await call('/commands',edit)).body.replayed,true);
+ assert.deepEqual(await recipients(id,2),[f.publisher.id,other].sort());assert.equal((await call('/commands',cmd)).body.replayed,true);
+ assert.equal((await admin.query('SELECT count(*)::int n FROM candidate_operations.leadership_outbox WHERE leadership_id=$1',[id])).rows[0].n,4);
+ assert.equal((await admin.query('SELECT count(*)::int n FROM candidate_operations.leadership_events WHERE leadership_id=$1',[id])).rows[0].n,2);
+});
+
+test('assignment and edits by another publisher retain only the assigned leader recipient',async()=>{
+ const f=await fixture();await extraPublisher(f);const created=await assign(f,f.closer.id);assert.deepEqual(await recipients(created.recordId,1),[f.closer.id]);
+ let r=await reference(f,created.recordId);assert.equal(r.data.selfAssigned,false);await assign(f,f.closer.id,'Kitchen',r);r=await reference(f,r.id);assert.equal(r.data.selfAssigned,false);assert.deepEqual(await recipients(r.id,2),[f.closer.id]);
+});
+
+test('configured checkout position is excluded from choices and assignments despite leadership capabilities',async()=>{
+ const f=await fixture();await admin.query("UPDATE candidate_identity.memberships SET position='Steward' WHERE id=$1",[f.closer.id]);await admin.query("INSERT INTO candidate_identity.membership_capabilities VALUES($1,'schedule.change',true)",[f.closer.id]);
+ const w=await loadScheduleScreen(http(f));assert.ok(!w.leadershipOptions.flatMap(o=>o.leaders).some(m=>m.id===f.closer.id));assert.ok(w.leadershipOptions.flatMap(o=>o.leaders).some(m=>m.id===f.publisher.id));
+ const response=await http(f)('/commands',command(f,f.closer.id));assert.equal(response.status,403);assert.equal(response.body.error.code,'leader_capability_required');
+ assert.equal((await admin.query('SELECT count(*)::int n FROM candidate_operations.leadership_references WHERE restaurant_id=$1',[f.scope])).rows[0].n,0);
+});
+
+test('existing checkout-role assignments remain intact; edits reactivation and replay recheck eligibility',async()=>{
+ const f=await fixture(),call=http(f),cmd=command(f,f.closer.id),created=await call('/commands',cmd);assert.equal(created.status,200);
+ await admin.query("UPDATE candidate_identity.memberships SET position='Steward' WHERE id=$1",[f.closer.id]);let r=await reference(f,created.body.recordId);assert.equal(r.data.active,true);assert.equal(r.revision,1);
+ const before=await recipients(r.id,1);for(const c of [cmd,command(f,f.closer.id,r)]){const denied=await call('/commands',c);assert.equal(denied.status,403);assert.equal(denied.body.error.code,'leader_capability_required');}
+ assert.equal((await reference(f,r.id)).revision,1);assert.deepEqual(await recipients(r.id,1),before);
+ assert.equal((await call('/commands',{requestId:randomUUID(),locationId:f.scope,action:'leadership.revoke',recordId:r.id,expectedRevision:r.revision,input:{note:'Reviewed existing checkout responsibility'}})).status,200);
+ r=await reference(f,r.id);assert.equal(r.data.active,false);assert.equal((await call('/commands',command(f,f.closer.id,r))).body.error.code,'leader_capability_required');
+ assert.equal((await admin.query('SELECT count(*)::int n FROM candidate_operations.leadership_events WHERE leadership_id=$1',[r.id])).rows[0].n,2);
+});
+
+test('late publisher notification failure rolls back self-assignment events receipts and revisions',async()=>{
+ const f=await fixture(),other=await extraPublisher(f),cmd=command(f),before=(await admin.query('SELECT revision FROM candidate_identity.restaurants WHERE id=$1',[f.scope])).rows[0].revision;
+ await admin.query("CREATE FUNCTION candidate_operations.fail_self_leader_notice() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fictional_publisher_notice_failure'; END; $$");
+ await admin.query(`CREATE TRIGGER fail_self_leader_notice BEFORE INSERT ON candidate_operations.leadership_outbox FOR EACH ROW WHEN (NEW.recipient_id='${other}'::uuid) EXECUTE FUNCTION candidate_operations.fail_self_leader_notice()`);
+ try{
+  assert.equal((await http(f)('/commands',cmd)).status,503);assert.equal((await admin.query('SELECT count(*)::int n FROM candidate_operations.leadership_references WHERE restaurant_id=$1',[f.scope])).rows[0].n,0);
+  assert.equal((await admin.query('SELECT count(*)::int n FROM candidate_operations.command_receipts WHERE request_id=$1',[cmd.requestId])).rows[0].n,0);assert.equal((await admin.query('SELECT revision FROM candidate_identity.restaurants WHERE id=$1',[f.scope])).rows[0].revision,before);
+ }finally{await admin.query('DROP TRIGGER fail_self_leader_notice ON candidate_operations.leadership_outbox');await admin.query('DROP FUNCTION candidate_operations.fail_self_leader_notice()');}
+ assert.equal((await http(f)('/commands',cmd)).status,200);
+});
+
+test('imported leadership without assignment events does not invent self-assignment provenance',async()=>{
+ const f=await fixture(),id=randomUUID();await admin.query("INSERT INTO candidate_operations.leadership_references(id,member_id,restaurant_id,department,starts_at,ends_at,note) VALUES($1,$2,$3,'Kitchen','2031-05-01T14:00:00Z','2031-05-01T22:00:00Z','Fictional imported reference')",[id,f.publisher.id,f.scope]);assert.equal((await reference(f,id)).data.selfAssigned,false);
+});
 test('server choices include eligible self-assignment and closing-only leaders without exposing coworker capabilities',async()=>{const f=await fixture(),w=await loadScheduleScreen(http(f));const kitchen=w.leadershipOptions.find(o=>o.area==='Kitchen'),service=w.leadershipOptions.find(o=>o.area==='Service');assert.deepEqual(kitchen.leaders.map(m=>m.id).sort(),[f.publisher.id,f.closer.id].sort());assert.deepEqual(service.leaders.map(m=>m.id).sort(),[f.publisher.id,f.foreign.id].sort());assert.deepEqual(w.members.find(m=>m.id===f.closer.id).capabilities,[]);assert.ok(kitchen.leaders.every(m=>Object.keys(m).sort().join(',')==='id,name'));const result=await assign(f);assert.equal((await reference(f,result.recordId)).ownerId,f.publisher.id);});
 test('planner, employee, location management alone and other-department publishers keep exact boundaries',async()=>{const f=await fixture();assert.deepEqual((await loadScheduleScreen(http(f,f.planner))).leadershipOptions,[]);assert.deepEqual((await loadScheduleScreen(http(f,f.employee))).leadershipOptions,[]);const foreign=await loadScheduleScreen(http(f,f.foreign));assert.deepEqual(foreign.leadershipOptions.map(o=>o.area),['Service']);await admin.query("UPDATE candidate_identity.membership_capabilities SET active=false WHERE membership_id=$1 AND capability='schedule.publish'",[f.publisher.id]);assert.deepEqual((await loadScheduleScreen(http(f))).leadershipOptions,[]);const denied=await http(f)('/commands',{requestId:randomUUID(),locationId:f.scope,action:'leadership.assign',input:{personId:f.publisher.id,area:'Kitchen',start:'2031-05-01T14:00:00Z',end:'2031-05-01T22:00:00Z',note:'Denied'}});assert.equal(denied.status,403);});
 test('HTTP edit revoke and reactivation use exact versions and preserve all membership permissions',async()=>{const f=await fixture(),before=(await admin.query('SELECT * FROM candidate_identity.membership_capabilities WHERE membership_id=$1 ORDER BY capability',[f.closer.id])).rows;const created=await assign(f,f.closer.id);let r=await reference(f,created.recordId);assert.equal(r.data.actions.canEdit,true);const owner=await reference(f,r.id,f.closer);assert.deepEqual(owner.data.actions,{canEdit:false,canRevoke:false});const edited=await assign(f,f.closer.id,'Kitchen',r);r=await reference(f,r.id);assert.equal(r.revision,edited.revision);const w=await loadScheduleScreen(http(f));await new ScheduleScreenSender().send(http(f),f.scope,'leadership.revoke',leadershipRevokeInput(w,r,'Ending responsibility',true),r);r=await reference(f,r.id);assert.equal(r.data.active,false);assert.deepEqual(r.data.actions,{canEdit:true,canRevoke:false});await assign(f,f.closer.id,'Kitchen',r);assert.equal((await reference(f,r.id)).data.active,true);assert.deepEqual((await admin.query('SELECT * FROM candidate_identity.membership_capabilities WHERE membership_id=$1 ORDER BY capability',[f.closer.id])).rows,before);assert.equal((await admin.query('SELECT count(*)::int n FROM candidate_operations.leadership_events WHERE leadership_id=$1',[r.id])).rows[0].n,4);});

@@ -8,7 +8,7 @@ export function leadershipOptions(w) {
  return options;
 }
 export function checkedLeadership(w,r) {
- if(!r||r.kind!=='leadership'||r.locationId!==w.location.id||typeof r.id!=='string'||!r.id||!Number.isSafeInteger(r.revision)||r.revision<1||typeof r.ownerId!=='string'||!r.ownerId||!w.location.configuration.operatingDepartments.includes(r.area)||r.data?.area!==r.area||r.data?.personId!==r.ownerId||typeof r.data?.active!=='boolean'||typeof r.data?.note!=='string'||typeof r.data?.actions?.canEdit!=='boolean'||typeof r.data?.actions?.canRevoke!=='boolean'||![r.data.start,r.data.end].every(t=>typeof t==='string'&&Number.isFinite(Date.parse(t)))||Date.parse(r.data.end)<=Date.parse(r.data.start))throw Error(leadershipReviewMessage);
+ if(!r||r.kind!=='leadership'||r.locationId!==w.location.id||typeof r.id!=='string'||!r.id||!Number.isSafeInteger(r.revision)||r.revision<1||typeof r.ownerId!=='string'||!r.ownerId||!w.location.configuration.operatingDepartments.includes(r.area)||r.data?.area!==r.area||r.data?.personId!==r.ownerId||typeof r.data?.active!=='boolean'||typeof r.data?.note!=='string'||typeof r.data?.selfAssigned!=='boolean'||typeof r.data?.actions?.canEdit!=='boolean'||typeof r.data?.actions?.canRevoke!=='boolean'||![r.data.start,r.data.end].every(t=>typeof t==='string'&&Number.isFinite(Date.parse(t)))||Date.parse(r.data.end)<=Date.parse(r.data.start))throw Error(leadershipReviewMessage);
  return r;
 }
 export function leadershipFields(w,r) {
