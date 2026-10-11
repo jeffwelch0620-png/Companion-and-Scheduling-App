@@ -4,7 +4,7 @@ const viewer=()=>({location:{id:'fictional-screen',timezone:'America/New_York',r
 const ok=body=>({status:200,body});
 test('request workspace loads every page, carries only current viewer permissions and retains scoped shifts',async()=>{
  const calls=[];const w=await loadScheduleScreen(async path=>{calls.push(path);if(path==='/schedule-viewer')return ok(viewer());const roster=path.startsWith('/schedule-roster');return ok({workspaceRevision:1,items:roster?[{id:path.includes('after')?'worker':'other'}]:[{id:path,kind:path.startsWith('/schedule-stations')?'station':'shift',data:{}}],nextCursor:roster&&!path.includes('after')?'next':null});});
- assert.equal(calls.filter(p=>p.startsWith('/schedule-roster')).length,2);assert.equal(w.records.length,4);assert.deepEqual(w.members.map(m=>m.capabilities),[[],[]]);
+ assert.equal(calls.filter(p=>p.startsWith('/schedule-roster')).length,2);assert.equal(w.records.length,5);assert.equal(w.offerReviewNotices,2);assert.deepEqual(w.members.map(m=>m.capabilities),[[],[]]);
 });
 test('revision drift retries the entire workspace instead of mixing snapshots',async()=>{
  let version=1,read=0;const w=await loadScheduleScreen(async path=>{if(path==='/schedule-viewer')return ok({...viewer(),workspaceRevision:version});if(++read===1){version=2;return ok({workspaceRevision:2,items:[{id:'mixed'}],nextCursor:null});}return ok({workspaceRevision:2,items:[],nextCursor:null});});assert.equal(w.records.length,0);assert.ok(read>1);
@@ -32,7 +32,7 @@ test('server uncertainty retains retry; rejected stale/access commands clear ret
  await assert.rejects(sender.send(async()=>({status:403}),'s','availability.save',{}),/current access/);assert.equal(sender.pending,null);
 });
 test('request screen refuses unrelated commands and preserves revision envelopes',async()=>{
- const sender=new ScheduleScreenSender();await assert.rejects(sender.send(()=>assert.fail(),'s','shift.publish',{}),/not enabled/);await assert.rejects(sender.send(()=>assert.fail(),'s','request.create',{type:'swap'}),/not enabled/);
+ const sender=new ScheduleScreenSender();await assert.rejects(sender.send(()=>assert.fail(),'s','shift.publish',{}),/not enabled/);await assert.rejects(sender.send(()=>assert.fail(),'s','request.create',{type:'unrelated'}),/not enabled/);
  await sender.send(async(_,command)=>{assert.equal(command.recordId,'a');assert.equal(command.expectedRevision,3);return ok({});},'s','availability.review',{approve:true},{id:'a',revision:3});
 });
 test('station context keeps exact setup references and safely adapts legacy stations with no guide/goal links',async()=>{

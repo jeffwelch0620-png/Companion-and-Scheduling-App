@@ -1,0 +1,12 @@
+import type {Workspace,RecordOf,CoverageDuty,History,Member} from '../../app/shared/types';
+export type OfferActionFlags={canVolunteer:boolean;canWithdraw:boolean;canWithdrawVolunteer:boolean;canConsent:boolean;canApprove:boolean;canDecline:boolean;canReview:boolean;departmentChange:boolean;isCurrent:boolean;approvalTargetIds:string[];replacementDepartment:string|null};
+export type Offer={id:string;locationId:string;ownerId:string;area:string;revision:number;updatedAt:string;kind:'coverage'|'request';data:{actions:OfferActionFlags;type?:'swap';shiftId:string;shiftRevision:number;position:string;start:string;end:string;duties:CoverageDuty[];volunteers:{personId:string;at:string}[];history:History;note:string;decision?:string;status:'open'|'pending'|'accepted-by-replacement'|'approved'|'withdrawn'|'declined'|'invalidated';replacementId?:string;selectedId?:string;eligible?:boolean;unavailableReason?:string}};
+export function isOffer(r:unknown):r is Offer;
+export function checkedOffer(w:Workspace,r:unknown):Offer;
+export const offerReviewMessage:string;
+export function validOffers(w:Workspace & {offerReviewNotices?:number}):{valid:Offer[];invalid:number};
+export function offerActions(w:Workspace,r:Offer,now:string):{current:boolean;volunteer:boolean;withdrawVolunteer:boolean;withdraw:boolean;consent:boolean;review:boolean;approve:boolean;decline:boolean;departmentChange:boolean;replacementDepartment:string|null;approvalTargetIds:string[]};
+export function replacementCandidates(w:Workspace,shift:RecordOf<'shift'>):Member[];
+export function replacementInput(w:Workspace,shift:RecordOf<'shift'>,type:string,fields:{note:unknown;replacementId?:string;openCoverageConfirmed?:boolean},now:string):Record<string,unknown>;
+export function offerIssueText(code:string):string;
+export function offerCommandInput(w:Workspace,r:Offer,action:string,fields:Record<string,unknown>,now:string):Record<string,unknown>;

@@ -1425,7 +1425,7 @@ BEGIN
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
  SELECT * INTO scope FROM candidate_identity.restaurants WHERE id=p_restaurant;
  SELECT array_agg(id) INTO selected FROM (SELECT r.id FROM candidate_operations.schedule_offers r WHERE r.restaurant_id=p_restaurant AND r.mode=p_mode AND (p_after IS NULL OR r.id>p_after) AND (actor.id IN (r.owner_id,r.replacement_id,r.selected_id) OR candidate_operations.offer_coordinator(actor.id,r.department) OR EXISTS(SELECT 1 FROM jsonb_array_elements(r.volunteers) v WHERE v->>'personId'=actor.id::text) OR r.mode='coverage' AND candidate_operations.offer_eligible(r,actor.id)) ORDER BY r.id LIMIT p_limit+1) page;
- SELECT coalesce(jsonb_agg(jsonb_build_object('id',r.id,'kind',CASE WHEN r.mode='coverage' THEN 'coverage' ELSE 'request' END,'ownerId',r.owner_id,'locationId',r.restaurant_id,'area',r.department,'revision',r.revision,'updatedAt',r.updated_at,'data',jsonb_build_object('type',CASE WHEN r.mode='swap' THEN 'swap' END,'title',r.position||' shift coverage','shiftId',r.shift_id,'shiftRevision',r.shift_revision,'position',r.position,'start',r.starts_at,'end',r.ends_at,'duties',r.duties,'status',r.status,'replacementId',r.replacement_id,'note',CASE WHEN r.mode='swap' OR private_access THEN r.note ELSE '' END,'decision',CASE WHEN r.mode='swap' OR private_access THEN r.decision ELSE '' END,'selectedId',CASE WHEN private_access OR r.selected_id=actor.id THEN r.selected_id END,'volunteers',CASE WHEN private_access THEN r.volunteers ELSE (SELECT coalesce(jsonb_agg(v),'[]') FROM jsonb_array_elements(r.volunteers) v WHERE v->>'personId'=actor.id::text) END,'history',CASE WHEN private_access THEN (SELECT coalesce(jsonb_agg(jsonb_build_object('action',e.action,'actorId',e.actor_id,'at',e.recorded_at,'note',e.note) ORDER BY e.revision),'[]') FROM candidate_operations.schedule_offer_events e WHERE e.offer_id=r.id) ELSE '[]'::jsonb END,'unavailableReason',candidate_operations.offer_issue(r),'eligible',candidate_operations.offer_eligible(r,actor.id))) ORDER BY r.id),'[]') INTO items FROM candidate_operations.schedule_offers r CROSS JOIN LATERAL (SELECT actor.id=r.owner_id OR candidate_operations.offer_coordinator(actor.id,r.department) private_access) access WHERE r.id=ANY(selected[1:p_limit]);
+ SELECT coalesce(jsonb_agg(jsonb_build_object('id',r.id,'kind',CASE WHEN r.mode='coverage' THEN 'coverage' ELSE 'request' END,'ownerId',r.owner_id,'locationId',r.restaurant_id,'area',r.department,'revision',r.revision,'updatedAt',r.updated_at,'data',jsonb_build_object('type',CASE WHEN r.mode='swap' THEN 'swap' END,'title',r.position||' shift coverage','shiftId',r.shift_id,'shiftRevision',r.shift_revision,'position',r.position,'start',r.starts_at,'end',r.ends_at,'duties',r.duties,'status',r.status,'replacementId',r.replacement_id,'note',CASE WHEN r.mode='swap' OR private_access THEN r.note ELSE '' END,'decision',CASE WHEN r.mode='swap' OR private_access THEN r.decision ELSE '' END,'selectedId',CASE WHEN private_access OR r.selected_id=actor.id THEN r.selected_id END,'volunteers',CASE WHEN private_access THEN r.volunteers ELSE (SELECT coalesce(jsonb_agg(v),'[]') FROM jsonb_array_elements(r.volunteers) v WHERE v->>'personId'=actor.id::text) END,'history',CASE WHEN private_access THEN (SELECT coalesce(jsonb_agg(jsonb_build_object('action',e.action,'actorId',e.actor_id,'at',e.recorded_at,'note',e.note) ORDER BY e.revision),'[]') FROM candidate_operations.schedule_offer_events e WHERE e.offer_id=r.id) ELSE '[]'::jsonb END,'unavailableReason',candidate_operations.offer_issue(r),'eligible',candidate_operations.offer_eligible(r,actor.id),'actions',candidate_operations.offer_actions(r,actor.id))) ORDER BY r.id),'[]') INTO items FROM candidate_operations.schedule_offers r CROSS JOIN LATERAL (SELECT actor.id=r.owner_id OR candidate_operations.offer_coordinator(actor.id,r.department) private_access) access WHERE r.id=ANY(selected[1:p_limit]);
  IF cardinality(selected)>p_limit THEN next_cursor:=selected[p_limit]; END IF;
  RETURN jsonb_build_object('items',items,'nextCursor',next_cursor,'workspaceRevision',scope.revision,'timezone',scope.timezone,'coverage',p_mode);
 END;
@@ -1667,6 +1667,43 @@ BEGIN
  INSERT INTO candidate_operations.command_receipts(restaurant_id,actor_id,request_id,payload,fingerprint,result) VALUES(p_restaurant,p_member,p_request,p_payload,encode(sha256(convert_to(p_payload::text,'UTF8')),'hex'),result);
  INSERT INTO candidate_operations.notification_outbox(restaurant_id,recipient_id,task_id,revision,message) SELECT p_restaurant,id,task.id,task.revision,task.title||': '||task.phase FROM (SELECT DISTINCT unnest(targets) id) recipients WHERE id IS NOT NULL;
  RETURN result;
+END;
+$function$
+
+CREATE OR REPLACE FUNCTION candidate_operations.offer_actions(p_offer candidate_operations.schedule_offers, p_member uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+DECLARE actor candidate_identity.memberships; replacement_department text; current_offer boolean; reviewer boolean;
+ volunteered boolean; targets uuid[]:=ARRAY[]::uuid[]; change_department boolean:=false;
+BEGIN
+ SELECT * INTO actor FROM candidate_identity.memberships WHERE id=p_member AND restaurant_id=p_offer.restaurant_id AND active AND NOT schedule_only;
+ IF NOT FOUND THEN RETURN jsonb_build_object('canVolunteer',false,'canWithdraw',false,'canWithdrawVolunteer',false,'canConsent',false,'canApprove',false,'canDecline',false,'canReview',false,'departmentChange',false,'isCurrent',false,'approvalTargetIds','[]'::jsonb,'replacementDepartment',NULL); END IF;
+ SELECT department INTO replacement_department FROM candidate_identity.memberships WHERE id=p_offer.replacement_id AND restaurant_id=p_offer.restaurant_id;
+ change_department:=p_offer.mode='swap' AND replacement_department IS NOT NULL AND replacement_department<>p_offer.department;
+ current_offer:=candidate_operations.offer_issue(p_offer)='' AND p_offer.ends_at>statement_timestamp();
+ volunteered:=EXISTS(SELECT 1 FROM jsonb_array_elements(p_offer.volunteers) v WHERE v->>'personId'=actor.id::text);
+ reviewer:=current_offer AND actor.id<>p_offer.owner_id AND actor.id IS DISTINCT FROM p_offer.replacement_id
+  AND candidate_operations.published_change_allowed(actor.id,p_offer.restaurant_id,p_offer.department,p_offer.starts_at,p_offer.ends_at);
+ IF reviewer AND (p_offer.mode='coverage' AND p_offer.status='open' OR p_offer.mode='swap' AND p_offer.status='accepted-by-replacement') THEN
+  SELECT coalesce(array_agg(m.id ORDER BY m.id),ARRAY[]::uuid[]) INTO targets FROM candidate_identity.memberships m
+  WHERE m.restaurant_id=p_offer.restaurant_id AND m.active AND NOT m.schedule_only AND m.id NOT IN (actor.id,p_offer.owner_id)
+   AND (p_offer.mode='swap' AND m.id=p_offer.replacement_id OR p_offer.mode='coverage' AND EXISTS(SELECT 1 FROM jsonb_array_elements(p_offer.volunteers) v WHERE v->>'personId'=m.id::text))
+   AND candidate_operations.published_change_allowed(actor.id,p_offer.restaurant_id,m.department,p_offer.starts_at,p_offer.ends_at)
+   AND candidate_operations.offer_eligible(p_offer,m.id)
+   AND EXISTS(SELECT 1 FROM candidate_operations.schedule_draft_events WHERE shift_id=p_offer.shift_id)
+   AND NOT EXISTS(SELECT 1 FROM candidate_operations.closes WHERE shift_id=p_offer.shift_id AND phase='closed');
+ END IF;
+ RETURN jsonb_build_object(
+  'canVolunteer',p_offer.mode='coverage' AND current_offer AND NOT volunteered AND jsonb_array_length(p_offer.volunteers)<100 AND candidate_operations.offer_eligible(p_offer,actor.id),
+  'canWithdraw',p_offer.mode='coverage' AND p_offer.status='open' AND actor.id=p_offer.owner_id,
+  'canWithdrawVolunteer',p_offer.mode='coverage' AND p_offer.status='open' AND volunteered,
+  'canConsent',p_offer.mode='swap' AND current_offer AND p_offer.status='pending' AND actor.id=p_offer.replacement_id,
+  'canApprove',cardinality(targets)>0,'canDecline',p_offer.mode='swap' AND reviewer,
+  'canReview',reviewer,'departmentChange',change_department,'isCurrent',current_offer,
+  'approvalTargetIds',to_jsonb(targets),'replacementDepartment',replacement_department);
 END;
 $function$
 
@@ -2720,9 +2757,13 @@ BEGIN
      target:=(input->>'personId')::uuid;
      IF NOT EXISTS(SELECT 1 FROM jsonb_array_elements(rec.volunteers) v WHERE v->>'personId'=target::text) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='volunteer_missing'; END IF;
     ELSE
-     IF NOT input ?& ARRAY['approve','note'] OR EXISTS(SELECT 1 FROM jsonb_object_keys(input) k WHERE k NOT IN ('approve','note')) OR jsonb_typeof(input->'approve') IS DISTINCT FROM 'boolean' THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_swap_review'; END IF;
+     IF NOT input ?& ARRAY['approve','note'] OR EXISTS(SELECT 1 FROM jsonb_object_keys(input) k WHERE k NOT IN ('approve','note','departmentConfirmed')) OR jsonb_typeof(input->'approve') IS DISTINCT FROM 'boolean' THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_swap_review'; END IF;
      target:=rec.replacement_id;
      IF (input->>'approve')::boolean AND rec.status<>'accepted-by-replacement' THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='replacement_consent_required'; END IF;
+    END IF;
+    IF action='request.review' THEN
+     IF input ? 'departmentConfirmed' AND jsonb_typeof(input->'departmentConfirmed') IS DISTINCT FROM 'boolean' THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_swap_review'; END IF;
+     IF input->'approve'='true'::jsonb AND EXISTS(SELECT 1 FROM candidate_identity.memberships WHERE id=target AND restaurant_id=p_restaurant AND department<>rec.department) AND input->'departmentConfirmed' IS DISTINCT FROM 'true'::jsonb THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='department_confirmation_required'; END IF;
     END IF;
     IF jsonb_typeof(input->'note') IS DISTINCT FROM 'string' OR length(btrim(event_note))=0 THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_consent_note'; END IF;
     rec.decision:=btrim(event_note);
@@ -2740,7 +2781,7 @@ BEGIN
   UPDATE candidate_operations.schedule_offers SET status=rec.status,selected_id=rec.selected_id,decision=rec.decision,volunteers=rec.volunteers,revision=revision+1,updated_at=clock_timestamp() WHERE id=rec.id RETURNING * INTO rec;
  END IF;
  IF p_payload ? 'clientCapturedAt' THEN PERFORM (p_payload->>'clientCapturedAt')::timestamptz; END IF;
- INSERT INTO candidate_operations.schedule_offer_events VALUES(rec.id,rec.revision,actor.id,action,event_note,to_jsonb(rec),rec.updated_at);
+ INSERT INTO candidate_operations.schedule_offer_events VALUES(rec.id,rec.revision,actor.id,action,event_note,to_jsonb(rec)||CASE WHEN action='request.review' AND input->'approve'='true'::jsonb THEN jsonb_build_object('departmentConfirmed',coalesce(input->'departmentConfirmed','false'::jsonb),'fromDepartment',rec.department,'toDepartment',(SELECT department FROM candidate_identity.memberships WHERE id=rec.selected_id AND restaurant_id=p_restaurant)) ELSE '{}'::jsonb END,rec.updated_at);
  IF creating AND rec.mode='swap' THEN recipients:=ARRAY[rec.replacement_id];
  ELSE
   SELECT array_agg(DISTINCT id) INTO recipients FROM (

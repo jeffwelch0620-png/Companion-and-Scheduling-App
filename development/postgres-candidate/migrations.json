@@ -184,6 +184,10 @@
     {
       "file": "046_source_attestation_and_shift_release.sql",
       "sha256": "d71529eb1735e966077d4fb72bdc9523a4f83d53d7fe947637785b6e3b0b7650"
+    },
+    {
+      "file": "047_offer_actions_and_department_acknowledgement.sql",
+      "sha256": "f8acf54abefb47df7f8a82d79ec0b7694753c1c641d89f265e8f29301d02dbef"
     }
   ]
 }

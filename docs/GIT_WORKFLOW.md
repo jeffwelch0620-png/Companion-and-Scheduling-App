@@ -1,6 +1,6 @@
 # Git workflow for Companion and Inventory integration
 
-The Companion repository keeps reviewed source on `main`. PostgreSQL preparation uses focused `codex/` branches from accepted main at `1b95d8e` (PR32). PR28 was squash-merged at `0f1aa31`; PR29 was separately approved and squash-merged at `a344421`, with 457/457 post-merge tests and CI passing. Inventory's merge is complete and its baseline is undergoing testing. Integration remains separate until the user confirms its tested baseline commit. Pushing saves versioned source remotely. Merging updates a shared baseline. Deployment and database application require a separate, explicit step.
+The Companion repository keeps reviewed source on `main`. PostgreSQL preparation uses focused `codex/` branches from accepted main at `e0479d1` (PR34). PR28 was squash-merged at `0f1aa31`; PR29 was separately approved and squash-merged at `a344421`, with 457/457 post-merge tests and CI passing. Inventory's merge is complete and its baseline is undergoing testing. Integration remains separate until the user confirms its tested baseline commit. Pushing saves versioned source remotely. Merging updates a shared baseline. Deployment and database application require a separate, explicit step.
 
 ## Routine development
 
@@ -43,4 +43,6 @@ Require pull requests, successful `candidate-validation` checks and resolution o
 
 PR32 weekly publication UI was separately approved and squash-merged at `1b95d8e` from reviewed head `d092dca`; merged-main CI passed 538/538 checks. Its publication-review corrections start from accepted main on `codex/companion-publication-review-followup` and require a new draft PR and separate merge approval. PR33 coverage/replacement UI remains a dependent draft; after the corrective PR is accepted, merge accepted main into it normally, retarget and re-test before seeking separate approval.
 
-PR34 follow-up adds corrective 046 after published 045; source attestation and scheduling planning use separate counters. PR34 remains a draft until its final reviewed head is separately approved. PR33 refresh still waits for that acceptance.
+PR34 follow-up adds corrective 046 after published 045; source attestation and scheduling planning use separate counters. PR34 was separately approved and squash-merged at `e0479d1` from tested head `078946e` (558/558 exact-head CI tests). PR33 normally incorporates that accepted main, targets main and remains a draft pending its refreshed validation and separate merge approval. No force-push, hosted application or Inventory integration is authorized by this refresh.
+
+PR33 reviewed follow-up adds corrective 047 for authoritative offer action reads and the required, audited department acknowledgement. Published 001–046 remain immutable. Push the tested follow-up to the existing branch and keep the PR draft; this work does not authorize ready status, merging, hosted application or Inventory changes.

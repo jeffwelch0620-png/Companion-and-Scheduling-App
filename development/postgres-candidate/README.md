@@ -31,7 +31,7 @@ npm run check:types --prefix development/postgres-candidate
 npm run build:preview --prefix development/postgres-candidate
 ```
 
-Bootstrap verifies the versioned hash manifest and applies 001–046 in order, inserts fictional base actors after 001 so later capability conversion can run, and creates fictional sessions after migration. Migration 037 requires PostgreSQL's trusted btree_gist extension for person booking exclusion. All candidate connection helpers use the selected database/port. Tests run serially because rollback checks create temporary failure triggers. The core concurrency tests use independent Node/PostgreSQL bridge processes; Python and machine-specific library paths are no longer required.
+Bootstrap verifies the versioned hash manifest and applies 001–047 in order, inserts fictional base actors after 001 so later capability conversion can run, and creates fictional sessions after migration. Migration 037 requires PostgreSQL's trusted btree_gist extension for person booking exclusion. All candidate connection helpers use the selected database/port. Tests run serially because rollback checks create temporary failure triggers. The core concurrency tests use independent Node/PostgreSQL bridge processes; Python and machine-specific library paths are no longer required.
 
 The GitHub `candidate-validation` gate performs this sequence when candidate dependencies change, and reports a successful intentional skip for unrelated changes. Its dependency detection includes application, database, package/configuration, shared UI and build inputs. Validation uses a fresh disposable PostgreSQL service. Passing candidate checks does not prove the complete application is migrated or deployed.
 
@@ -46,7 +46,7 @@ npm run preview:seed --prefix development/postgres-candidate
 npm run preview:serve --prefix development/postgres-candidate
 ```
 
-Open `http://127.0.0.1:6610/schedule-forms`, `/checkout-forms`, `/overnight-forms` or `/forms` locally. The scheduling screen covers day/week/personal reads, individual drafts and availability/time-off requests; publication, copying, coverage, leadership and attendance controls remain pending. Run seed once per fresh database; it refuses the existing fictional scheduling restaurant. The server binds only to loopback and issues short-lived, locally signed fictional tokens. Never deploy this fixture-token server. Stop it with Ctrl+C. Runtime fixture JSON, generated reference modules and preview build output stay ignored. Run browser checks after regression tests to avoid competing fictional business dates.
+Open `http://127.0.0.1:6610/schedule-forms`, `/checkout-forms`, `/overnight-forms` or `/forms` locally. The scheduling screen covers day/week/personal reads, individual drafts, availability/time-off requests, reviewed weekly publication and coverage/named replacement consent with independent approval. Copying, leadership assignment, other published edits and attendance controls remain pending. Run seed once per fresh database; it refuses the existing fictional scheduling restaurant. The server binds only to loopback and issues short-lived, locally signed fictional tokens. Never deploy this fixture-token server. Stop it with Ctrl+C. Runtime fixture JSON, generated reference modules and preview build output stay ignored. Run browser checks after regression tests to avoid competing fictional business dates.
 
 ## Scope and evidence
 
@@ -109,3 +109,5 @@ PR30 store configuration and corrective safeguards (041–043) were separately a
 [Weekly publication UI preparation](WEEKLY_PUBLICATION_UI_CHECKPOINT.md) adds selected-draft review, server-calculated staffing gaps, exact closing selections and online publication recovery. The current branch adds read support in 044; real source certification, shared UI adoption and production integration remain separate.
 
 [Publication review follow-up](PUBLICATION_REVIEW_FOLLOWUP_CHECKPOINT.md) records accepted PR32, scheduling-scoped freshness, a bounded batched read, minimized standard metadata and a tab-scoped uncertain-publication warning. This corrective package remains separate from coverage UI approval, shared identity and hosted adoption.
+
+[Coverage and named replacement UI](COVERAGE_SWAP_UI_CHECKPOINT.md) connects scoped offers, captured duties, explicit consent, independent approval and department-change review. PR33 has normally incorporated accepted PR34 main `e0479d1` and remains a draft for separate approval.

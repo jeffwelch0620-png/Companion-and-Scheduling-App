@@ -119,14 +119,15 @@ export function parseCommand(raw: unknown, restaurantId: string) {
    if(input.type==='swap'&&Object.hasOwn(input,'shiftRevision')&&(!Number.isSafeInteger(input.shiftRevision)||Number(input.shiftRevision)<1||Number(input.shiftRevision)>2147483646))throw new CommandError(400,'invalid_revision');
    payload={action:c.action,input:{type:input.type,start:instant(input.start),end:instant(input.end),note:string(input.note,2000),...(input.type==='swap'?{shiftId:identifier(input.shiftId),replacementId:identifier(input.replacementId),...(Object.hasOwn(input,'shiftRevision')?{shiftRevision:input.shiftRevision}:{})}:{})}};
   }else{
-   keys(input,['approve','note','affectedShifts'],['approve','note']);
+   keys(input,['approve','note','affectedShifts','departmentConfirmed'],['approve','note']);
+   if(Object.hasOwn(input,'departmentConfirmed')&&typeof input.departmentConfirmed!=='boolean')throw new CommandError(400,'invalid_swap_review');
    if(typeof input.approve!=='boolean'||!Number.isSafeInteger(c.expectedRevision)||Number(c.expectedRevision)<1||Number(c.expectedRevision)>2147483646)throw new CommandError(400,'invalid_time_off_review');
    let affectedShifts: {id:string;revision:number}[]|undefined;
    if(Object.hasOwn(input,'affectedShifts')){
     if(!Array.isArray(input.affectedShifts)||input.affectedShifts.length>100)throw new CommandError(400,'invalid_time_off_impact');
     affectedShifts=input.affectedShifts.map(v=>{const s=object(v);keys(s,['id','revision'],['id','revision']);if(!Number.isSafeInteger(s.revision)||Number(s.revision)<1||Number(s.revision)>2147483646)throw new CommandError(400,'invalid_time_off_impact');return {id:identifier(s.id),revision:Number(s.revision)};});
    }
-   payload={action:c.action,recordId:identifier(c.recordId),expectedRevision:c.expectedRevision,input:{approve:input.approve,note:string(input.note,2000),...(affectedShifts?{affectedShifts}:{})}};
+   payload={action:c.action,recordId:identifier(c.recordId),expectedRevision:c.expectedRevision,input:{approve:input.approve,note:string(input.note,2000),...(affectedShifts?{affectedShifts}:{}),...(Object.hasOwn(input,'departmentConfirmed')?{departmentConfirmed:input.departmentConfirmed}:{})}};
   }
  }else if(c.action==='shift.cancel'){
   keys(input,['note','closeTransfers'],['note']);
