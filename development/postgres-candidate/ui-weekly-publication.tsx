@@ -6,7 +6,7 @@ import type {Send} from './ui-form-types';
 export function WeeklyPublicationReview({w,review,now,busy,send,onError,onBack}:{w:PublicationWorkspace;review:PublicationReview;now:string;busy:boolean;send:Send;onError:(message:string)=>void;onBack:()=>void}) {
  const eligible=publishableDrafts(w,review.weekStart,now);
  if(review.locationId!==w.location.id||review.actorId!==w.me.id||!eligible.length)return null;
- const stale=review.scheduleRevision!==w.scheduleRevision||review.drafts.some(r=>!eligible.some(s=>s.id===r.id&&s.revision===r.revision));
+ const stale=review.scheduleRevision!==w.scheduleRevision||review.inputRevision!==w.inputRevision||review.drafts.some(r=>!eligible.some(s=>s.id===r.id&&s.revision===r.revision));
  const blocked=stale||review.drafts.some(r=>!r.sourceReviewComplete||r.closingIssues.length>0||r.copiedStaffing.length>0),zone=w.location.timezone;
  return <form className="shared-publish-review" onSubmit={async e=>{e.preventDefault();if(blocked||busy)return;const fields=new FormData(e.currentTarget);try{await send('shift.publish-batch',publicationInput(review,{confirmed:fields.get('confirmed')==='on',note:String(fields.get('note')??''),coverageAcknowledged:fields.get('coverageAcknowledged')==='on',coverageNote:String(fields.get('coverageNote')??'')}));}catch(e){onError(e instanceof Error?e.message:'Publication could not be confirmed.');}}}>
   <h2>Review selected shifts</h2><p>Week of {review.weekStart}. Only these {review.drafts.length} saved drafts will publish. If any selected shift fails a check, none of the selection will publish.</p>

@@ -7,13 +7,13 @@ const id=n=>'10000000-0000-0000-0000-'+String(n).padStart(12,'0'),week='2031-04-
 function fixture() {
  const me={id:id(1),name:'Publisher',locationId:'fictional-week-ui',position:'Manager',area:'Kitchen',capabilities:['schedule.publish'],qualifications:[],scheduleJobs:['Cook']};
  const worker={...me,id:id(2),name:'Employee',position:'Cook',capabilities:[]};
- const w={scheduleRevision:5,location:{id:me.locationId,name:'Fictional store',timezone:'Europe/London',revision:8,configuration:{operatingDepartments:['Service','Kitchen'],dishDepartment:'Kitchen',dishPosition:'Steward',dishAliases:['Steward']}},me,members:[me,worker],records:[{id:id(3),kind:'shift',locationId:me.locationId,ownerId:worker.id,area:'Kitchen',revision:2,data:{position:'Cook',start:'2031-05-01T13:00:00Z',end:'2031-05-01T15:00:00Z',published:false}}]};
+ const w={scheduleRevision:5,inputRevision:3,location:{id:me.locationId,name:'Fictional store',timezone:'Europe/London',revision:8,configuration:{operatingDepartments:['Service','Kitchen'],dishDepartment:'Kitchen',dishPosition:'Steward',dishAliases:['Steward']}},me,members:[me,worker],records:[{id:id(3),kind:'shift',locationId:me.locationId,ownerId:worker.id,area:'Kitchen',revision:2,data:{position:'Cook',start:'2031-05-01T13:00:00Z',end:'2031-05-01T15:00:00Z',published:false}}]};
  const close={id:id(4),revision:3,due:'2031-05-01T14:30:00Z',ownerId:worker.id,managerId:me.id,verifierId:null,standardId:id(7),standardRevision:2,standard:{title:'Closing checklist',version:2,position:'Cook'}};
- const plan={weekStart:week,period:{start:'2031-04-27T23:00:00Z',end:'2031-05-04T23:00:00Z'},workspaceRevision:8,scheduleRevision:5,planningReview:'a'.repeat(64),plannedGapCount:1,staffing:[{id:id(5),revision:4,required:2,gaps:[{start:'2031-05-01T13:00:00Z',end:'2031-05-01T15:00:00Z',required:2,scheduled:1}]}]};
- const detail={shiftId:id(3),revision:2,workspaceRevision:8,scheduleRevision:5,staffing:[],closing:[close],closingIssues:[],sourceReviewComplete:true};
+ const plan={weekStart:week,period:{start:'2031-04-27T23:00:00Z',end:'2031-05-04T23:00:00Z'},workspaceRevision:8,scheduleRevision:5,inputRevision:3,planningReview:'a'.repeat(64),plannedGapCount:1,staffing:[{id:id(5),revision:4,required:2,gaps:[{start:'2031-05-01T13:00:00Z',end:'2031-05-01T15:00:00Z',required:2,scheduled:1}]}]};
+ const detail={shiftId:id(3),revision:2,workspaceRevision:8,scheduleRevision:5,inputRevision:3,staffing:[],closing:[close],closingIssues:[],sourceReviewComplete:true};
  const need={id:id(5),revision:4,kind:'staffing',locationId:me.locationId,area:'Kitchen',ownerId:me.id,data:{title:'Grill coverage',position:'Cook',minimum:2,status:'approved',start:'2031-05-01T13:00:00Z',end:'2031-05-01T15:00:00Z'}};
  plan.drafts=[detail];plan.staffing[0].record=need;
- const call=async path=>({status:200,body:structuredClone(path==='/week-review'?plan:{location:w.location,me:w.me,workspaceRevision:8,scheduleRevision:5})});
+ const call=async path=>({status:200,body:structuredClone(path==='/week-review'?plan:{location:w.location,me:w.me,workspaceRevision:8,scheduleRevision:5,inputRevision:3})});
  return {w,plan,detail,need,call};
 }
 const review=f=>loadWeeklyPublicationReview(f.call,f.w,week,[id(3)],now);
@@ -41,6 +41,13 @@ test('review discards all details on changed scope, shift revision, planning tok
 });
 test('malformed or incomplete closing and staffing reads never become an empty safe selection',async()=>{
  for(const mutate of [f=>delete f.detail.closing,f=>f.detail.closing.push({...f.detail.closing[0]}),f=>delete f.detail.sourceReviewComplete,f=>f.plan.plannedGapCount=0,f=>f.plan.staffing[0].gaps[0].scheduled=2,f=>f.need.revision++]){const f=fixture();mutate(f);await assert.rejects(review(f));}
+});
+
+test('missing or changed source input revision rejects the entire review at every read boundary',async()=>{
+ for(const [path,detail] of [['/week-review',false],['/week-review',true],['/schedule-viewer',false]]) {
+  const f=fixture(),original=f.call;f.call=async(...args)=>{const r=await original(...args);if(args[0]===path){if(detail)r.body.drafts[0].inputRevision++;else r.body.inputRevision++;}return r;};await assert.rejects(review(f),/changed/);
+ }
+ const f=fixture();delete f.w.inputRevision;await assert.rejects(review(f),/changed/);
 });
 test('100 selected drafts and over 100 staffing needs still use exactly three calls',async()=>{
  const f=fixture(),calls=[],base=f.w.records[0],detail=f.detail,need=f.need;
@@ -95,6 +102,10 @@ test('review issues disable publication while describing source and independent 
 });
 test('stale reviewed revisions disable publication and require current records',async()=>{
  const f=fixture(),r=await review(f);f.w.records[0].revision++;const html=render(f,r);assert.match(html,/selection changed/);assert.match(html,/disabled=""[^>]*>Publish/);
+});
+
+test('changed source input revision disables publication even if a stale viewer reports the old planning counter',async()=>{
+ const f=fixture(),r=await review(f);f.w.inputRevision++;const html=render(f,r);assert.match(html,/selection changed/);assert.match(html,/disabled=""[^>]*>Publish/);
 });
 
 test('uncertain publication survives client reconstruction as an actor-scoped warning without storing a command or token',async()=>{

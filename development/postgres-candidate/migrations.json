@@ -180,6 +180,10 @@
     {
       "file": "045_scheduling_revision_and_publication_review.sql",
       "sha256": "4a14ea991122dd72a5cd5daf80302dc6af228314374e2c89825c42e5fa32be6b"
+    },
+    {
+      "file": "046_source_attestation_and_shift_release.sql",
+      "sha256": "d71529eb1735e966077d4fb72bdc9523a4f83d53d7fe947637785b6e3b0b7650"
     }
   ]
 }
