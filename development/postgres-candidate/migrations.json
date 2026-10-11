@@ -196,6 +196,18 @@
     {
       "file": "049_leadership_visibility_and_checkout_eligibility.sql",
       "sha256": "6a0a63bceacec4418eb2b37043497f38bf8fb29271e7e827eb498631bc626f5e"
+    },
+    {
+      "file": "050_published_shift_ui_projection.sql",
+      "sha256": "5500f56aa97a1c236aeaa02268a1439588c496bc8afecb7ad96e7fc3e21d2450"
+    },
+    {
+      "file": "051_closing_transfer_review.sql",
+      "sha256": "40c45b8e745bdd22f9a2ac47c3e0f47e023b5e33600996fc9b20faee5eed9ce1"
+    },
+    {
+      "file": "052_published_action_privacy.sql",
+      "sha256": "e1f1c2e7a9d3fc86839c2dbf8544df39b00da76032dc02c56e38f9eea7837450"
     }
   ]
 }
