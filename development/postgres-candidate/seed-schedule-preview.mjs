@@ -33,6 +33,6 @@ try {
   await executeTask(db,publisher,scope,{requestId:randomUUID(),locationId:scope,action:'shift.publish',recordId:shift.recordId,expectedRevision:shift.revision,input:{note:'Fictional replacement preview publication'}});
  }
  // Privileged seed attestation only, after all fictional inputs; the UI cannot refresh it.
- await pool.query("INSERT INTO candidate_operations.weekly_scope_reviews(restaurant_id,workspace_revision,evidence) SELECT id,revision,'Complete fictional scheduling fixture only' FROM candidate_identity.restaurants WHERE id=$1",[scope]);
+ await pool.query("INSERT INTO candidate_operations.weekly_scope_reviews(restaurant_id,workspace_revision,schedule_revision,input_revision,evidence) SELECT r.id,r.revision,c.schedule_revision,c.input_revision,'Complete fictional scheduling fixture only' FROM candidate_identity.restaurants r JOIN candidate_operations.scope_coordination c ON c.restaurant_id=r.id WHERE r.id=$1",[scope]);
  writeFileSync(new URL('runtime/schedule-preview-fixture.json',import.meta.url),JSON.stringify({sessions}));
 }finally{await pool.end();await db.close();}

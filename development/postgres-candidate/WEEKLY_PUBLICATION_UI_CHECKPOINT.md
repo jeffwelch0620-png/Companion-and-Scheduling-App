@@ -1,5 +1,7 @@
 # Weekly publication UI preparation
 
+PR32 was subsequently approved and accepted at `1b95d8e`, with 538/538 merged-main CI checks passing. The historical implementation/evidence below describes PR32; [corrective publication review work](PUBLICATION_REVIEW_FOLLOWUP_CHECKPOINT.md) supersedes its per-draft/global-revision read contract and adds reload recovery in a separately reviewed draft.
+
 Focused candidate work from accepted Companion main `79f3bf9` (PR31), whose merged-main CI passed 519/519 checks. The active D1 backend, Inventory and hosted services remain separate. This is candidate UI adoption, not PostgreSQL backend cutover or deployment.
 
 ## Reviewed selection and publication

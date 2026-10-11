@@ -1,6 +1,6 @@
 # Coverage and named replacement screen preparation
 
-Dependent candidate work from draft PR32 head `d092dca`, based on accepted Companion main `79f3bf9` (PR31). PR32 is not an accepted baseline. Both preparation slices require separate review and merge approval. Candidate preparation remains separate from the active backend, Inventory and hosted services.
+PR33 normally incorporates accepted Companion main `e0479d1` (PR34, tested head `078946e`). The refreshed coverage package targets main and remains a draft for separate review and merge approval. Candidate preparation remains separate from the active backend, Inventory and hosted services.
 
 ## Consent and independent decisions
 
@@ -20,7 +20,7 @@ All new actions use the existing frozen command envelope, exact offer/shift revi
 
 ## Schema and review boundary
 
-Existing granted read/command contracts are sufficient. Published migrations 001-044, `migrations.json`, the generated function snapshot, backend commands and the three-component source-copy gate are unchanged. The new focused component is not a copied shared component. Future application adoption must connect this slice to the shared identity/workspace contracts alongside the existing copied-component retirement plan.
+Existing granted read/command contracts are sufficient. Published migrations 001-046, `migrations.json`, the generated function snapshot, backend commands and the three-component source-copy gate are unchanged. The new focused component is not a copied shared component. Future application adoption must connect this slice to the shared identity/workspace contracts alongside the existing copied-component retirement plan.
 
 ## Evidence
 
@@ -30,3 +30,7 @@ Existing granted read/command contracts are sufficient. Published migrations 001
 - Fictional browser rehearsal: owner coverage offer, coworker privacy/volunteering and independent approval; named cross-department request, participant acceptance and separately confirmed manager approval. Browser fixture shifts have no closing duties; authenticated API tests separately exercise captured closing duties and ownership transfer.
 
 M06 remains partial. Next UI slices: dated leadership assignment, other published-shift edits and attendance/audited corrections, followed by copying/batch editing and reviewed source ingestion. Shared-authz identity, actual notification delivery (including department-gap awareness), production provisioning/device recovery and the tested Inventory baseline/port remain open. No merge or deployment is included.
+
+## Refresh after accepted PR34
+
+The normal main merge preserves all published migration bytes, the accepted schema snapshot, separate scheduling/source-input counters and tab-scoped publication recovery. Coverage, swap and leadership pages retain the global workspace consistency check, while the loaded workspace also carries both publication counters. Fresh fictional loopback bootstrap through all 46 migrations and schema comparison passed. The combined local serial suite passed 575/575 tests (zero failures/skips). Strict backend/UI types, source-copy gate, preview build, readiness classification and all three preview seeds passed. Refreshed browser smoke checks passed: employee published-shift replacement form and named coworker choices; publisher selected-draft review loaded current closing/staffing details alongside coverage navigation. These refresh checks did not submit new commands; the full suite includes the transactional coverage/consent/approval tests. Exact-head CI follows the tested push. Historical evidence above describes the original PR33 head.

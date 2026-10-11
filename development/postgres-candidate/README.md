@@ -31,7 +31,7 @@ npm run check:types --prefix development/postgres-candidate
 npm run build:preview --prefix development/postgres-candidate
 ```
 
-Bootstrap verifies the versioned hash manifest and applies 001–044 in order, inserts fictional base actors after 001 so later capability conversion can run, and creates fictional sessions after migration. Migration 037 requires PostgreSQL's trusted btree_gist extension for person booking exclusion. All candidate connection helpers use the selected database/port. Tests run serially because rollback checks create temporary failure triggers. The core concurrency tests use independent Node/PostgreSQL bridge processes; Python and machine-specific library paths are no longer required.
+Bootstrap verifies the versioned hash manifest and applies 001–046 in order, inserts fictional base actors after 001 so later capability conversion can run, and creates fictional sessions after migration. Migration 037 requires PostgreSQL's trusted btree_gist extension for person booking exclusion. All candidate connection helpers use the selected database/port. Tests run serially because rollback checks create temporary failure triggers. The core concurrency tests use independent Node/PostgreSQL bridge processes; Python and machine-specific library paths are no longer required.
 
 The GitHub `candidate-validation` gate performs this sequence when candidate dependencies change, and reports a successful intentional skip for unrelated changes. Its dependency detection includes application, database, package/configuration, shared UI and build inputs. Validation uses a fresh disposable PostgreSQL service. Passing candidate checks does not prove the complete application is migrated or deployed.
 
@@ -108,4 +108,6 @@ PR30 store configuration and corrective safeguards (041–043) were separately a
 
 [Weekly publication UI preparation](WEEKLY_PUBLICATION_UI_CHECKPOINT.md) adds selected-draft review, server-calculated staffing gaps, exact closing selections and online publication recovery. The current branch adds read support in 044; real source certification, shared UI adoption and production integration remain separate.
 
-[Coverage and named replacement UI](COVERAGE_SWAP_UI_CHECKPOINT.md) connects scoped offers, captured duties, explicit consent, independent approval and department-change review. It depends on draft weekly-publication PR32; neither draft preparation is an accepted merge or deployment.
+[Publication review follow-up](PUBLICATION_REVIEW_FOLLOWUP_CHECKPOINT.md) records accepted PR32, scheduling-scoped freshness, a bounded batched read, minimized standard metadata and a tab-scoped uncertain-publication warning. This corrective package remains separate from coverage UI approval, shared identity and hosted adoption.
+
+[Coverage and named replacement UI](COVERAGE_SWAP_UI_CHECKPOINT.md) connects scoped offers, captured duties, explicit consent, independent approval and department-change review. PR33 has normally incorporated accepted PR34 main `e0479d1` and remains a draft for separate approval.

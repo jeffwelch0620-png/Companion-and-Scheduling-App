@@ -11,7 +11,7 @@ import {WeeklyPublicationReview} from './ui-weekly-publication';
 import {loadWeeklyPublicationReview,publishableDrafts} from './weekly-publication-client.mjs';
 import {manages} from '../../app/shared/types';
 import {localDate,nextDate,displayTime} from '../../app/shared/local-time';
-import {loadScheduleScreen,ScheduleScreenSender} from './schedule-screen-client.mjs';
+import {loadScheduleScreen,ScheduleScreenSender,publicationRecovery,clearPublicationRecovery,publicationRecoveryMessage} from './schedule-screen-client.mjs';
 import '../../app/team/workspace.css';
 import '../../app/team/schedule-mobile.css';
 import '../../app/team/jmax-shell.css';
@@ -26,8 +26,10 @@ async function call(actor,path,command){
 }
 function Preview(){
  const [actor,setActor]=useState('schedule-worker'),[w,setWorkspace]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[view,setView]=useState(null),[screen,setScreen]=useState('schedule'),[week,setWeek]=useState(''),[boardView,setBoardView]=useState('day'),[draftDay,setDraftDay]=useState(''),[selectedIds,setSelectedIds]=useState([]),[publicationReview,setPublicationReview]=useState(null);
+ const [recovery,setRecovery]=useState(null);
  const sender=useRef(new ScheduleScreenSender()),generation=useRef(0),inFlight=useRef(false);
- async function refresh(who=actor){const id=++generation.current;setWorkspace(null);setSelectedIds([]);setPublicationReview(null);try{const next=await loadScheduleScreen((...args)=>call(who,...args));if(id===generation.current)setWorkspace(next);}catch(e){if(id===generation.current)setError(e.message);}}
+ function deviceStorage(){try{return sessionStorage;}catch{return null;}}
+ async function refresh(who=actor){const id=++generation.current;setWorkspace(null);setRecovery(null);setSelectedIds([]);setPublicationReview(null);try{const next=await loadScheduleScreen((...args)=>call(who,...args));if(id===generation.current){setWorkspace(next);setRecovery(publicationRecovery(deviceStorage(),scope,next.me.id));if(!sender.current.pending)sender.current=new ScheduleScreenSender({storage:deviceStorage(),actorId:next.me.id});}}catch(e){if(id===generation.current)setError(e.message);}}
  useEffect(()=>{sender.current=new ScheduleScreenSender();setView(null);setScreen('schedule');setError('');setMessage('');refresh(actor);return()=>{generation.current++;};},[actor]);
  async function send(action,input,record){
   if(inFlight.current)throw Error('Please wait for the current submission.');inFlight.current=true;setBusy(true);setError('');setMessage('');
@@ -48,6 +50,7 @@ function Preview(){
   <label>Preview employee <select aria-label="Preview employee" value={actor} disabled={busy||!!sender.current.pending} onChange={e=>setActor(e.target.value)}><option value="schedule-worker">Fictional employee</option><option value="schedule-replacement">Fictional replacement employee</option><option value="schedule-manager">Fictional schedule manager</option><option value="schedule-publisher">Fictional schedule publisher</option><option value="schedule-foreign">Fictional other-department manager</option></select></label>
   <button disabled={busy||!!sender.current.pending} onClick={()=>{setView(null);setError('');refresh();}}>Reload current records</button>
   {error&&<p role="alert" className="shared-error">{error}</p>}<p role="status">{message}</p>
+  {w&&recovery&&<section role="alert"><p>{publicationRecoveryMessage}</p><button disabled={busy||!!sender.current.pending} onClick={()=>{clearPublicationRecovery(deviceStorage(),scope,w.me.id);setRecovery(null);}}>I checked current published shifts</button></section>}
   {sender.current.pending&&!busy&&<p>Keep this page open and retry the original submission. Scheduling requests require a connection; they are not saved in the employee task offline queue.</p>}
   {sender.current.pending&&!busy&&<button disabled={busy} onClick={retrySubmission}>Retry original submission</button>}
   {w?<fieldset disabled={busy||!!sender.current.pending} style={{border:0,padding:0}}>
