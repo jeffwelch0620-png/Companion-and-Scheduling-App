@@ -44,7 +44,27 @@ export function parseCommand(raw: unknown, restaurantId: string) {
  if(c.locationId!==restaurantId) throw new CommandError(403,'scope_mismatch');
  const requestId=identifier(c.requestId),input=object(c.input);
  let payload: Record<string,unknown>;
- if(c.action==='leadership.assign'||c.action==='leadership.revoke'){
+ if(typeof c.action==='string'&&c.action.startsWith('attendance.')){
+  const creating=c.action==='attendance.record';
+  if(!['attendance.record','attendance.correct','attendance.void','attendance.review','attendance.reopen'].includes(c.action))throw new CommandError(400,'unsupported_action');
+  if(creating&&(Object.hasOwn(c,'recordId')||Object.hasOwn(c,'expectedRevision'))||!creating&&(!Number.isSafeInteger(c.expectedRevision)||Number(c.expectedRevision)<1||Number(c.expectedRevision)>1000))throw new CommandError(400,'invalid_revision');
+  if(creating||c.action==='attendance.correct'){
+   keys(input,creating?['shiftId','shiftRevision','type','reportedAt','note','facts']:['type','reportedAt','note','facts','changeReason'],creating?['shiftId','shiftRevision','type','reportedAt','note']:['type','reportedAt','note','changeReason']);
+   if(typeof input.type!=='string'||!['call-in','no-show','late','left-early','other'].includes(input.type))throw new CommandError(400,'invalid_attendance_value');
+   const reported=input.reportedAt;
+   if(typeof reported!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/.test(reported)||!Number.isFinite(Date.parse(reported))||!Number.isFinite(Date.parse(reported.slice(0,10)+'T12:00:00Z'))||new Date(reported.slice(0,10)+'T12:00:00Z').toISOString().slice(0,10)!==reported.slice(0,10)||Number(reported.slice(11,13))>23)throw new CommandError(400,'invalid_attendance_time');
+   if(creating&&(!Number.isSafeInteger(input.shiftRevision)||Number(input.shiftRevision)<1||Number(input.shiftRevision)>2147483646))throw new CommandError(400,'invalid_revision');
+   let facts:Record<string,unknown>|undefined;
+   if(Object.hasOwn(input,'facts')){
+    facts=object(input.facts);keys(facts,['contact','coverage','emergency'],['contact','coverage','emergency']);
+    if(typeof facts.contact!=='string'||!['unknown','phone','message','none'].includes(facts.contact)||typeof facts.coverage!=='string'||!['unknown','confirmed','uncovered'].includes(facts.coverage)||typeof facts.emergency!=='string'||!['unknown','reported','not-reported'].includes(facts.emergency))throw new CommandError(400,'invalid_attendance_facts');
+   }
+   payload={action:c.action,input:{type:input.type,reportedAt:instant(reported),note:string(input.note,2000),...(facts?{facts}:{}),...(creating?{shiftId:identifier(input.shiftId),shiftRevision:input.shiftRevision}:{changeReason:string(input.changeReason,2000)})}};
+  }else{
+   const key=c.action==='attendance.void'?'changeReason':'note';keys(input,[key],[key]);payload={action:c.action,input:{[key]:string(input[key],2000)}};
+  }
+  if(!creating)payload={...payload,recordId:identifier(c.recordId),expectedRevision:c.expectedRevision};
+ }else if(c.action==='leadership.assign'||c.action==='leadership.revoke'){
   const updating=Object.hasOwn(c,'recordId');
   if(updating&&(!Number.isSafeInteger(c.expectedRevision)||Number(c.expectedRevision)<1||Number(c.expectedRevision)>2147483646)||!updating&&Object.hasOwn(c,'expectedRevision')||c.action==='leadership.revoke'&&!updating)throw new CommandError(400,'invalid_revision');
   if(c.action==='leadership.assign'){
@@ -245,7 +265,9 @@ export async function executeTask(
  try {
   return await database.transaction(async connection=>{
    const response=await connection.query(
-    command.payload.action==='shift.publish-batch'
+    String(command.payload.action).startsWith('attendance.')
+     ?'SELECT candidate_operations.attendance_command($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
+    :command.payload.action==='shift.publish-batch'
      ?'SELECT candidate_operations.publish_week($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
     :String(command.payload.action).startsWith('staffing.')
      ?'SELECT candidate_operations.staffing_command($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
@@ -291,7 +313,7 @@ export async function executeTask(
  } catch(error) {
   const e=error as {code?:string;message?:string};
   if(e.code==='42501') throw new CommandError(403,e.message??'denied');
-  if(e.code==='P0001'&&['request_payload_conflict','revision_conflict','phase_conflict','shift_ended','active_shift_time_conflict','shift_conflict','closing_zone_conflict','attention_pending','attention_not_pending','checkout_pending','dish_cycle_conflict','dish_shape_conflict','availability_replacement_conflict','availability_shift_conflict','draft_reference_only','schedule_inputs_incomplete','station_assignment_not_migrated','shift_overlap','approved_time_off_conflict','linked_shift_protected','linked_task_pending','linked_close_protected','time_off_impact_conflict','time_off_cancellation_not_migrated','station_name_immutable','station_title_conflict','station_setup_reference_only','goal_guide_changed','publication_review_required','publication_linked_work_held','station_goal_reviewer_unavailable','staffing_overlap','staffing_publication_review_required','closing_publication_review_required','planning_review_conflict','weekly_scope_review_required','closing_selection_conflict','closing_transfer_selection_conflict','completed_close_protected','coverage_offer_exists','offer_changed','volunteer_missing','volunteer_conflict','replacement_consent_required','replacement_no_longer_eligible'].includes(e.message??''))
+  if(e.code==='P0001'&&['attendance_duplicate','attendance_source_ineligible','attendance_voided','attendance_history_limit','attendance_already_reviewed','attendance_not_reviewed','request_payload_conflict','revision_conflict','phase_conflict','shift_ended','active_shift_time_conflict','shift_conflict','closing_zone_conflict','attention_pending','attention_not_pending','checkout_pending','dish_cycle_conflict','dish_shape_conflict','availability_replacement_conflict','availability_shift_conflict','draft_reference_only','schedule_inputs_incomplete','station_assignment_not_migrated','shift_overlap','approved_time_off_conflict','linked_shift_protected','linked_task_pending','linked_close_protected','time_off_impact_conflict','time_off_cancellation_not_migrated','station_name_immutable','station_title_conflict','station_setup_reference_only','goal_guide_changed','publication_review_required','publication_linked_work_held','station_goal_reviewer_unavailable','staffing_overlap','staffing_publication_review_required','closing_publication_review_required','planning_review_conflict','weekly_scope_review_required','closing_selection_conflict','closing_transfer_selection_conflict','completed_close_protected','coverage_offer_exists','offer_changed','volunteer_missing','volunteer_conflict','replacement_consent_required','replacement_no_longer_eligible'].includes(e.message??''))
    throw new CommandError(409,e.message??'conflict');
   if(e.code?.startsWith('22')||e.code==='23514') throw new CommandError(400,e.message??'invalid_command');
   throw error; // Network/database failures must remain failures, never confirmed empty or applied.

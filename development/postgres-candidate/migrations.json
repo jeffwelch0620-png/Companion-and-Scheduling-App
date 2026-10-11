@@ -208,6 +208,10 @@
     {
       "file": "052_published_action_privacy.sql",
       "sha256": "e1f1c2e7a9d3fc86839c2dbf8544df39b00da76032dc02c56e38f9eea7837450"
+    },
+    {
+      "file": "053_attendance_backend.sql",
+      "sha256": "c9b362aefb36fac1f544b80cb7f43fe44dfa8f36562d9df288a7faed1d4609f1"
     }
   ]
 }

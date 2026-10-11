@@ -8,7 +8,7 @@
     { "name": "Time-off and swap requests", "status": "candidate-workflow", "kinds": ["request"], "evidence": "SCHEDULE_CONSENT_CHECKPOINT.md" },
     { "name": "Staffing needs and publication review", "status": "candidate-workflow", "kinds": ["staffing"], "evidence": "PUBLICATION_REVIEW_CHECKPOINT.md" },
     { "name": "Coverage consent", "status": "candidate-workflow", "kinds": ["coverage"], "evidence": "SCHEDULE_CONSENT_CHECKPOINT.md" },
-    { "name": "Attendance", "status": "not-migrated", "kinds": ["attendance"] },
+    { "name": "Attendance backend", "status": "candidate-workflow", "kinds": ["attendance"], "evidence": "ATTENDANCE_BACKEND_CHECKPOINT.md" },
     { "name": "Station setup", "status": "candidate-workflow", "kinds": ["station"], "evidence": "STATION_SETUP_CHECKPOINT.md" },
     { "name": "Manual employee goals", "status": "candidate-workflow", "kinds": ["goal"], "evidence": "EMPLOYEE_GOALS_CHECKPOINT.md" },
     { "name": "Training and development", "status": "not-migrated", "kinds": ["development", "proficiency", "achievement", "learningcase"] },
