@@ -188,6 +188,10 @@
     {
       "file": "047_offer_actions_and_department_acknowledgement.sql",
       "sha256": "f8acf54abefb47df7f8a82d79ec0b7694753c1c641d89f265e8f29301d02dbef"
+    },
+    {
+      "file": "048_leadership_ui_projection.sql",
+      "sha256": "213d5cf6f517ff53f2416b45333c4759a34ab842ce428d9e50a22c95f8b9d1e3"
     }
   ]
 }

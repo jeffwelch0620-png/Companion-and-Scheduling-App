@@ -23,7 +23,7 @@ export async function loadScheduleScreen(call) {
   if(changed||JSON.stringify(last.body)!==JSON.stringify(viewer))continue;
   for(const member of [...sets.roster,viewer.me])assertCanonicalCheckoutMembership({location:viewer.location},member);
   const stations=sets.stations.map(r=>({...r,data:{...r.data,...(r.data.setup?{setup:{...r.data.setup,standardIds:r.data.setup.standardIds??[],goals:r.data.setup.goals??[]}}:{})}}));
-  const workspace={location:viewer.location,scheduleRevision:viewer.scheduleRevision,inputRevision:viewer.inputRevision,me:viewer.me,members:sets.roster.map(m=>({...m,capabilities:m.id===viewer.me.id?viewer.me.capabilities:[]})),records:[...sets.availability,...sets.requests,...sets.shifts,...stations,...sets.leadership],offerReviewNotices:0};
+  const workspace={location:viewer.location,scheduleRevision:viewer.scheduleRevision,inputRevision:viewer.inputRevision,me:viewer.me,leadershipOptions:viewer.leadershipOptions??[],members:sets.roster.map(m=>({...m,capabilities:m.id===viewer.me.id?viewer.me.capabilities:[]})),records:[...sets.availability,...sets.requests,...sets.shifts,...stations,...sets.leadership],offerReviewNotices:0};
   for(const [kind,offers] of [['coverage',sets.coverage],['request',sets.swaps]])for(const r of offers)try{if(r?.kind!==kind)throw Error('Invalid offer kind');workspace.records.push(checkedOffer(workspace,r));}catch{workspace.offerReviewNotices++;}
   return workspace;
  }
@@ -39,7 +39,8 @@ export class ScheduleScreenSender {
  constructor({storage=null,actorId=null}={}) {this.storage=storage;this.actorId=actorId;}
  pending=null;
  async send(call,locationId,action,input,record) {
-  if(!['shift.save','shift.publish-batch','availability.save','availability.review','request.create','request.review','request.consent','coverage.create','coverage.volunteer','coverage.withdraw-volunteer','coverage.withdraw','coverage.approve'].includes(action)||action==='request.create'&&!['time-off','swap'].includes(input.type)||action==='request.review'&&(record?.kind!=='request'||!['time-off','swap'].includes(record?.data.type))||action==='request.consent'&&(record?.kind!=='request'||record?.data.type!=='swap')||action.startsWith('coverage.')&&action!=='coverage.create'&&record?.kind!=='coverage')throw Error('This workflow is not enabled in this preview.');
+  if(!['leadership.assign','leadership.revoke','shift.save','shift.publish-batch','availability.save','availability.review','request.create','request.review','request.consent','coverage.create','coverage.volunteer','coverage.withdraw-volunteer','coverage.withdraw','coverage.approve'].includes(action)||action==='request.create'&&!['time-off','swap'].includes(input.type)||action==='request.review'&&(record?.kind!=='request'||!['time-off','swap'].includes(record?.data.type))||action==='request.consent'&&(record?.kind!=='request'||record?.data.type!=='swap')||action.startsWith('coverage.')&&action!=='coverage.create'&&record?.kind!=='coverage')throw Error('This workflow is not enabled in this preview.');
+  if(action.startsWith('leadership.')&&(record&&record.kind!=='leadership'||action==='leadership.revoke'&&!record))throw Error('Open a current leadership assignment before changing it.');
   if(action==='shift.save'&&record&&(record.kind!=='shift'||record.data.published||record.data.cancelled||record.data.releasedAt))throw Error('Only unpublished, active candidate drafts can be edited in this preview.');
   const fields={locationId,action,input,...(record?{recordId:record.id,expectedRevision:record.revision}:{})},signature=JSON.stringify(fields);
   if(this.pending&&this.pending.signature!==signature)throw Error('Retry the previous submission before changing its details. Its outcome is still unknown.');
