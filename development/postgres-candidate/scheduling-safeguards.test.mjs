@@ -59,27 +59,42 @@ test('one person across locations conflicts without exposing the other store; eq
  assert.equal((await admin.query('SELECT count(*)::int n FROM candidate_operations.shift_references WHERE restaurant_id=$1',[b.scope])).rows[0].n,1);
 });
 
-test('simultaneous cross-location runtime submissions commit exactly one shift and receipt',async()=>{
+test('simultaneous cross-location runtime submissions retry whole transactions and commit exactly one shift and receipt',async()=>{
  const [a,b]=await fixture(),commands=[draft(a),draft(b)];
- const results=await Promise.allSettled([run(a,commands[0]),run(b,commands[1])]);
+ const coordinated=async(f,command)=>{for(let attempt=0;;attempt++){try{return await run(f,command);}catch(e){if(e.code!=='40001'||attempt===4)throw e;await new Promise(r=>setTimeout(r,20*(attempt+1)));}}};
+ const results=await Promise.allSettled([coordinated(a,commands[0]),coordinated(b,commands[1])]);
  assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal(results.find(r=>r.status==='rejected').reason.code,'shift_overlap');
  assert.equal((await admin.query('SELECT count(*)::int n FROM candidate_operations.command_receipts WHERE request_id=ANY($1::uuid[])',[commands.map(c=>c.requestId)])).rows[0].n,1);
  assert.equal((await admin.query('SELECT count(*)::int n FROM candidate_operations.person_shift_bookings WHERE person_id=$1',[a.worker.personId])).rows[0].n,1);
 });
 
-test('exclusion constraint arbitrates an invisible in-flight command; rollback frees the competing intent',async()=>{
+test('cross-store coordination arbitrates an in-flight command; rollback frees the competing intent',async()=>{
  for(const commit of [true,false]){
   const [a,b]=await fixture(),first=await client(),second=await client(),ca=draft(a),cb=draft(b);let pending;
   try{
    await first.query('BEGIN');await sqlCommand(first,a,ca);await second.query('BEGIN');
    pending=sqlCommand(second,b,cb);pending.catch(()=>{});await waiting(second.processID);
    await first.query(commit?'COMMIT':'ROLLBACK');
-   if(commit){await assert.rejects(pending,e=>e.code==='P0001'&&e.message==='shift_overlap'&&e.where.includes('sync_person_shift_booking'));await second.query('ROLLBACK');}
+   if(commit){await assert.rejects(pending,e=>e.code==='P0001'&&e.message==='shift_overlap');await second.query('ROLLBACK');}
    else {await pending;await second.query('COMMIT');}
    const receipts=(await admin.query('SELECT request_id FROM candidate_operations.command_receipts WHERE request_id=ANY($1::uuid[])',[[ca.requestId,cb.requestId]])).rows;
    assert.deepEqual(receipts.map(r=>r.request_id),[commit?ca.requestId:cb.requestId]);
    assert.equal((await admin.query('SELECT count(*)::int n FROM candidate_operations.shift_references WHERE restaurant_id=$1',[commit?b.scope:a.scope])).rows[0].n,0);
   }finally{await first.query('ROLLBACK');await second.query('ROLLBACK');await first.end();await second.end();}
+ }
+});
+
+test('private booking exclusion independently arbitrates invisible writes and rollback releases the competing period',async()=>{
+ for(const commit of [true,false]) {
+  const [a,b]=await fixture(),one=await raw(a,{start:'2035-11-06T05:00Z',end:'2035-11-06T07:00Z'}),two=await raw(b,{start:'2035-11-07T05:00Z',end:'2035-11-07T07:00Z'}),first=await admin.connect(),second=await admin.connect();
+  try {
+   await first.query('BEGIN');await second.query('BEGIN');await second.query("SET LOCAL statement_timeout='8s'");
+   await first.query("UPDATE candidate_operations.person_shift_bookings SET period=tstzrange($2,$3,'[)') WHERE shift_id=$1",[one,start,end]);
+   const pending=second.query("UPDATE candidate_operations.person_shift_bookings SET period=tstzrange($2,$3,'[)') WHERE shift_id=$1",[two,start,end]);pending.catch(()=>{});await waiting(second.processID);
+   await first.query(commit?'COMMIT':'ROLLBACK');
+   if(commit){await assert.rejects(pending,e=>e.code==='23P01');await second.query('ROLLBACK');}else{await pending;await second.query('COMMIT');}
+   const winner=(await admin.query("SELECT shift_id FROM candidate_operations.person_shift_bookings WHERE person_id=$1 AND period=tstzrange($2,$3,'[)')",[a.worker.personId,start,end])).rows;assert.deepEqual(winner.map(r=>r.shift_id),[commit?one:two]);
+  }finally{await first.query('ROLLBACK');await second.query('ROLLBACK');await admin.query("UPDATE candidate_operations.person_shift_bookings b SET period=tstzrange(s.starts_at,s.ends_at,'[)') FROM candidate_operations.shift_references s WHERE b.shift_id=s.id AND b.shift_id=ANY($1::uuid[])",[[one,two]]);first.release();second.release();}
  }
 });
 
