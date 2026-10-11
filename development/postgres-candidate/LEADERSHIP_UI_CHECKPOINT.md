@@ -18,7 +18,7 @@ Creation, editing, revocation and reactivation require a fresh reason. Revoke ad
 
 All submissions use the existing frozen scheduling envelope, original request id, record id and exact revision. A lost response/5xx keeps editing, navigation, actor switching and reload disabled until the original request can be retried. Known 4xx refusals clear uncertain state and reload current records. This is online, in-page recovery; leadership is not added to the employee task offline queue. Reload persistence of uncertain leadership submissions remains a later device-recovery item.
 
-Events and assignment notification intents are stored atomically by the existing command. This screen shows current assignment details and the latest reason; event-history browsing, additional publisher/owner awareness for self-assignment and notification delivery remain separate work. Candidate notification intents are not evidence of delivered notifications.
+Events and assignment notification intents are stored atomically by the existing command. This screen shows current assignment details and the latest reason; event-history browsing and notification delivery remain separate work. The [049 follow-up](LEADERSHIP_FOLLOWUP_CHECKPOINT.md) adds self-assignment badges and notification intents for other scoped publishers. Candidate notification intents are not evidence of delivered notifications.
 
 ## Validation and next step
 
@@ -26,4 +26,6 @@ Fresh fictional bootstrap through all 48 migrations and generated snapshot compa
 
 All three fictional preview seeds passed. The loopback browser rehearsal verified self-assignment, a reasoned target/period edit, confirmed revocation, reviewed reactivation and an assigned manager's read-only detail view without publisher controls. Runtime fixtures and screenshot evidence remain ignored. Exact-head CI is recorded in the draft PR description; these checks do not establish hosted or real-store pilot readiness.
 
-M06 remains partial. Next preparation: other published-shift editing UI, followed by attendance/completed-record correction design, copying/batch editing and reviewed source completeness. Shared authz, copied-component retirement, actual notification delivery and Inventory integration from its confirmed tested baseline remain open. This draft does not authorize a merge, hosted migration application or deployment.
+M06 remains partial. Next preparation: other published-shift editing UI, followed by attendance/completed-record correction design, copying/batch editing and reviewed source completeness. Shared authz, copied-component retirement, actual notification delivery and Inventory integration from its confirmed tested baseline remain open. Follow-ups require separate merge approval; hosted migration application and deployment remain separate decisions.
+
+PR35 was separately approved and accepted at `382fa92`; merged-main CI passed 604/604 tests. The 049 visibility/eligibility follow-up remains a separate draft.
