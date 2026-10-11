@@ -312,7 +312,7 @@ CREATE OR REPLACE FUNCTION candidate_operations.change_schedule(p_subject text, 
  SET search_path TO 'pg_catalog'
 AS $function$
 DECLARE actor candidate_identity.memberships; owner_member candidate_identity.memberships; rec candidate_operations.shift_references; updated candidate_operations.shift_references; target candidate_operations.shift_references; station candidate_operations.station_references; scope candidate_identity.restaurants; receipt candidate_operations.command_receipts;
- c candidate_operations.closes; mapping jsonb; input jsonb; result jsonb; cancelling boolean; structural boolean; note text; original_owner uuid; old_helper uuid;
+ c candidate_operations.closes; mapping jsonb; input jsonb; result jsonb; cancelling boolean; structural boolean; note text; original_owner uuid; old_helper uuid; transfer_issue text;
 BEGIN
  PERFORM candidate_operations.lock_scope(p_restaurant);
  cancelling:=p_payload->>'action'='shift.cancel';input:=p_payload->'input';
@@ -355,11 +355,9 @@ BEGIN
    IF mapping IS NULL OR c.revision<>(mapping->>'closingRevision')::integer THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='closing_transfer_selection_conflict'; END IF;
    SELECT * INTO target FROM candidate_operations.shift_references WHERE id=(mapping->>'shiftId')::uuid AND restaurant_id=p_restaurant AND id<>rec.id AND NOT cancelled AND released_at IS NULL FOR UPDATE;
    IF NOT FOUND OR target.revision<>(mapping->>'expectedRevision')::integer THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='closing_transfer_selection_conflict'; END IF;
-   IF rec.published AND NOT target.published OR target.department<>c.department OR c.due<target.starts_at OR c.due>target.ends_at THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='closing_covering_shift_denied'; END IF;
-   IF target.published AND NOT candidate_operations.published_change_allowed(actor.id,p_restaurant,target.department,target.starts_at,target.ends_at) OR NOT target.published AND NOT candidate_operations.goal_authorized(actor.id,target.department,'schedule.manage') THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='action_denied'; END IF;
    SELECT * INTO owner_member FROM candidate_identity.memberships WHERE id=target.member_id AND restaurant_id=p_restaurant AND active AND NOT schedule_only AND NOT candidate_operations.is_dish_position(p_restaurant,position) FOR SHARE;
-   IF NOT FOUND OR owner_member.id IN (c.manager_id,c.verifier_id) OR NOT EXISTS(SELECT 1 FROM candidate_identity.station_clearances WHERE member_id=owner_member.id AND restaurant_id=p_restaurant AND active AND position=c.standard_snapshot->>'position') OR NOT EXISTS(SELECT 1 FROM candidate_operations.shift_standard_links WHERE shift_id=target.id AND standard_id=c.standard_id AND active) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='closing_covering_employee_denied'; END IF;
-   IF EXISTS(SELECT 1 FROM candidate_operations.closes WHERE shift_id=target.id AND phase<>'cancelled' AND zone=c.zone) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='closing_zone_conflict'; END IF;
+   transfer_issue:=candidate_operations.closing_transfer_issue(actor.id,c,target,rec.published);
+   IF transfer_issue<>'' THEN RAISE EXCEPTION USING ERRCODE=CASE WHEN transfer_issue='closing_covering_shift_denied' THEN '22023' WHEN transfer_issue IN ('action_denied','closing_covering_employee_denied') THEN '42501' ELSE 'P0001' END,MESSAGE=transfer_issue; END IF;
    old_helper:=c.helper_id;
    UPDATE candidate_operations.closes SET shift_id=target.id,shift_revision=target.revision,owner_id=owner_member.id,phase='open',answers='[]',helper_id=NULL,correction=NULL,revision=revision+1 WHERE id=c.id RETURNING * INTO c;
    IF jsonb_array_length(candidate_operations.closing_publication_issues(target.id,p_restaurant))>0 THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='closing_publication_review_required'; END IF;
@@ -562,6 +560,35 @@ BEGIN
   IF c.standard_snapshot->>'verification'='senior-then-manager' AND (c.verifier_id IS NULL OR c.verifier_id IN (s.member_id,c.manager_id) OR NOT candidate_operations.closing_manager_read(c.verifier_id,p_restaurant,s.department,'close.verify')) THEN issues:=issues||jsonb_build_array(jsonb_build_object('closeId',c.id,'code','closing_verifier_unavailable')); END IF;
  END LOOP;
  RETURN issues;
+END;
+$function$
+
+CREATE OR REPLACE FUNCTION candidate_operations.closing_transfer_issue(p_actor uuid, p_close candidate_operations.closes, p_target candidate_operations.shift_references, p_published boolean)
+ RETURNS text
+ LANGUAGE plpgsql
+ STABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+DECLARE owner_member candidate_identity.memberships; standard candidate_operations.standard_references;
+BEGIN
+ IF p_target.id IS NULL OR p_target.restaurant_id<>p_close.restaurant_id OR p_target.id=p_close.shift_id OR p_target.cancelled OR p_target.released_at IS NOT NULL
+  OR p_published AND NOT p_target.published OR p_target.department<>p_close.department OR p_close.due<p_target.starts_at OR p_close.due>p_target.ends_at THEN RETURN 'closing_covering_shift_denied'; END IF;
+ IF p_target.published AND NOT candidate_operations.published_change_allowed(p_actor,p_close.restaurant_id,p_target.department,p_target.starts_at,p_target.ends_at)
+  OR NOT p_target.published AND NOT candidate_operations.goal_authorized(p_actor,p_target.department,'schedule.manage') THEN RETURN 'action_denied'; END IF;
+ SELECT * INTO owner_member FROM candidate_identity.memberships WHERE id=p_target.member_id AND restaurant_id=p_close.restaurant_id AND active AND NOT schedule_only AND NOT candidate_operations.is_dish_position(p_close.restaurant_id,position);
+ IF NOT FOUND OR owner_member.id IN (p_close.manager_id,p_close.verifier_id)
+  OR NOT EXISTS(SELECT 1 FROM candidate_identity.station_clearances WHERE member_id=owner_member.id AND restaurant_id=p_close.restaurant_id AND active AND position=p_close.standard_snapshot->>'position')
+  OR NOT EXISTS(SELECT 1 FROM candidate_operations.shift_standard_links WHERE shift_id=p_target.id AND standard_id=p_close.standard_id AND active) THEN RETURN 'closing_covering_employee_denied'; END IF;
+ IF EXISTS(SELECT 1 FROM candidate_operations.closes WHERE shift_id=p_target.id AND phase<>'cancelled' AND zone=p_close.zone) THEN RETURN 'closing_zone_conflict'; END IF;
+ SELECT * INTO standard FROM candidate_operations.standard_references WHERE id=p_close.standard_id AND restaurant_id=p_close.restaurant_id;
+ IF NOT FOUND OR standard.status<>'approved' OR standard.revision<>p_close.standard_revision
+  OR p_target.station_id IS NULL AND standard.position IS DISTINCT FROM p_target.position
+  OR p_target.station_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM candidate_operations.station_references t WHERE t.id=p_target.station_id AND t.status='active' AND (t.setup_data->'standardIds' @> to_jsonb(ARRAY[p_close.standard_id::text]) OR lower(btrim(standard.position))=lower(btrim(t.title))))
+  OR NOT candidate_operations.closing_manager_read(p_close.manager_id,p_close.restaurant_id,p_target.department,'close.confirm')
+  OR NOT EXISTS(SELECT 1 FROM candidate_identity.membership_capabilities WHERE membership_id=p_close.manager_id AND capability='location.manage' AND active) AND NOT EXISTS(SELECT 1 FROM candidate_operations.leadership_references WHERE member_id=p_close.manager_id AND restaurant_id=p_close.restaurant_id AND department=p_target.department AND active AND starts_at<=p_close.due AND ends_at>=p_close.due)
+  OR p_close.standard_snapshot->>'verification'='senior-then-manager' AND (p_close.verifier_id IS NULL OR p_close.verifier_id IN (p_target.member_id,p_close.manager_id) OR NOT candidate_operations.closing_manager_read(p_close.verifier_id,p_close.restaurant_id,p_target.department,'close.verify'))
+  OR jsonb_array_length(candidate_operations.closing_publication_issues_read(p_target.id,p_close.restaurant_id))>0 THEN RETURN 'closing_publication_review_required'; END IF;
+ RETURN '';
 END;
 $function$
 
@@ -1457,7 +1484,7 @@ CREATE OR REPLACE FUNCTION candidate_operations.list_schedule_shifts(p_subject t
  STABLE SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-DECLARE actor candidate_identity.memberships; caps text[]; selected uuid[]; items jsonb; next_cursor uuid; scope candidate_identity.restaurants;
+DECLARE actor candidate_identity.memberships; caps text[]; selected uuid[]; items jsonb; next_cursor uuid; scope candidate_identity.restaurants; can_change boolean;
 BEGIN
  IF p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 100 THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_page_size'; END IF;
  SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id
@@ -1465,6 +1492,7 @@ BEGIN
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
  SELECT * INTO scope FROM candidate_identity.restaurants WHERE id=p_restaurant;
  SELECT coalesce(array_agg(capability),'{}') INTO caps FROM candidate_identity.membership_capabilities WHERE membership_id=actor.id AND active;
+ can_change:='schedule.change'=ANY(caps);
  SELECT array_agg(id ORDER BY id) INTO selected FROM (
   SELECT s.id FROM candidate_operations.shift_references s WHERE s.restaurant_id=p_restaurant AND (p_after IS NULL OR s.id>p_after) AND (s.published OR s.ends_at>statement_timestamp())
   AND (
@@ -1476,7 +1504,7 @@ BEGIN
   ) ORDER BY s.id LIMIT p_limit+1
  ) page;
  SELECT coalesce(jsonb_agg(jsonb_build_object('id',s.id,'kind','shift','locationId',s.restaurant_id,'area',s.department,'ownerId',s.member_id,'revision',s.revision,
-  'data',jsonb_build_object('personId',s.member_id,'position',s.position,'start',s.starts_at,'end',s.ends_at,'published',s.published,'cancelled',s.cancelled,'releasedAt',s.released_at,'publishedActions',candidate_operations.published_shift_actions(actor.id,p_restaurant,s.id))||CASE WHEN s.station_id IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('stationId',s.station_id,'stationName',s.station_name,'stationRevision',s.station_revision) END||CASE WHEN caps && ARRAY['schedule.manage','schedule.publish','schedule.change'] AND (actor.department=s.department OR 'location.manage'=ANY(caps)) AND EXISTS(SELECT 1 FROM candidate_operations.time_off_shift_flags f WHERE f.shift_id=s.id AND f.restaurant_id=p_restaurant AND f.review_status='pending') THEN jsonb_build_object('reviewFlags',(SELECT jsonb_agg(jsonb_build_object('reason',f.reason,'reviewStatus',f.review_status) ORDER BY f.request_id) FROM candidate_operations.time_off_shift_flags f WHERE f.shift_id=s.id AND f.restaurant_id=p_restaurant AND f.review_status='pending')) ELSE '{}'::jsonb END) ORDER BY s.id),'[]')
+  'data',jsonb_build_object('personId',s.member_id,'position',s.position,'start',s.starts_at,'end',s.ends_at,'published',s.published,'cancelled',s.cancelled,'releasedAt',s.released_at,'publishedActions',CASE WHEN can_change THEN candidate_operations.published_shift_actions(actor.id,p_restaurant,s.id) ELSE jsonb_build_object('canEdit',false,'canChangeStructure',false,'canChangeStation',false,'canCancel',false,'unfinishedClosingCount',0,'hasLinkedTasks',false,'hasCompletedClosing',false,'editAreas','[]'::jsonb,'blockedReason','authority') END)||CASE WHEN s.station_id IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('stationId',s.station_id,'stationName',s.station_name,'stationRevision',s.station_revision) END||CASE WHEN caps && ARRAY['schedule.manage','schedule.publish','schedule.change'] AND (actor.department=s.department OR 'location.manage'=ANY(caps)) AND EXISTS(SELECT 1 FROM candidate_operations.time_off_shift_flags f WHERE f.shift_id=s.id AND f.restaurant_id=p_restaurant AND f.review_status='pending') THEN jsonb_build_object('reviewFlags',(SELECT jsonb_agg(jsonb_build_object('reason',f.reason,'reviewStatus',f.review_status) ORDER BY f.request_id) FROM candidate_operations.time_off_shift_flags f WHERE f.shift_id=s.id AND f.restaurant_id=p_restaurant AND f.review_status='pending')) ELSE '{}'::jsonb END) ORDER BY s.id),'[]')
  INTO items FROM candidate_operations.shift_references s WHERE s.id=ANY(selected[1:p_limit]);
  IF cardinality(selected)>p_limit THEN next_cursor:=selected[p_limit]; END IF;
  RETURN jsonb_build_object('items',items,'nextCursor',next_cursor,'workspaceRevision',scope.revision,'timezone',scope.timezone,'coverage','shift-references-only');
@@ -2194,9 +2222,10 @@ DECLARE s candidate_operations.shift_references%ROWTYPE; allowed boolean; struct
 BEGIN
  SELECT * INTO s FROM candidate_operations.shift_references WHERE id=p_shift AND restaurant_id=p_restaurant;
  IF NOT FOUND THEN RETURN NULL; END IF;
+ -- Authority is evaluated before linked-work queries. Non-editors receive no work-state metadata.
+ IF NOT candidate_operations.published_change_allowed(p_member,p_restaurant,s.department,s.starts_at,s.ends_at) THEN RETURN jsonb_build_object('canEdit',false,'canChangeStructure',false,'canChangeStation',false,'canCancel',false,'unfinishedClosingCount',0,'hasLinkedTasks',false,'hasCompletedClosing',false,'editAreas','[]'::jsonb,'blockedReason','authority'); END IF;
  allowed:=s.published AND NOT s.cancelled AND s.released_at IS NULL AND s.ends_at>statement_timestamp()
-  AND EXISTS(SELECT 1 FROM candidate_operations.schedule_draft_events WHERE shift_id=s.id)
-  AND candidate_operations.published_change_allowed(p_member,p_restaurant,s.department,s.starts_at,s.ends_at);
+  AND EXISTS(SELECT 1 FROM candidate_operations.schedule_draft_events WHERE shift_id=s.id);
  SELECT count(*)::integer INTO closing_count FROM candidate_operations.closes WHERE shift_id=s.id AND phase NOT IN ('closed','cancelled');
  pending_tasks:=EXISTS(SELECT 1 FROM candidate_operations.tasks WHERE shift_id=s.id AND phase<>'closed');
  structural:=allowed AND NOT EXISTS(SELECT 1 FROM candidate_operations.tasks WHERE shift_id=s.id)
@@ -2347,6 +2376,38 @@ BEGIN
  SELECT * INTO shift FROM candidate_operations.shift_references WHERE id=p_shift AND restaurant_id=p_restaurant;
  IF NOT FOUND OR NOT(actor.id=shift.member_id OR candidate_operations.closing_manager_read(actor.id,p_restaurant,shift.department,'tasks.manage') OR candidate_operations.closing_manager_read(actor.id,p_restaurant,shift.department,'close.confirm')) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='shift_denied'; END IF;
  RETURN jsonb_build_object('id',shift.id,'kind','shift','locationId',p_restaurant,'area',shift.department,'ownerId',shift.member_id,'revision',shift.revision,'data',jsonb_build_object('personId',shift.member_id,'position',shift.position,'start',shift.starts_at,'end',shift.ends_at,'published',shift.published,'cancelled',shift.cancelled,'releasedAt',shift.released_at));
+END;
+$function$
+
+CREATE OR REPLACE FUNCTION candidate_operations.read_shift_cancellation_review(p_subject text, p_member uuid, p_restaurant text, p_shift uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+DECLARE actor candidate_identity.memberships; s candidate_operations.shift_references; c candidate_operations.closes; scope_revision integer; closings jsonb:='[]'; choices jsonb; pending_tasks boolean; count_closing integer;
+BEGIN
+ SELECT m.* INTO actor FROM candidate_identity.memberships m JOIN candidate_identity.auth_links a ON a.person_id=m.person_id WHERE m.id=p_member AND m.restaurant_id=p_restaurant AND m.active AND NOT m.schedule_only AND a.subject=p_subject;
+ IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='actor_denied'; END IF;
+ SELECT * INTO s FROM candidate_operations.shift_references WHERE id=p_shift AND restaurant_id=p_restaurant AND published;
+ IF NOT FOUND OR NOT candidate_operations.published_change_allowed(actor.id,p_restaurant,s.department,s.starts_at,s.ends_at) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='action_denied'; END IF;
+ IF s.cancelled OR s.released_at IS NOT NULL THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='phase_conflict'; END IF;
+ IF s.ends_at<=statement_timestamp() THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='shift_ended'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM candidate_operations.schedule_draft_events WHERE shift_id=s.id) THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='draft_reference_only'; END IF;
+ SELECT revision INTO scope_revision FROM candidate_identity.restaurants WHERE id=p_restaurant;
+ SELECT count(*)::integer INTO count_closing FROM candidate_operations.closes WHERE shift_id=s.id AND phase NOT IN ('closed','cancelled');
+ IF count_closing>100 THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='closing_selection_limit'; END IF;
+ pending_tasks:=EXISTS(SELECT 1 FROM candidate_operations.tasks WHERE shift_id=s.id AND phase<>'closed');
+ FOR c IN SELECT * FROM candidate_operations.closes WHERE shift_id=s.id AND phase NOT IN ('closed','cancelled') ORDER BY id LOOP
+  -- Hold a task-blocked review without exposing choices that cannot be submitted.
+  SELECT coalesce(jsonb_agg(jsonb_build_object('shiftId',t.id,'revision',t.revision,'ownerId',t.member_id,'ownerName',p.name,'start',t.starts_at,'end',t.ends_at,'position',t.position,'area',t.department) ORDER BY t.starts_at,t.id),'[]') INTO choices
+  FROM (SELECT t.* FROM candidate_operations.shift_references t WHERE NOT pending_tasks AND t.restaurant_id=p_restaurant AND t.id<>s.id AND t.published AND NOT t.cancelled AND t.released_at IS NULL AND t.department=c.department AND t.starts_at<=c.due AND t.ends_at>=c.due AND candidate_operations.closing_transfer_issue(actor.id,c,t,true)='' ORDER BY t.starts_at,t.id LIMIT 101) t
+  JOIN candidate_identity.memberships m ON m.id=t.member_id JOIN candidate_identity.people p ON p.id=m.person_id;
+  closings:=closings||jsonb_build_array(jsonb_build_object('id',c.id,'revision',c.revision,'zone',c.zone,'due',c.due,'phase',c.phase,'ownerId',c.owner_id,
+   'standard',jsonb_build_object('id',c.standard_id,'title',c.standard_snapshot->>'title','version',c.standard_snapshot->'version','position',c.standard_snapshot->>'position'),
+   'optionsTruncated',jsonb_array_length(choices)>100,'options',CASE WHEN jsonb_array_length(choices)>100 THEN choices - 100 ELSE choices END));
+ END LOOP;
+ RETURN jsonb_build_object('locationId',p_restaurant,'actorId',actor.id,'shiftId',s.id,'revision',s.revision,'workspaceRevision',scope_revision,'closing',closings,'canCancel',NOT pending_tasks,'blockedReason',CASE WHEN pending_tasks THEN 'linked_task_pending' ELSE '' END);
 END;
 $function$
 

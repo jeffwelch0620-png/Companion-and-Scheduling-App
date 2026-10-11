@@ -94,7 +94,7 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
  return async(request:Request):Promise<Response>=>{
   try{
    const url=new URL(request.url);
-   const route=/^\/api\/operations\/([a-zA-Z0-9_-]{1,100})\/(commands|week-review|tasks|goals|staffing|publication-review|closes|dish-cycles|overnight|shifts|schedule-viewer|schedule-shifts|schedule-roster|schedule-availability|schedule-requests|schedule-stations|schedule-coverage|schedule-swaps|schedule-leadership)(?:\/([0-9a-f-]{36}))?$/.exec(url.pathname);
+   const route=/^\/api\/operations\/([a-zA-Z0-9_-]{1,100})\/(commands|week-review|tasks|goals|staffing|publication-review|cancellation-review|closes|dish-cycles|overnight|shifts|schedule-viewer|schedule-shifts|schedule-roster|schedule-availability|schedule-requests|schedule-stations|schedule-coverage|schedule-swaps|schedule-leadership)(?:\/([0-9a-f-]{36}))?$/.exec(url.pathname);
    if(!route)return json({error:{code:'route_not_found'}},404);
    const [,scope,resource,taskId]=route;
    if((resource.startsWith('schedule-')||resource==='goals'||resource==='staffing')&&(taskId||url.searchParams.getAll('after').length>1||url.searchParams.getAll('limit').length>1))
@@ -138,6 +138,10 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
     if(resource==='schedule-viewer'){return result((await connection.query('SELECT candidate_operations.schedule_viewer($1,$2::uuid,$3) AS result',[identity.subject,identity.membershipId,scope])).rows[0]);}
     if(resource==='staffing'){
      return result((await connection.query('SELECT candidate_operations.list_staffing($1,$2::uuid,$3,$4::uuid,$5::integer) AS result',[identity.subject,identity.membershipId,scope,after,Number(limitText)])).rows[0]);
+    }
+    if(resource==='cancellation-review'){
+     if(!taskId)throw new CommandError(400,'shift_identifier_required');
+     return result((await connection.query('SELECT candidate_operations.read_shift_cancellation_review($1,$2::uuid,$3,$4::uuid) AS result',[identity.subject,identity.membershipId,scope,taskId])).rows[0]);
     }
     if(resource==='publication-review'){
      if(!taskId)throw new CommandError(400,'shift_identifier_required');
@@ -195,7 +199,8 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
    return json(data);
   }catch(error){
    if(error instanceof CommandError)return json({error:{code:/^[a-z_]+$/.test(error.code)?error.code:'invalid_request'}},error.status);
-   const pg=error as {code?:string};
+   const pg=error as {code?:string;message?:string};
+   if(pg.code==='P0001'&&['phase_conflict','shift_ended','draft_reference_only'].includes(pg.message??''))return json({error:{code:pg.message}},409);
    if(pg.code==='42501')return json({error:{code:'access_denied'}},403);
    if(pg.code?.startsWith('22'))return json({error:{code:'invalid_request'}},400);
    return json({error:{code:'service_unavailable'}},503);
