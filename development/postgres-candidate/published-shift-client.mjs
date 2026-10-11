@@ -12,7 +12,8 @@ export function publishedShiftFields(w,r) {
  for(const key of ['start','end']) {
   const instant=r.data[key],date=localDate(instant,w.location.timezone),time=localClock(instant,w.location.timezone);
   fields[key+'Date']=date;fields[key+'Time']=time;
-  fields[key+'Occurrence']=Date.parse(localInstant(date,time,w.location.timezone,'later'))>Date.parse(localInstant(date,time,w.location.timezone,'earlier'))&&Date.parse(instant)>=Date.parse(localInstant(date,time,w.location.timezone,'later'))?'later':'earlier';
+  const earlier=localInstant(date,time,w.location.timezone,'earlier'),later=localInstant(date,time,w.location.timezone,'later');
+  fields[key+'Occurrence']=earlier===later?'':Date.parse(instant)>=Date.parse(later)?'later':'earlier';
  }
  return fields;
 }

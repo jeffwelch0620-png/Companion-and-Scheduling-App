@@ -18,6 +18,8 @@ Exact shift revisions and frozen request IDs use the existing screen sender. Net
 
 Malformed published action projections fail closed for that detail. Other schedule reads and existing coverage/consent flows remain available. No coworker capability arrays, closing answers or event payloads are added to the shift list.
 
+Pre-merge follow-up: ordinary timestamp prefills leave occurrence blank; ambiguous originals retain their exact occurrence and seconds. Changing a date/time clears its prior occurrence choice. Published 050 remains immutable under the shared-migration convention. Corrective 052 on dependent PR38 will return only false actions, zero counts, false linked/completed flags, empty edit areas and `authority` for viewers without published-change authority. Until that correction is accepted, 050 still exposes linked-work flags/counts to non-editors; PR37 alone does not resolve this privacy finding. Validate the combined corrected PR38 package before accepting the merge sequence or using this projection outside fictional preparation.
+
 ## Validation
 
 Fresh fictional bootstrap through all 50 migrations and snapshot comparison passed. Forty focused checks passed; the full serial run passed all 628 behavioral cases. Its remaining manifest assertion was updated from 49 to 50 and passed separately; final UI/manifest regressions passed 9/9. Strict backend/UI types, source-copy gates, preview builds and readiness inventory passed. Published 001–049 bytes and hashes remain unchanged. Fifteen new API/UI cases cover server-projected controls, dated/revoked authority, protected linked work, local-time/DST validation, active-time limits, exact versions, audited cancellation and original receipt replay. Final fresh full-suite GitHub results are recorded on the PR. Notification intents and fictional browser checks do not establish actual message delivery or real-store readiness.
@@ -32,3 +34,5 @@ Browser rehearsal passed on a separate loopback preview: imported protection, re
 - Retirement of candidate UI copies during the reviewed shared/PostgreSQL port.
 - Inventory integration from its confirmed tested baseline commit.
 - Optional leadership polish: suppress peer self-assignment intents for note-only changes while retaining creation/reactivation and material changes (including a new self-assigned member); show revoked badge wording; add bounded publisher-only history. PR36 is accepted; these are later follow-ups, not part of 050.
+
+Follow-up local validation: fresh PostgreSQL 17.11 bootstrap through unchanged 050 and snapshot comparison; 32/32 serial published-schedule, published-screen, UI and manifest checks; strict backend/UI types and preview build passed. New ordinary-to-fold and both unchanged ambiguous-original cases pass. Exact follow-up head and full CI counts are maintained in the PR description.
