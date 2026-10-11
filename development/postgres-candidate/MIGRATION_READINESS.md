@@ -154,3 +154,7 @@ Publication follow-up 046 separates source-input attestation from draft/publicat
 ## Published shift screen preparation (050)
 
 PR36 leadership follow-up is accepted at `1c536d1` with 614/614 merged-main CI tests. [Published shift UI checkpoint](PUBLISHED_SHIFT_UI_CHECKPOINT.md) prepares published edits, protected reason-only changes and cancellation without unfinished closing transfers. M06 remains partial: explicit covering-shift cancellation UI, attendance/audited corrections, copying/batch editing, ingestion/source completeness, shared authz, notification delivery and copied-component retirement remain open. Optional PR36 leadership polish stays deferred. Inventory integration requires its confirmed tested baseline.
+
+## Closing-transfer cancellation screen preparation (051)
+
+PR37 is an unmerged draft at `c27cca1`; its exact-head CI passed 629/629. [Closing-transfer UI checkpoint](CLOSING_TRANSFER_UI_CHECKPOINT.md) adds current, server-filtered covering choices, an explicit per-assignment review and atomic cancellation through the existing command. The new branch depends on PR37 and requires its own review and merge approval after that dependency is accepted and incorporated normally. M06 remains partial: attendance/audited corrections are next, followed by copying/batch editing, source completeness/ingestion, shared authz, notification delivery and copied-component retirement. Inventory remains separate until its tested baseline is confirmed.

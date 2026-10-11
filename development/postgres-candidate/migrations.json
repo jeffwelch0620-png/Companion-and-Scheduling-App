@@ -200,6 +200,10 @@
     {
       "file": "050_published_shift_ui_projection.sql",
       "sha256": "5500f56aa97a1c236aeaa02268a1439588c496bc8afecb7ad96e7fc3e21d2450"
+    },
+    {
+      "file": "051_closing_transfer_review.sql",
+      "sha256": "40c45b8e745bdd22f9a2ac47c3e0f47e023b5e33600996fc9b20faee5eed9ce1"
     }
   ]
 }

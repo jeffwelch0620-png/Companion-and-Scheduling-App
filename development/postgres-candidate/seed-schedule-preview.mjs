@@ -32,6 +32,22 @@ try {
   await pool.query("INSERT INTO candidate_operations.publication_reviews(shift_id,shift_revision,workspace_revision,no_staffing,no_closing,evidence) SELECT $1,$2,revision,true,true,'Complete fictional replacement fixture only' FROM candidate_identity.restaurants WHERE id=$3",[shift.recordId,shift.revision,scope]);
   await executeTask(db,publisher,scope,{requestId:randomUUID(),locationId:scope,action:'shift.publish',recordId:shift.recordId,expectedRevision:shift.revision,input:{note:'Fictional replacement preview publication'}});
  }
+ // Command-created source and covering shifts for explicit cancellation review.
+ const guide=randomUUID(),transferDay=nextDate(day,3);
+ await pool.query("INSERT INTO candidate_operations.standard_references VALUES($1,$2,'Kitchen','Fictional grill closing guide','Grill','Cook',1,1,'manager','approved','[\"Clean and inspect grill\"]')",[guide,scope]);
+ await pool.query("INSERT INTO candidate_identity.membership_capabilities VALUES($1,'tasks.manage',true)",[publisher.membershipId]);
+ for(const actor of ['schedule-worker','schedule-replacement']){
+  await pool.query("INSERT INTO candidate_identity.station_clearances VALUES($1,$2,'Cook',true)",[members[actor],scope]);
+  const shift=await executeTask(db,publisher,scope,{requestId:randomUUID(),locationId:scope,action:'shift.save',input:{personId:members[actor],position:'Cook',start:localInstant(transferDay,'10:00','America/Chicago'),end:localInstant(transferDay,'12:00','America/Chicago'),note:'Fictional closing transfer review'}});
+  if(actor==='schedule-worker')await pool.query('INSERT INTO candidate_operations.shift_standard_links(shift_id,standard_id,restaurant_id) VALUES($1,$2,$3)',[shift.recordId,guide,scope]);
+  let closing;
+  if(actor==='schedule-worker')closing=await executeTask(db,publisher,scope,{requestId:randomUUID(),locationId:scope,action:'close.assign',input:{shiftId:shift.recordId,standardId:guide,managerId:publisher.membershipId,due:localInstant(transferDay,'11:30','America/Chicago'),note:'Fictional closing responsibility'}});
+  await pool.query("INSERT INTO candidate_operations.publication_reviews(shift_id,shift_revision,workspace_revision,no_staffing,no_closing,evidence) SELECT $1,$2,revision,true,$4,'Complete fictional transfer fixture only' FROM candidate_identity.restaurants WHERE id=$3",[shift.recordId,shift.revision,scope,!closing]);
+  await executeTask(db,publisher,scope,{requestId:randomUUID(),locationId:scope,action:'shift.publish',recordId:shift.recordId,expectedRevision:shift.revision,input:{note:'Fictional closing transfer preview publication'}});
+  // Privileged fixture input: the published covering reference gets its reviewed guide link.
+  if(actor==='schedule-replacement')await pool.query('INSERT INTO candidate_operations.shift_standard_links(shift_id,standard_id,restaurant_id) VALUES($1,$2,$3)',[shift.recordId,guide,scope]);
+  if(closing)await pool.query("UPDATE candidate_operations.closes SET phase='manager-confirmation',answers='[0]' WHERE id=$1",[closing.recordId]);
+ }
  // Privileged seed attestation only, after all fictional inputs; the UI cannot refresh it.
  await pool.query("INSERT INTO candidate_operations.weekly_scope_reviews(restaurant_id,workspace_revision,schedule_revision,input_revision,evidence) SELECT r.id,r.revision,c.schedule_revision,c.input_revision,'Complete fictional scheduling fixture only' FROM candidate_identity.restaurants r JOIN candidate_operations.scope_coordination c ON c.restaurant_id=r.id WHERE r.id=$1",[scope]);
  writeFileSync(new URL('runtime/schedule-preview-fixture.json',import.meta.url),JSON.stringify({sessions}));
