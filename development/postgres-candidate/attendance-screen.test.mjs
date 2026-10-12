@@ -1,6 +1,6 @@
 import test,{after} from 'node:test';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';import pg from 'pg';
 import {connection} from './test-config.mjs';import {PostgresDatabase} from './postgres-driver.ts';import {createTaskHandler} from './task-http.ts';import {loadScheduleScreen,ScheduleScreenSender} from './schedule-screen-client.mjs';
-import {loadAttendanceRange,loadAttendanceDetail,attendanceFields,attendanceInput,attendanceDecision,attendancePatterns} from './attendance-client.mjs';
+import {loadAttendanceRange,loadShiftAttendance,loadAttendanceDetail,attendanceFields,attendanceInput,attendanceDecision,attendancePatterns} from './attendance-client.mjs';
 const admin=new pg.Pool({...connection,user:'candidate_owner'}),db=new PostgresDatabase({...connection,user:'candidate_runtime'});after(async()=>{await admin.end();await db.close();});
 async function fixture(){
  const f={scope:'attendance-ui-'+randomUUID()};await admin.query("INSERT INTO candidate_identity.restaurants(id,name,timezone,operating_departments,dish_department,dish_position,dish_aliases) VALUES($1,'Fictional attendance forms','America/Chicago',ARRAY['Kitchen','Service'],'Kitchen','Steward',ARRAY['Steward'])",[f.scope]);
@@ -35,4 +35,39 @@ test('private attendance does not enter employee scheduling workspaces; revocati
  const f=await fixture(),saved=await record(f),call=http(f);let loaded=await detail(f,saved.recordId),w=await loadScheduleScreen(call);await new ScheduleScreenSender().send(call,f.scope,'attendance.review',attendanceDecision(w,loaded.record,'attendance.review','Fictional review'),loaded.record);
  const employee=await loadScheduleScreen(http(f,f.worker));assert.deepEqual(employee.attendanceAreas,[]);assert.ok(!JSON.stringify(employee).includes('Fictional private attendance facts'));assert.equal((await http(f,f.worker)('/attendance')).status,403);await assert.rejects(loadAttendanceRange(http(f,f.worker),employee,'2020-05-01','2020-05-01'),/current access/);
  w=await loadScheduleScreen(call);let revoked=false;await assert.rejects(loadAttendanceDetail(async(path,c)=>{const response=await call(path.replace('limit=100','limit=1'),c);if(path.startsWith('/attendance-history/')&&!revoked){revoked=true;await admin.query('UPDATE candidate_identity.sessions SET active=false WHERE id=$1',[f.manager.sessionId]);}return response;},w,saved.recordId),/Sign in again/);
+});
+
+test('an actual schedule command during range paging does not restart attendance loading',async()=>{
+ const f=await fixture();await record(f);await record(f,'other');
+ await admin.query("INSERT INTO candidate_identity.membership_capabilities VALUES($1,'schedule.manage',true)",[f.manager.id]);
+ await admin.query("INSERT INTO candidate_identity.schedule_eligibility VALUES($1,'Cook','schedule-job',true)",[f.worker.id]);
+ await admin.query('INSERT INTO candidate_operations.schedule_input_reviews(restaurant_id,time_off_complete,reviewed_at) VALUES($1,true,clock_timestamp())',[f.scope]);
+ const original=http(f),w=await loadScheduleScreen(original);let wrote=false,pages=0,viewers=0;
+ const loaded=await loadAttendanceRange(async(path,c)=>{
+  if(path==='/schedule-viewer')viewers++;if(path.startsWith('/attendance?'))pages++;
+  const response=await original(path.replace('limit=100','limit=1'),c);
+  if(path.startsWith('/attendance?')&&!wrote){wrote=true;const command={requestId:randomUUID(),locationId:f.scope,action:'shift.save',input:{personId:f.worker.id,position:'Cook',start:'2031-06-01T13:00:00Z',end:'2031-06-01T15:00:00Z'}};assert.equal((await original('/commands',command)).status,200);}
+  return response;
+ },w,'2020-05-01','2020-05-01');
+ assert.equal(loaded.complete,true);assert.equal(loaded.attendanceRevision,w.attendanceRevision);assert.equal(pages,2);assert.equal(viewers,2);
+});
+
+test('an attendance command during range paging restarts the drain and relevant capability revocation denies it',async()=>{
+ const f=await fixture(),saved=await record(f);await record(f,'other');const original=http(f),w=await loadScheduleScreen(original);let wrote=false,pages=0;
+ const loaded=await loadAttendanceRange(async(path,c)=>{
+  const response=await original(path.replace('limit=100','limit=1'),c);
+  if(path.startsWith('/attendance?')){pages++;if(!wrote){wrote=true;assert.equal((await original('/commands',{requestId:randomUUID(),locationId:f.scope,action:'attendance.review',recordId:saved.recordId,expectedRevision:1,input:{note:'Fictional concurrent review'}})).status,200);}}
+  return response;
+ },w,'2020-05-01','2020-05-01');
+ assert.equal(loaded.attendanceRevision,w.attendanceRevision+1);assert.equal(pages,4);assert.ok(loaded.records.find(r=>r.id===saved.recordId).data.review);
+ const fresh=await loadScheduleScreen(original);let revoked=false;
+ await assert.rejects(loadAttendanceRange(async(path,c)=>{const response=await original(path.replace('limit=100','limit=1'),c);if(path.startsWith('/attendance?')&&!revoked){revoked=true;await admin.query('UPDATE candidate_identity.membership_capabilities SET active=false WHERE membership_id=$1',[f.manager.id]);}return response;},fresh,'2020-05-01','2020-05-01'),/current access/);
+});
+
+test('per-shift loader includes original assignee history without loading unrelated shifts on the same day',async()=>{
+ const f=await fixture(),saved=await record(f);await admin.query('UPDATE candidate_operations.shift_references SET member_id=$1,revision=revision+1 WHERE id=$2',[f.replacement.id,f.shift]);
+ await record(f,'other');const another=randomUUID();await admin.query("INSERT INTO candidate_operations.shift_references(id,restaurant_id,member_id,department,position,starts_at,ends_at,revision,published) VALUES($1,$2,$3,'Kitchen','Cook','2020-05-01T16:00:00Z','2020-05-01T18:00:00Z',1,true)",[another,f.scope,f.worker.id]);
+ const call=http(f),w=await loadScheduleScreen(call),sender=new ScheduleScreenSender();await sender.send(call,f.scope,'attendance.record',{shiftId:another,shiftRevision:1,type:'other',reportedAt:'2020-05-01T12:00:00Z',note:'Fictional unrelated entry'});
+ const paths=[],loaded=await loadShiftAttendance(async(path,c)=>{paths.push(path);return call(path.replace('limit=100','limit=1'),c);},await loadScheduleScreen(call),f.shift);
+ assert.equal(loaded.records.length,2);assert.ok(loaded.records.some(r=>r.id===saved.recordId&&r.ownerId===f.worker.id));assert.ok(loaded.records.some(r=>r.ownerId===f.replacement.id));assert.ok(loaded.records.every(r=>r.data.shiftId===f.shift));assert.ok(paths.filter(p=>p.startsWith('/attendance?')).every(p=>p.includes('shift='+f.shift)&&!p.includes('from=')));
 });

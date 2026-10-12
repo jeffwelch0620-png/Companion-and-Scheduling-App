@@ -23,7 +23,7 @@ export async function loadScheduleScreen(call) {
   if(changed||JSON.stringify(last.body)!==JSON.stringify(viewer))continue;
   for(const member of [...sets.roster,viewer.me])assertCanonicalCheckoutMembership({location:viewer.location},member);
   const stations=sets.stations.map(r=>({...r,data:{...r.data,...(r.data.setup?{setup:{...r.data.setup,standardIds:r.data.setup.standardIds??[],goals:r.data.setup.goals??[]}}:{})}}));
-  const workspace={location:viewer.location,scheduleRevision:viewer.scheduleRevision,inputRevision:viewer.inputRevision,me:viewer.me,attendanceAreas:viewer.attendanceAreas??[],leadershipOptions:viewer.leadershipOptions??[],members:sets.roster.map(m=>({...m,capabilities:m.id===viewer.me.id?viewer.me.capabilities:[]})),records:[...sets.availability,...sets.requests,...sets.shifts,...stations,...sets.leadership],offerReviewNotices:0};
+  const workspace={location:viewer.location,scheduleRevision:viewer.scheduleRevision,inputRevision:viewer.inputRevision,me:viewer.me,attendanceRevision:viewer.attendanceRevision,attendanceAreas:viewer.attendanceAreas??[],leadershipOptions:viewer.leadershipOptions??[],members:sets.roster.map(m=>({...m,capabilities:m.id===viewer.me.id?viewer.me.capabilities:[]})),records:[...sets.availability,...sets.requests,...sets.shifts,...stations,...sets.leadership],offerReviewNotices:0};
   for(const [kind,offers] of [['coverage',sets.coverage],['request',sets.swaps]])for(const r of offers)try{if(r?.kind!==kind)throw Error('Invalid offer kind');workspace.records.push(checkedOffer(workspace,r));}catch{workspace.offerReviewNotices++;}
   return workspace;
  }

@@ -25,33 +25,45 @@ export function checkedAttendance(w,r){
  if((d.status==='voided'||r.revision===1000)&&Object.values(a).some(Boolean)||a.canReview&&d.review!==null||a.canReopen&&d.review===null)fail();
  return structuredClone(r);
 }
+// Only attendance authority/configuration participates in read freshness. Scheduling counters do not.
+export function attendanceAccessKey(w){
+ const config=configuredLocation(w.location).configuration;
+ return JSON.stringify({actor:w.me.id,scope:w.location.id,area:w.me.area,position:w.me.position,
+  capabilities:[...(w.me.capabilities??[])].filter(c=>['location.manage','people.manage'].includes(c)).sort(),
+  areas:[...attendanceAreas(w)].sort(),timezone:w.location.timezone,configuration:config},(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v);
+}
+export function attendanceReadCurrent(w,data){
+ try{return !!data&&data.actorId===w.me.id&&data.locationId===w.location.id&&Number.isSafeInteger(data.attendanceRevision)&&data.attendanceRevision>=0&&data.attendanceRevision>=(w.attendanceRevision??0)&&data.accessKey===attendanceAccessKey(w);}catch{return false;}
+}
 function checkedViewer(w,v){
- if(!v||v.me?.id!==w.me.id||!same(v.me,w.me)||!same(v.attendanceAreas,w.attendanceAreas)||v.location?.id!==w.location.id||!Number.isSafeInteger(v.workspaceRevision)||v.workspaceRevision<w.location.revision||v.location.revision!==v.workspaceRevision||JSON.stringify(v.location.configuration)!==JSON.stringify(w.location.configuration)||v.location.timezone!==w.location.timezone)throw Error('Attendance access changed. Reload current records.');
- const current={...w,location:v.location,attendanceAreas:v.attendanceAreas};if(!attendanceAreas(current).length)throw Error('Your current access does not allow attendance.');return current;
+ if(!v||v.location?.id!==w.location.id||!Number.isSafeInteger(v.workspaceRevision)||v.location.revision!==v.workspaceRevision||!Number.isSafeInteger(v.attendanceRevision)||v.attendanceRevision<0||v.attendanceRevision<(w.attendanceRevision??0)||attendanceAccessKey(v)!==attendanceAccessKey(w))throw Error('Attendance access changed. Reload current records.');
+ const current={...w,location:v.location,me:v.me,attendanceAreas:v.attendanceAreas};if(!attendanceAreas(current).length)throw Error('Your current access does not allow attendance.');return current;
 }
 async function get(call,path){let response;try{response=await call(path);}catch{throw Error('Attendance could not be loaded. No partial totals or history are shown.');}if(response?.status!==200)throw Object.assign(Error(response?.status===401?'Sign in again, then reload attendance.':response?.status===403?'Your current access does not allow attendance.':'Attendance could not be loaded. No partial totals or history are shown.'),{status:response?.status});return response.body;}
-export async function loadAttendanceRange(call,w,from,to){
+async function loadAttendanceSelection(call,w,from,to,shiftId){
  if(!attendanceAreas(w).length)throw Error('Your current access does not allow attendance.');
- if(![from,to].every(d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&Number.isFinite(Date.parse(d+'T12:00:00Z'))&&new Date(d+'T12:00:00Z').toISOString().slice(0,10)===d)||from>to)throw Error('Choose a valid attendance date range.');
+ if(!shiftId&&(![from,to].every(d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&Number.isFinite(Date.parse(d+'T12:00:00Z'))&&new Date(d+'T12:00:00Z').toISOString().slice(0,10)===d)||from>to))throw Error('Choose a valid attendance date range.');
  for(let attempt=0;attempt<3;attempt++){
   const viewer=await get(call,'/schedule-viewer'),current=checkedViewer(w,viewer),records=[],ids=new Set(),cursors=new Set();let after=null,changed=false,invalid=0;
   do{
-   const page=await get(call,'/attendance?limit=100&from='+from+'&to='+to+(after?'&after='+after:''));
+   const page=await get(call,'/attendance?limit=100'+(shiftId?'&shift='+shiftId:'&from='+from+'&to='+to)+(after?'&after='+after:''));
    if(!page||typeof page!=='object'||Array.isArray(page))fail();
-   if(page.workspaceRevision!==viewer.workspaceRevision){changed=true;break;}
-   if(!Array.isArray(page.items)||page.items.length>100||page.from!==from||page.to!==to||typeof page.rangeComplete!=='boolean'||page.nextCursor!==null&&!uuid(page.nextCursor)||page.rangeComplete!==(page.nextCursor===null))fail();
-   for(const raw of page.items){if(!uuid(raw?.id)||ids.has(raw.id)||after&&raw.id<=after)fail();ids.add(raw.id);try{const r=checkedAttendance(current,raw),day=localDate(r.data.shift.start,r.data.shift.timezone);if(day<from||day>to)fail();records.push(r);}catch{invalid++;}}
+   if(page.attendanceRevision!==viewer.attendanceRevision){changed=true;break;}
+   if(!Array.isArray(page.items)||page.items.length>100||page.from!==from||page.to!==to||page.shiftId!==shiftId||typeof page.rangeComplete!=='boolean'||page.nextCursor!==null&&!uuid(page.nextCursor)||page.rangeComplete!==(page.nextCursor===null))fail();
+   for(const raw of page.items){if(!uuid(raw?.id)||ids.has(raw.id)||after&&raw.id<=after)fail();ids.add(raw.id);try{const r=checkedAttendance(current,raw),day=localDate(r.data.shift.start,r.data.shift.timezone);if(shiftId?r.data.shiftId!==shiftId:day<from||day>to)fail();records.push(r);}catch{invalid++;}}
    const last=page.items.at(-1)?.id;
    if(page.nextCursor&&(page.nextCursor!==last||cursors.has(page.nextCursor)||after&&page.nextCursor<=after))fail();
    if(cursors.size>=100)throw Error('This date range has too many entries to review together. Choose a shorter range; no partial totals are shown.');
    after=page.nextCursor;if(after)cursors.add(after);
   }while(after);
   const final=await get(call,'/schedule-viewer');checkedViewer(w,final);
-  if(changed||JSON.stringify(viewer)!==JSON.stringify(final))continue;
-  return {records,invalid,complete:invalid===0,from,to,workspaceRevision:viewer.workspaceRevision,actorId:w.me.id,locationId:w.location.id};
+  if(changed||viewer.attendanceRevision!==final.attendanceRevision||attendanceAccessKey(viewer)!==attendanceAccessKey(final))continue;
+  return {records,invalid,complete:invalid===0,from,to,shiftId,attendanceRevision:viewer.attendanceRevision,accessKey:attendanceAccessKey(current),workspaceRevision:viewer.workspaceRevision,actorId:w.me.id,locationId:w.location.id};
  }
  throw Error('Attendance changed while loading. Reload before reviewing totals.');
 }
+export function loadAttendanceRange(call,w,from,to){return loadAttendanceSelection(call,w,from,to,null);}
+export function loadShiftAttendance(call,w,shiftId){if(!uuid(shiftId))fail();return loadAttendanceSelection(call,w,null,null,shiftId);}
 export async function loadAttendanceDetail(call,w,id){
  if(!uuid(id)||!attendanceAreas(w).length)fail();
  for(let attempt=0;attempt<3;attempt++){
@@ -60,7 +72,7 @@ export async function loadAttendanceDetail(call,w,id){
   do{
    const page=await get(call,'/attendance-history/'+id+'?limit=100&after='+after);
    if(!page||typeof page!=='object'||Array.isArray(page))fail();
-   if(page.attendanceRevision!==record.revision){changed=true;break;}
+   if(page.recordRevision!==record.revision||page.attendanceRevision!==viewer.attendanceRevision){changed=true;break;}
    if(!Array.isArray(page.items)||page.items.length>100||typeof page.historyComplete!=='boolean'||page.historyComplete!==(page.nextCursor===null)||page.nextCursor!==null&&!rev(page.nextCursor))fail();
    for(const e of page.items){
     const a=e?.after,b=e?.before;
@@ -70,9 +82,9 @@ export async function loadAttendanceDetail(call,w,id){
    if(page.nextCursor&&(page.nextCursor!==events.at(-1)?.revision||page.nextCursor<=after))fail();after=page.nextCursor;
   }while(after);
   const latest=checkedAttendance(current,await get(call,'/attendance/'+id)),final=await get(call,'/schedule-viewer');checkedViewer(w,final);
-  if(changed||JSON.stringify(viewer)!==JSON.stringify(final)||JSON.stringify(record)!==JSON.stringify(latest))continue;
+  if(changed||viewer.attendanceRevision!==final.attendanceRevision||attendanceAccessKey(viewer)!==attendanceAccessKey(final)||JSON.stringify(record)!==JSON.stringify(latest))continue;
   const last=events.at(-1)?.after;
-  if(events.length!==record.revision||last.attendance_type!==record.data.type||last.status!==record.data.status||Date.parse(last.reported_at)!==Date.parse(record.data.reportedAt)||last.note!==record.data.note||!same(last.facts,record.data.facts))fail();return {record,events,complete:true,workspaceRevision:viewer.workspaceRevision,actorId:w.me.id,locationId:w.location.id};
+  if(events.length!==record.revision||last.attendance_type!==record.data.type||last.status!==record.data.status||Date.parse(last.reported_at)!==Date.parse(record.data.reportedAt)||last.note!==record.data.note||!same(last.facts,record.data.facts))fail();return {record,events,complete:true,attendanceRevision:viewer.attendanceRevision,accessKey:attendanceAccessKey(current),workspaceRevision:viewer.workspaceRevision,actorId:w.me.id,locationId:w.location.id};
  }
  throw Error('Attendance history changed while loading. Reload to review it.');
 }

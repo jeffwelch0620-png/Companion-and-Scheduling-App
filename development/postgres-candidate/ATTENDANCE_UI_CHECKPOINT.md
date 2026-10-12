@@ -1,6 +1,6 @@
 # Manager attendance forms preparation
 
-This candidate UI branch depends on unmerged PR40 backend head `d44fff2`. Accepted main remains PR39 `11a6931`. This slice adds no SQL: migrations 001–053, manifest and generated function snapshot match PR40 byte for byte. Keep this draft based on PR40's branch until its separate approval; then normally merge accepted main, retarget, retest and seek separate UI merge approval. No rebase, force-push, hosted application, active backend or Inventory change is authorized.
+This candidate UI branch normally incorporated unmerged PR40 backend head `609a913`, retaining both histories without rebasing or force-pushing. Accepted main remains PR39 `11a6931`. This slice adds no independent SQL: migrations 001–054, manifest and generated function snapshot match PR40 byte for byte. Keep this draft based on PR40's branch until its separate approval; then normally merge accepted main, retarget, retest and seek separate UI merge approval. No rebase, force-push, hosted application, active backend or Inventory change is authorized.
 
 ## Manager workflow
 
@@ -12,11 +12,13 @@ Reported-time forms use the shift's saved timezone. Unchanged corrections preser
 
 ## Complete private reads
 
-Attendance is kept out of the general scheduling workspace and employee reads. Range/detail controllers keep data in memory only and are reset by actor/scope/revision changes. Stale loads cannot repopulate an unmounted/changed controller. Private loading failure clears results rather than retaining stale notes, actions or totals.
+Attendance is kept out of the general scheduling workspace and employee reads. Range/detail controllers keep data in memory only and are reset by actor/scope, attendance revision or relevant authority/configuration changes. Unrelated global/scheduling counters do not reset them or hide a complete read. The authority projection includes actor identity, department, position, attendance capabilities/areas and store configuration/timezone; it excludes schedule eligibility, leadership choices and scheduling counters. Stale loads cannot repopulate an unmounted/changed controller. Private loading failure clears results rather than retaining stale notes, actions or totals.
 
-The range loader drains bounded UUID pages, checks cursor progress/duplicates, range dates, record shape, viewer identity/permissions and a consistent workspace revision, then rechecks the viewer. Concurrent writes retry the whole range up to three times; more than 100 cursor pages requires a shorter range rather than displaying truncated totals. Malformed individual entries are held with no actions; valid entries remain available, but pattern totals are withheld until the whole range is valid. Counts exclude voided entries and count distinct original shifts once. They are not attendance rates, hours worked, pay, disciplinary points or emergency determinations.
+The range loader drains bounded UUID pages, checks cursor progress/duplicates, range dates, record shape, viewer identity/permissions and a consistent attendance revision, then rechecks viewer authority and the attendance revision. Attendance writes retry the whole range up to three times; unrelated schedule commands do not. More than 100 cursor pages requires a shorter range rather than displaying truncated totals. Malformed individual entries are held with no actions; valid entries remain available, but pattern totals are withheld until the whole range is valid. Counts exclude voided entries and count distinct original shifts once. They are not attendance rates, hours worked, pay, disciplinary points or emergency determinations.
 
-Detail loading drains every ascending event page under the exact attendance revision, checks the before/after chain and original snapshot, rereads the record and viewer, then enables controls. No partial history is presented as complete. The collapsible history shows current/historical actors, original snapshots, before/after facts and reasons. Session/permission revocation stops loading without revealing additional pages.
+Detail loading drains every ascending event page under the exact entry `recordRevision` and store `attendanceRevision`, checks the before/after chain and original snapshot, rereads the record and viewer, then enables controls. No partial history is presented as complete. The collapsible history shows current/historical actors, original snapshots, before/after facts and reasons. Session/permission revocation stops loading without revealing additional pages.
+
+Shift detail uses the indexed `shift` selector instead of draining a day range. It includes authorized original-assignee and voided entries after reassignment, unlike the original app’s current-owner-only helper, and labels original-assignee records “Previous assignee entry”. Existing self-actions remain allowed for authorized managers pending later owner review; no new ±24-hour reported-time bound is added.
 
 ## Submission and device behavior
 
@@ -26,7 +28,7 @@ Durable attendance recovery across browser reload remains deferred: keep the pag
 
 ## Evidence and adoption
 
-Fresh fictional loopback PostgreSQL 17 applies 001–053 with unchanged snapshot. Local rendered/client and HTTP integration tests check all five actions, paging/counts, revocation, malformed records, original identity/current names, DST and frozen retry confirmations. Strict candidate types, original preview build and source-copy gate are checked before push; exact-head CI counts and browser evidence are reported in the draft PR.
+Fresh fictional loopback PostgreSQL 17 applies 001–054 with unchanged snapshot. Local rendered/client and HTTP integration tests check all five actions, paging/counts, revocation, malformed records, original identity/current names, DST and frozen retry confirmations. Strict candidate types, original preview build and source-copy gate are checked before push; exact-head CI counts and browser evidence are reported in the draft PR.
 
 During shared UI adoption, fold these candidate forms/loaders into the original `app/team/attendance.tsx` and related manager review flow, preserve server-projected authorization and bounded history, then remove `ui-attendance.tsx` and candidate-only adapters when the unified implementation is validated. Reuse the original fact widgets; do not add them to the three-copy source-hash gate. Existing copied-component retirement stays tracked separately.
 
