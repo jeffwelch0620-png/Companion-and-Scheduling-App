@@ -5,6 +5,8 @@ import {WorkspaceForm,RecordDetail} from '../../app/team/workspace-forms';
 import {LeadershipBoard,LeadershipEditor,LeadershipDetail} from './ui-leadership';
 import {ClosingTransferCancellation} from './ui-closing-transfer';
 import {CompletedShiftCorrections} from './ui-corrections';
+import {RetrospectiveLeaveReviews} from './ui-leave-reviews';
+import {hasLeaveReviewAccess} from './leave-review-client.mjs';
 import {hasCorrectionAccess} from './correction-client.mjs';
 import {AttendanceHistory,ShiftAttendance} from './ui-attendance';
 import {PublishedShiftChanges} from './ui-published-shift';
@@ -64,9 +66,11 @@ function Preview(){
    {!view&&screen==='leadership'&&<LeadershipBoard w={w} onOpen={r=>setView({id:r.id})} onCreate={()=>setView({kind:'leadership'})} onBack={()=>setScreen('schedule')}/>}
    {!view&&screen==='coverage'&&<CoverageSwapBoard w={w} onOpen={r=>setView({id:r.id})} onBack={()=>setScreen('schedule')}/>}
    {!view&&screen==='corrections'&&<CompletedShiftCorrections key={w.me.id} w={w} call={path=>call(actor,path)} send={send} onError={setError} onBack={()=>setScreen('schedule')}/>}
+   {!view&&screen==='leave-reviews'&&<RetrospectiveLeaveReviews key={w.me.id} w={w} call={path=>call(actor,path)} send={send} onError={setError} onBack={()=>setScreen('schedule')} onOpenShift={id=>{setScreen('schedule');setView({id});}}/>}
    {!view&&screen==='attendance'&&<AttendanceHistory key={w.me.id} w={w} call={path=>call(actor,path)} send={send} onError={setError} onBack={()=>setScreen('schedule')}/>}
    {!view&&screen==='schedule'&&<section className="schedule-week">
     {hasCorrectionAccess(w)&&<button onClick={()=>setScreen('corrections')}>Completed shift corrections</button>}
+    {hasLeaveReviewAccess(w)&&<button onClick={()=>setScreen('leave-reviews')}>Retrospective time off review</button>}
     <button onClick={()=>setScreen('leadership')}>Dated shift leadership</button>
     {Array.isArray(w.attendanceAreas)&&w.attendanceAreas.length>0&&<button onClick={()=>setScreen('attendance')}>Attendance history</button>}
     <button onClick={()=>setScreen('coverage')}>Coverage and replacement requests</button>{w.offerReviewNotices>0&&<p role="status">Some replacement requests need review. Open coverage requests to review the notice or contact a manager.</p>}
