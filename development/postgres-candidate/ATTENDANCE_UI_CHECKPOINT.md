@@ -1,6 +1,6 @@
 # Manager attendance forms preparation
 
-This candidate UI branch normally incorporated unmerged PR40 backend head `609a913`, retaining both histories without rebasing or force-pushing. Accepted main remains PR39 `11a6931`. This slice adds no independent SQL: migrations 001–054, manifest and generated function snapshot match PR40 byte for byte. Keep this draft based on PR40's branch until its separate approval; then normally merge accepted main, retarget, retest and seek separate UI merge approval. No rebase, force-push, hosted application, active backend or Inventory change is authorized.
+PR40 was separately approved and squash-merged at accepted main `a8c0bde` from reviewed backend head `609a913`. This UI branch normally merged that main, retaining both histories without rebasing or force-pushing, and now targets main. This slice adds no independent SQL: migrations 001–054, manifest and generated function snapshot match accepted main byte for byte. Retest the refreshed head before separate UI merge approval; this PR remains a draft. No hosted application, active backend or Inventory change is authorized.
 
 ## Manager workflow
 
