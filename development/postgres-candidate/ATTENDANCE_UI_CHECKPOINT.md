@@ -1,6 +1,6 @@
 # Manager attendance forms preparation
 
-PR40 was separately approved and squash-merged at accepted main `a8c0bde` from reviewed backend head `609a913`. This UI branch normally merged that main, retaining both histories without rebasing or force-pushing, and now targets main. This slice adds no independent SQL: migrations 001–054, manifest and generated function snapshot match accepted main byte for byte. Retest the refreshed head before separate UI merge approval; this PR remains a draft. No hosted application, active backend or Inventory change is authorized.
+PR40 was separately approved and squash-merged at accepted main `a8c0bde` from reviewed backend head `609a913`. This UI branch normally merged that main, retaining both histories without rebasing or force-pushing, and now targets main. This slice adds no independent SQL: migrations 001–054, manifest and generated function snapshot match accepted main byte for byte. PR41 was separately approved and accepted at main `c69792d` from refreshed head `e574c90`, with 704/704 post-merge CI checks. No hosted application, active backend or Inventory change is authorized.
 
 ## Manager workflow
 

@@ -94,7 +94,7 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
  return async(request:Request):Promise<Response>=>{
   try{
    const url=new URL(request.url);
-   const route=/^\/api\/operations\/([a-zA-Z0-9_-]{1,100})\/(commands|week-review|tasks|goals|staffing|attendance|attendance-history|publication-review|cancellation-review|closes|dish-cycles|overnight|shifts|schedule-viewer|schedule-shifts|schedule-roster|schedule-availability|schedule-requests|schedule-stations|schedule-coverage|schedule-swaps|schedule-leadership)(?:\/([0-9a-f-]{36}))?$/.exec(url.pathname);
+   const route=/^\/api\/operations\/([a-zA-Z0-9_-]{1,100})\/(commands|week-review|tasks|goals|staffing|completed-shifts|shift-corrections|shift-correction-history|attendance|attendance-history|publication-review|cancellation-review|closes|dish-cycles|overnight|shifts|schedule-viewer|schedule-shifts|schedule-roster|schedule-availability|schedule-requests|schedule-stations|schedule-coverage|schedule-swaps|schedule-leadership)(?:\/([0-9a-f-]{36}))?$/.exec(url.pathname);
    if(!route)return json({error:{code:'route_not_found'}},404);
    const [,scope,resource,taskId]=route;
    if((resource.startsWith('schedule-')||resource==='goals'||resource==='staffing')&&(taskId||url.searchParams.getAll('after').length>1||url.searchParams.getAll('limit').length>1))
@@ -107,12 +107,14 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
    const session=await verifyToken(auth.slice(7));
    const command=resource==='commands'||resource==='week-review'?await body(request):undefined;
    if(resource==='schedule-viewer'&&url.search)throw new CommandError(400,'invalid_query');
-   const queryKeys=resource==='attendance'&&!taskId?['after','limit','from','to','shift']:['after','limit'];
+   const queryKeys=resource==='completed-shifts'&&!taskId?['after','limit','asOf']:resource==='attendance'&&!taskId?['after','limit','from','to','shift']:['after','limit'];
    if([...url.searchParams.keys()].some(k=>!queryKeys.includes(k)||url.searchParams.getAll(k).length>1)
-    ||(resource==='commands'||resource==='week-review')&&url.search||taskId&&resource!=='attendance-history'&&url.search)
+    ||(resource==='commands'||resource==='week-review')&&url.search||taskId&&!['attendance-history','shift-correction-history'].includes(resource)&&url.search)
     throw new CommandError(400,'invalid_query');
    const after=url.searchParams.get('after'),limitText=url.searchParams.get('limit')??'50';
-   if(after!==null&&(resource==='attendance-history'?!/^(0|[1-9][0-9]{0,2}|1000)$/.test(after):!uuid.test(after))||!/^([1-9]|[1-9][0-9]|100)$/.test(limitText))
+   const correctionAsOf=url.searchParams.get('asOf');
+   if(correctionAsOf!==null&&(!/^\d{4}-\d{2}-\d{2}T([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9](\.\d{1,6})?)?(Z|[+-]\d{2}:\d{2})$/.test(correctionAsOf)||!Number.isFinite(Date.parse(correctionAsOf))||new Date(correctionAsOf.slice(0,10)+'T12:00:00Z').toISOString().slice(0,10)!==correctionAsOf.slice(0,10)))throw new CommandError(400,'invalid_correction_query');
+   if(after!==null&&(['attendance-history','shift-correction-history'].includes(resource)?!/^(0|[1-9][0-9]{0,2}|1000)$/.test(after):!uuid.test(after))||!/^([1-9]|[1-9][0-9]|100)$/.test(limitText))
     throw new CommandError(400,'invalid_pagination');
    const from=url.searchParams.get('from'),to=url.searchParams.get('to');
    const attendanceShift=url.searchParams.get('shift');
@@ -139,6 +141,16 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
      const review=command as {weekStart?:unknown;draftIds?:unknown};
      if(!review||typeof review!=='object'||Array.isArray(review)||Object.keys(review).some(k=>!['weekStart','draftIds'].includes(k))||typeof review.weekStart!=='string'||!Array.isArray(review.draftIds)||review.draftIds.length<1||review.draftIds.length>100||review.draftIds.some(id=>typeof id!=='string'||!uuid.test(id)))throw new CommandError(400,'invalid_week_fields');
      return result((await connection.query('SELECT candidate_operations.weekly_review($1,$2::uuid,$3,$4,$5::jsonb) AS result',[identity.subject,identity.membershipId,scope,review.weekStart,JSON.stringify(review.draftIds)])).rows[0]);
+    }
+    if(resource==='shift-correction-history'){
+     if(!taskId)throw new CommandError(400,'correction_identifier_required');
+     return result((await connection.query('SELECT candidate_operations.read_shift_correction_history($1,$2::uuid,$3,$4::uuid,$5::integer,$6::integer) AS result',[identity.subject,identity.membershipId,scope,taskId,Number(after??0),Number(limitText)])).rows[0]);
+    }
+    if(resource==='shift-corrections'){
+     return result((await connection.query(taskId?'SELECT candidate_operations.read_shift_correction($1,$2::uuid,$3,$4::uuid) AS result':'SELECT candidate_operations.list_shift_corrections($1,$2::uuid,$3,$4::uuid,$5::integer) AS result',taskId?[identity.subject,identity.membershipId,scope,taskId]:[identity.subject,identity.membershipId,scope,after,Number(limitText)])).rows[0]);
+    }
+    if(resource==='completed-shifts'){
+     return result((await connection.query(taskId?'SELECT candidate_operations.read_completed_shift_review($1,$2::uuid,$3,$4::uuid) AS result':'SELECT candidate_operations.list_completed_shifts($1,$2::uuid,$3,$4::uuid,$5::integer,$6::timestamptz) AS result',taskId?[identity.subject,identity.membershipId,scope,taskId]:[identity.subject,identity.membershipId,scope,after,Number(limitText),correctionAsOf])).rows[0]);
     }
     if(resource==='attendance-history'){
      if(!taskId)throw new CommandError(400,'attendance_identifier_required');
@@ -212,7 +224,7 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
   }catch(error){
    if(error instanceof CommandError)return json({error:{code:/^[a-z_]+$/.test(error.code)?error.code:'invalid_request'}},error.status);
    const pg=error as {code?:string;message?:string};
-   if(pg.code==='P0001'&&['phase_conflict','shift_ended','draft_reference_only'].includes(pg.message??''))return json({error:{code:pg.message}},409);
+   if(pg.code==='P0001'&&['phase_conflict','shift_ended','draft_reference_only','correction_source_ineligible'].includes(pg.message??''))return json({error:{code:pg.message}},409);
    if(pg.code==='42501')return json({error:{code:'access_denied'}},403);
    if(pg.code?.startsWith('22'))return json({error:{code:'invalid_request'}},400);
    return json({error:{code:'service_unavailable'}},503);
