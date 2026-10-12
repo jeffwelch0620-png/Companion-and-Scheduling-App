@@ -1,6 +1,6 @@
 # Git workflow for Companion and Inventory integration
 
-The Companion repository keeps reviewed source on `main`. PostgreSQL preparation uses focused `codex/` branches from accepted main at `b922ea7` (PR42). The approved backend head `b9d930c` passed 740/740 exact-head CI checks; merged-main checks are recorded on PR43 after completion. PR28 was squash-merged at `0f1aa31`; PR29 was separately approved and squash-merged at `a344421`, with 457/457 post-merge tests and CI passing. Inventory's merge is complete and its baseline is undergoing testing. Integration remains separate until the user confirms its tested baseline commit. Pushing saves versioned source remotely. Merging updates a shared baseline. Deployment and database application require a separate, explicit step.
+The Companion repository keeps reviewed source on `main`. PostgreSQL preparation uses focused `codex/` branches from accepted main at `b922ea7` (PR42), with 740/740 merged-main CI checks passing. The approved backend head `b9d930c` also passed 740/740 exact-head CI checks. PR28 was squash-merged at `0f1aa31`; PR29 was separately approved and squash-merged at `a344421`, with 457/457 post-merge tests and CI passing. Inventory's merge is complete and its baseline is undergoing testing. Integration remains separate until the user confirms its tested baseline commit. Pushing saves versioned source remotely. Merging updates a shared baseline. Deployment and database application require a separate, explicit step.
 
 ## Routine development
 
