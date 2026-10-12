@@ -224,6 +224,10 @@
     {
       "file": "056_correction_source_and_reporting.sql",
       "sha256": "f6c164e7f951be5e254f5838ca6083facc6f4c392a3406b92586923bc02729cd"
+    },
+    {
+      "file": "057_bounded_correction_board.sql",
+      "sha256": "4c293838f357ebbaa8fb6fd459bb5bf632a0bf7ec6f86409b7460ccdeb4681cf"
     }
   ]
 }

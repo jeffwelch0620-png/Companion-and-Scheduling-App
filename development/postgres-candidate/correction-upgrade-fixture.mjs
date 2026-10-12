@@ -13,4 +13,7 @@ export async function legacyCorrectionShape(client){
 export async function upgradeCorrectionShape(client){
  const source=await readFile(new URL('056_correction_source_and_reporting.sql',import.meta.url),'utf8');
  await client.query(source.replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,''));
+ // Reapply current read projections/indexes after reproducing historical 055/056 shapes.
+ const board=await readFile(new URL('057_bounded_correction_board.sql',import.meta.url),'utf8');
+ await client.query(board.replace(/^BEGIN;$/m,'').replace(/^COMMIT;$/m,'').replaceAll('CREATE INDEX ', 'CREATE INDEX IF NOT EXISTS ').replaceAll('CREATE FUNCTION ', 'CREATE OR REPLACE FUNCTION '));
 }

@@ -10,11 +10,11 @@ async function fixture(){const f={scope:'correction-ui-'+randomUUID()};await poo
  for(const key of ['manager','employee']){const shift=randomUUID();await pool.query("INSERT INTO candidate_operations.shift_references(id,restaurant_id,member_id,department,position,starts_at,ends_at,revision,published) VALUES($1,$2,$3,'Kitchen','Cook','2020-05-01T13:00:17.321Z','2020-05-01T15:00:17.321Z',1,true)",[shift,f.scope,f[key].member]);f[key].shift=shift;}
  f.call=actor=>{const a=f[actor],handler=createTaskHandler(db,async()=>({subject:a.subject,sessionId:a.session}));return async(path,command)=>{const response=await handler(new Request('http://fictional.invalid/api/operations/'+f.scope+path,{method:command?'POST':'GET',headers:{Authorization:'Bearer fictional',...(command?{'Content-Type':'application/json'}:{})},...(command?{body:JSON.stringify(command)}:{})}));return {status:response.status,body:await response.json()};};};f.workspace=async actor=>{const v=await f.call(actor)('/schedule-viewer');assert.equal(v.status,200);return {...v.body,members:[],records:[]};};return f;}
 test('real HTTP correction screen preserves original records, applies coworker changes and retries a lost committed response once',async()=>{
- const f=await fixture(),call=f.call('manager'),w=await f.workspace('manager'),board=await loadCorrectionBoard(call,w);assert.equal(board.sources.length,2);assert.equal(board.records.length,0);assert.equal(board.invalid,0);assert.deepEqual(w.records,[]);
+ const f=await fixture(),call=f.call('manager'),w=await f.workspace('manager'),board=await loadCorrectionBoard(call,w,{from:'2020-05-01',to:'2020-05-01'});assert.equal(board.sources.length,2);assert.equal(board.records.length,0);assert.equal(board.invalid,0);assert.deepEqual(w.records,[]);
  const original=(await pool.query('SELECT to_jsonb(s) value FROM candidate_operations.shift_references s WHERE id=$1',[f.employee.shift])).rows[0].value;
  const detail=await loadCorrectionDetail(call,w,f.employee.shift,{source:true}),input=correctionInput(w,detail.source,{...correctionFields(detail.source),position:'Reconciled Cook',reason:'Fictional planned correction'}),sender=new ScheduleScreenSender();let exact;
  await assert.rejects(sender.send(async(p,c)=>{exact=structuredClone(c);const r=await call(p,c);assert.equal(r.status,200);throw Error('Response lost after commit');},f.scope,'correction.propose',input));const receipt=await sender.retry(async(p,c)=>{assert.deepEqual(c,exact);return call(p,c);});assert.equal(receipt.replayed,true);assert.equal(receipt.correctionStatus,'applied');assert.equal(receipt.effectiveRevision,1);
- const loaded=await loadCorrectionDetail(call,w,receipt.recordId);assert.equal(loaded.record.data.effectiveSummary.position,'Reconciled Cook');assert.equal(loaded.events.length,1);assert.equal(loaded.record.data.actions.canPropose,true);assert.equal((await loadCorrectionBoard(call,w)).records.length,1);assert.deepEqual((await pool.query('SELECT to_jsonb(s) value FROM candidate_operations.shift_references s WHERE id=$1',[f.employee.shift])).rows[0].value,original);
+ const loaded=await loadCorrectionDetail(call,w,receipt.recordId);assert.equal(loaded.record.data.effectiveSummary.position,'Reconciled Cook');assert.equal(loaded.events.length,1);assert.equal(loaded.record.data.actions.canPropose,true);assert.equal((await loadCorrectionBoard(call,w,{from:'2020-05-01',to:'2020-05-01'})).records.length,1);assert.deepEqual((await pool.query('SELECT to_jsonb(s) value FROM candidate_operations.shift_references s WHERE id=$1',[f.employee.shift])).rows[0].value,original);
  assert.equal((await pool.query('SELECT count(*)::integer n FROM candidate_operations.completed_shift_correction_outbox WHERE correction_id=$1',[receipt.recordId])).rows[0].n,1);assert.equal((await f.call('employee')('/shift-corrections/'+receipt.recordId)).status,403);assert.equal((await f.call('employee')('/completed-shifts')).status,403);
 });
 test('real own-person proposal stays pending, only independent correction permission approves, and full history matches effective summary',async()=>{
@@ -46,4 +46,50 @@ test('real 055-to-056 audit upgrade loads an intact cross-version chain and reje
   const extra=structuredClone(history);extra.items[1].before.additive_audit_metadata='future fictional field';assert.equal((await loadCorrectionDetail(async p=>p.startsWith('/shift-correction-history')?{status:200,body:extra}:call(p),w,created.recordId)).events.length,2);
   for(const tamper of [h=>h.items[1].before.reason='Changed past fact',h=>h.items[1].before.source_key.revision=999,h=>delete h.items[1].before.person_id]){const h=structuredClone(history);tamper(h);await assert.rejects(loadCorrectionDetail(async p=>p.startsWith('/shift-correction-history')?{status:200,body:h}:call(p),w,created.recordId),/needs review/);}
  }finally{await client.query('ROLLBACK');client.release();}
+});
+
+test('ranged HTTP board excludes over 10000 historical sources and ledgers before paging',async()=>{
+ const f=await fixture(),call=f.call('manager'),w=await f.workspace('manager');
+ const result=await new ScheduleScreenSender().send(call,f.scope,'correction.propose',{shiftId:f.employee.shift,shiftRevision:1,expectedCorrectionRevision:0,start:'2020-05-01T13:00:17.321Z',end:'2020-05-01T15:00:17.321Z',position:'Reconciled Cook',reason:'Fictional range template'});
+ await pool.query(`INSERT INTO candidate_operations.shift_references(id,restaurant_id,member_id,department,position,starts_at,ends_at,revision,published)
+ SELECT gen_random_uuid(),$1,$2,'Kitchen','Cook',t,t+interval '1 hour',1,true FROM (SELECT timestamptz '1980-01-01T12:00:00Z'+n*interval '1 day' t FROM generate_series(1,10001) n) old`,[f.scope,f.employee.member]);
+ await pool.query(`INSERT INTO candidate_operations.completed_shift_corrections
+ SELECT (jsonb_populate_record(NULL::candidate_operations.completed_shift_corrections,to_jsonb(template)||jsonb_build_object('id',gen_random_uuid(),'shift_id',s.id,'original_snapshot',to_jsonb(s),'source_key',candidate_operations.correction_source_key(to_jsonb(s)),
+ 'shift_local_date',(s.starts_at AT TIME ZONE template.timezone)::date,'effective_summary',jsonb_build_object('start',s.starts_at,'end',s.ends_at,'position',s.position),'proposal_summary',jsonb_build_object('start',s.starts_at,'end',s.ends_at,'position',s.position)))).*
+ FROM candidate_operations.shift_references s CROSS JOIN candidate_operations.completed_shift_corrections template WHERE s.restaurant_id=$1 AND s.starts_at<'2010-01-01' AND template.id=$2`,[f.scope,result.recordId]);
+ let calls=0;const board=await loadCorrectionBoard(async(...args)=>{calls++;return call(...args);},w,{from:'2020-05-01',to:'2020-05-01'});assert.equal(board.sources.length,2);assert.equal(board.records.length,1);assert.equal(board.invalid,0);assert.equal(calls,5);
+ assert.equal((await pool.query('SELECT count(*)::integer n FROM candidate_operations.completed_shift_corrections WHERE restaurant_id=$1',[f.scope])).rows[0].n,10002);
+ // These excluded fixture ledger rows are never loaded as complete audit histories.
+ const indexes=(await pool.query("SELECT indexname FROM pg_indexes WHERE schemaname='candidate_operations' AND indexname IN ('completed_source_start_range','completed_correction_date_range')")).rows;assert.equal(indexes.length,2);
+});
+
+test('local start-date range includes both DST occurrences and overnight shifts, excluding adjacent dates',async()=>{
+ const f=await fixture(),call=f.call('manager'),w=await f.workspace('manager');
+ for(const [from,to,periods] of [
+  ['2020-11-01','2020-11-01',[['2020-11-01T04:00:00Z','2020-11-01T04:30:00Z',false],['2020-11-01T05:00:00Z','2020-11-01T05:30:00Z',true],['2020-11-01T06:10:00Z','2020-11-01T06:30:00Z',true],['2020-11-01T07:10:00Z','2020-11-01T07:30:00Z',true],['2020-11-02T05:30:00Z','2020-11-02T07:00:00Z',true],['2020-11-02T07:10:00Z','2020-11-02T08:00:00Z',false]]],
+  ['2020-03-08','2020-03-08',[['2020-03-08T05:00:00Z','2020-03-08T05:30:00Z',false],['2020-03-08T06:00:00Z','2020-03-08T06:30:00Z',true],['2020-03-09T04:30:00Z','2020-03-09T05:30:00Z',true],['2020-03-09T05:40:00Z','2020-03-09T06:00:00Z',false]]]
+ ]){const expected=[];for(const [start,end,inRange] of periods){const shift=randomUUID();await pool.query("INSERT INTO candidate_operations.shift_references(id,restaurant_id,member_id,department,position,starts_at,ends_at,revision,published) VALUES($1,$2,$3,'Kitchen','Cook',$4,$5,1,true)",[shift,f.scope,f.employee.member,start,end]);if(inRange)expected.push(shift);}
+  const board=await loadCorrectionBoard(call,w,{from,to});assert.deepEqual(board.sources.map(s=>s.shiftId).sort(),expected.sort());assert.equal(board.complete,true);
+ }
+ for(const resource of ['completed-shifts','shift-corrections'])for(const query of ['from=2020-05-01','to=2020-05-01','from=2020-02-30&to=2020-03-01','from=2020-05-02&to=2020-05-01','from=2020-05-01&from=2020-05-01&to=2020-05-01'])assert.equal((await call('/'+resource+'?'+query)).status,400);
+ assert.equal((await call('/completed-shifts/'+f.employee.shift+'?from=2020-05-01&to=2020-05-01')).status,400);assert.equal((await call('/schedule-shifts?from=2020-05-01&to=2020-05-01')).status,400);
+ for(const functionName of ['list_completed_shifts','list_shift_corrections'])await assert.rejects(pool.query('SELECT candidate_operations.'+functionName+'($1,$2::uuid,$3,NULL::uuid,50'+(functionName==='list_completed_shifts'?',NULL::timestamptz':'')+',$4::date,$5::date)',[f.manager.subject,f.manager.member,f.scope,'2020-05-01',null]),e=>e.message==='invalid_correction_query');
+});
+
+test('position options match original or active store jobs, retire on reload and commands still reject unknown jobs',async()=>{
+ const f=await fixture(),call=f.call('manager'),w=await f.workspace('manager');await pool.query("INSERT INTO candidate_identity.schedule_eligibility VALUES($1,'Inactive Cook','schedule-job',false)",[f.employee.member]);
+ let detail=await loadCorrectionDetail(call,w,f.employee.shift,{source:true});assert.deepEqual(detail.source.positionOptions,['Another proposed Cook','Cook','Reconciled Cook']);assert.equal(detail.source.positionOptions.includes('Inactive Cook'),false);assert.notDeepEqual(detail.source.positionOptions,w.me.scheduleJobs);
+ const result=await new ScheduleScreenSender().send(call,f.scope,'correction.propose',correctionInput(w,detail.source,{...correctionFields(detail.source),position:'Reconciled Cook',reason:'Fictional known job'}));
+ await pool.query("UPDATE candidate_identity.schedule_eligibility SET active=false WHERE member_id=$1 AND job='Reconciled Cook'",[f.employee.member]);detail=await loadCorrectionDetail(call,w,f.employee.shift,{source:true});assert.equal(detail.source.effectiveSummary.position,'Reconciled Cook');assert.equal(detail.source.positionOptions.includes('Reconciled Cook'),false);
+ const ledger=await loadCorrectionDetail(call,w,result.recordId);assert.deepEqual(ledger.record.data.positionOptions,detail.source.positionOptions);
+ await assert.rejects(new ScheduleScreenSender().send(call,f.scope,'correction.propose',correctionInput(w,detail.source,{...correctionFields(detail.source),endTime:'11:00',reason:'Fictional retired job'})),/active scheduling job at this store/);
+ const runtime=await pool.connect();try{await runtime.query('SET ROLE candidate_runtime');await assert.rejects(runtime.query("SELECT candidate_operations.correction_position_options($1,'Cook')",[f.scope]),e=>e.code==='42501');}finally{await runtime.query('RESET ROLE');runtime.release();}
+});
+
+test('real unrelated draft creation during a board drain does not restart it or weaken source checks',async()=>{
+ const f=await fixture(),call=f.call('manager'),w=await f.workspace('manager');let written=false,calls=0;
+ const board=await loadCorrectionBoard(async path=>{calls++;const response=await call(path);if(path.startsWith('/completed-shifts?')&&!written){written=true;await pool.query("INSERT INTO candidate_operations.shift_references(id,restaurant_id,member_id,department,position,starts_at,ends_at,revision,published) VALUES($1,$2,$3,'Kitchen','Cook','2020-05-02T13:00:00Z','2020-05-02T15:00:00Z',1,false)",[randomUUID(),f.scope,f.approver.member]);}return response;},w,{from:'2020-05-01',to:'2020-05-01'});
+ assert.equal(calls,5);assert.equal(board.sources.length,2);assert.ok(board.scheduleRevision>w.scheduleRevision);
+ const review=await loadCorrectionDetail(call,w,f.employee.shift,{source:true});await pool.query('UPDATE candidate_operations.shift_references SET revision=revision+1 WHERE id=$1',[f.employee.shift]);
+ await assert.rejects(new ScheduleScreenSender().send(call,f.scope,'correction.propose',correctionInput(w,review.source,{...correctionFields(review.source),position:'Reconciled Cook',reason:'Fictional stale source'})),/changed|review|version/i);
 });

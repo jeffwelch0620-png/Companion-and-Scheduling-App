@@ -1,6 +1,10 @@
 import {configuredLocation} from './ui-store-configuration.mjs';
 import {localDate,localClock,localInstant} from './runtime/closing-reference/local-time.mjs';
 export const correctionReviewMessage='This correction needs review. Reload or contact an authorized manager.';
+export const correctionRangeMessage='Choose a shorter range; no partial history is shown';
+const date=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(v+'T12:00:00Z'))&&new Date(v+'T12:00:00Z').toISOString().slice(0,10)===v;
+export function defaultCorrectionRange(w,now=new Date().toISOString()){const to=localDate(now,w.location.timezone),start=new Date(to+'T12:00:00Z');start.setUTCDate(start.getUTCDate()-13);return {from:start.toISOString().slice(0,10),to};}
+function checkedRange(range){if(!date(range?.from)||!date(range?.to)||range.from>range.to)throw Error('Choose a valid start and end date.');return {from:range.from,to:range.to};}
 const id=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 const count=v=>Number.isSafeInteger(v)&&v>=0,positive=v=>count(v)&&v>0,rev=v=>positive(v)&&v<=1000;
 const text=v=>typeof v==='string'&&!!v.trim();
@@ -23,12 +27,13 @@ function auditProjection(value){
 export function hasCorrectionAccess(w){try{return !!configuredLocation(w.location)&&Array.isArray(w.me.capabilities)&&w.me.capabilities.includes('schedule.correct')&&w.me.scheduleOnly!==true&&w.me.position!==w.location.configuration.dishPosition;}catch{return false;}}
 // A navigation/freshness projection only. Server reads and commands enforce person and scope authority.
 export function correctionAccessKey(w){const config=configuredLocation(w.location).configuration;return JSON.stringify({actor:w.me.id,scope:w.location.id,area:w.me.area,position:w.me.position,scheduleOnly:w.me.scheduleOnly===true,capabilities:[...(w.me.capabilities??[])].filter(c=>['schedule.correct','location.manage'].includes(c)).sort(),timezone:w.location.timezone,configuration:config},(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v);}
-export function correctionReadCurrent(w,data){try{return !!data&&data.actorId===w.me.id&&data.locationId===w.location.id&&data.accessKey===correctionAccessKey(w)&&hasCorrectionAccess(w)&&count(data.correctionRevision)&&count(data.scheduleRevision)&&data.scheduleRevision>=(w.scheduleRevision??0);}catch{return false;}}
+export function correctionReadCurrent(w,data){try{return !!data&&data.actorId===w.me.id&&data.locationId===w.location.id&&data.accessKey===correctionAccessKey(w)&&hasCorrectionAccess(w)&&count(data.correctionRevision)&&count(data.scheduleRevision)&&('from' in data?!!checkedRange(data):data.scheduleRevision>=(w.scheduleRevision??0));}catch{return false;}}
 function checkedViewer(w,v){if(!hasCorrectionAccess(v)||v.location.id!==w.location.id||correctionAccessKey(v)!==correctionAccessKey(w)||!count(v.scheduleRevision))throw Error('Correction access changed. Reload current records.');return {...w,me:v.me,location:v.location};}
 export function checkedCorrection(w,r){
  const d=r?.data,a=d?.actions,o=d?.original;
  if(!hasCorrectionAccess(w)||!id(r?.id)||r.kind!=='shift-correction'||r.locationId!==w.location.id||!id(r.ownerId)||!w.location.configuration.operatingDepartments.includes(r.area)||!rev(r.revision)||!time(r.updatedAt)||!d||!id(d.shiftId)||!positive(d.sourceRevision)||!positive(d.currentSourceRevision)||!text(d.employeeName)||!text(d.employeeNameAtEntry)||d.historicalNameLabel!=='name at time of entry'||!text(d.timezone)||!/^\d{4}-\d{2}-\d{2}$/.test(d.shiftLocalDate)||!o||o.id!==d.shiftId||o.member_id!==r.ownerId||o.department!==r.area||o.revision!==d.sourceRevision||!summary({start:o.starts_at,end:o.ends_at,position:o.position})||!summary(d.effectiveSummary)||!count(d.appliedRevision)||d.appliedRevision>r.revision||!count(d.proposalBaseRevision)||d.proposalBaseRevision>r.revision||!summary(d.proposal)||!id(d.authorId)||!text(d.authorName)||!text(d.authorNameAtEntry)||!text(d.reason)||typeof d.decisionNote!=='string'||!statuses.includes(d.status)||!a||['canPropose','canApprove','canReject','canWithdraw'].some(k=>typeof a[k]!=='boolean')||!d.warnings||['sourceChanged','hasOriginalTasks','hasOriginalClosings'].some(k=>typeof d.warnings[k]!=='boolean'))fail();
  try{if(localDate(o.starts_at,d.timezone)!==d.shiftLocalDate||localDate(d.effectiveSummary.start,d.timezone)!==d.effectiveLocalDate)fail();}catch{fail();}
+ if(!Array.isArray(d.positionOptions)||d.positionOptions.some(v=>!text(v))||new Set(d.positionOptions).size!==d.positionOptions.length||!d.positionOptions.includes(o.position))fail();
  if(d.status==='pending'?a.canPropose:d.status!=='pending'&&(a.canApprove||a.canReject||a.canWithdraw))fail();
  if(r.revision===1000&&Object.values(a).some(Boolean)||d.warnings.sourceChanged&&(a.canPropose||a.canApprove)||d.status==='applied'&&(d.appliedRevision!==r.revision||!same(d.proposal,d.effectiveSummary)))fail();
  return structuredClone(r);
@@ -36,34 +41,39 @@ export function checkedCorrection(w,r){
 export function checkedCompletedShift(w,s){
  if(!hasCorrectionAccess(w)||!id(s?.shiftId)||!positive(s.sourceRevision)||!positive(s.currentSourceRevision)||!id(s.ownerId)||!w.location.configuration.operatingDepartments.includes(s.area)||!text(s.employeeName)||!summary(s.originalSummary)||!summary(s.effectiveSummary)||!text(s.timezone)||!count(s.recordRevision)||s.recordRevision>1000||typeof s.canPropose!=='boolean'||!count(s.correctionRevision))fail();
  try{localDate(s.originalSummary.start,s.timezone);if(localDate(s.effectiveSummary.start,s.timezone)!==s.effectiveLocalDate)fail();}catch{fail();}
+ if(!Array.isArray(s.positionOptions)||s.positionOptions.some(v=>!text(v))||new Set(s.positionOptions).size!==s.positionOptions.length||!s.positionOptions.includes(s.originalSummary.position))fail();
  if(s.correction===null){if(s.recordRevision!==0||!same(s.originalSummary,s.effectiveSummary))fail();}
  else {const r=checkedCorrection(w,s.correction);if(r.data.shiftId!==s.shiftId||r.revision!==s.recordRevision||r.ownerId!==s.ownerId||r.area!==s.area||r.data.sourceRevision!==s.sourceRevision||r.data.currentSourceRevision!==s.currentSourceRevision||r.data.timezone!==s.timezone||r.data.effectiveLocalDate!==s.effectiveLocalDate||!same(r.data.effectiveSummary,s.effectiveSummary)||!same({start:r.data.original.starts_at,end:r.data.original.ends_at,position:r.data.original.position},s.originalSummary))fail();}
  return structuredClone(s);
 }
 async function get(call,path){let r;try{r=await call(path);}catch{throw Error('Corrections could not be loaded. Keep this page open if a submission is uncertain.');}if(r?.status!==200)throw Object.assign(Error(r?.status===401?'Sign in again, then reload corrections.':r?.status===403?'Your current access does not allow corrections.':'Corrections could not be loaded. No partial history is shown.'),{status:r?.status});return r.body;}
 const stamp=(w,n)=>({actorId:w.me.id,locationId:w.location.id,accessKey:correctionAccessKey(w),correctionRevision:n});
-export async function loadCorrectionBoard(call,w){
+export async function loadCorrectionBoard(call,w,range=defaultCorrectionRange(w)){
  if(!hasCorrectionAccess(w))fail();
+ const {from,to}=checkedRange(range),rangeQuery='&from='+encodeURIComponent(from)+'&to='+encodeURIComponent(to);
  for(let attempt=0;attempt<3;attempt++){
   const viewer=await get(call,'/schedule-viewer'),current=checkedViewer(w,viewer),sources=[],records=[];let correctionRevision=null,asOf=null,changed=false,invalid=0;
   for(const resource of ['completed-shifts','shift-corrections']){
-   let after=null;const seen=new Set(),cursors=new Set();
+   let after=null,pages=0;const seen=new Set(),cursors=new Set();
    do{
-    const p=await get(call,'/'+resource+'?limit=100'+(after?'&after='+after:'')+(resource==='completed-shifts'&&asOf?'&asOf='+encodeURIComponent(asOf):''));
+    const p=await get(call,'/'+resource+'?limit=100'+rangeQuery+(after?'&after='+after:'')+(resource==='completed-shifts'&&asOf?'&asOf='+encodeURIComponent(asOf):''));pages++;
     if(!p||!Array.isArray(p.items)||p.items.length>100||!count(p.correctionRevision)||typeof p.rangeComplete!=='boolean'||p.rangeComplete!==(p.nextCursor===null)||p.nextCursor!==null&&!id(p.nextCursor))fail();
+    if(p.from!==from||p.to!==to)fail();
     correctionRevision??=p.correctionRevision;if(p.correctionRevision!==correctionRevision){changed=true;break;}
-    if(resource==='completed-shifts'){if(!time(p.asOf)||!count(p.scheduleRevision))fail();asOf??=p.asOf;if(p.asOf!==asOf||p.scheduleRevision!==viewer.scheduleRevision){changed=true;break;}}
+    if(resource==='completed-shifts'){if(!time(p.asOf)||!count(p.scheduleRevision))fail();asOf??=p.asOf;if(p.asOf!==asOf){changed=true;break;}}
     let last=after;
     for(const raw of p.items){const key=resource==='completed-shifts'?raw?.shiftId:raw?.id;if(!id(key)||seen.has(key)||last&&key<=last)fail();seen.add(key);last=key;try{if(resource==='completed-shifts'){const s=checkedCompletedShift(current,{...raw,correctionRevision:p.correctionRevision});if(s.correctionRevision!==correctionRevision||Date.parse(s.originalSummary.end)>Date.parse(asOf))fail();sources.push(s);}else records.push(checkedCorrection(current,raw));}catch{invalid++;}}
-    if(p.nextCursor&&(p.nextCursor!==last||cursors.has(p.nextCursor)||cursors.size>=100))fail();after=p.nextCursor;if(after)cursors.add(after);
+    if(p.nextCursor&&(p.nextCursor!==last||cursors.has(p.nextCursor)))fail();
+    if(p.nextCursor&&pages>=100)throw Error(correctionRangeMessage);after=p.nextCursor;if(after)cursors.add(after);
    }while(after);
    if(changed)break;
   }
-  const fence=await get(call,'/completed-shifts?limit=1'+(asOf?'&asOf='+encodeURIComponent(asOf):'')),final=await get(call,'/schedule-viewer');checkedViewer(w,final);
-  if(changed||fence.correctionRevision!==correctionRevision||fence.scheduleRevision!==viewer.scheduleRevision||final.scheduleRevision!==viewer.scheduleRevision)continue;
-  return {sources,records,invalid,complete:invalid===0,asOf,scheduleRevision:viewer.scheduleRevision,...stamp(w,correctionRevision)};
+  const fence=await get(call,'/completed-shifts?limit=1'+rangeQuery+(asOf?'&asOf='+encodeURIComponent(asOf):'')),final=await get(call,'/schedule-viewer');checkedViewer(w,final);
+  if(!count(fence.correctionRevision)||!time(fence.asOf)||fence.from!==from||fence.to!==to)fail();
+  if(changed||fence.correctionRevision!==correctionRevision||fence.asOf!==asOf)continue;
+  return {sources,records,invalid,complete:invalid===0,asOf,from,to,scheduleRevision:final.scheduleRevision,...stamp(w,correctionRevision)};
  }
- throw Error('Correction or schedule records changed while loading. Reload to review them.');
+ throw Error('Correction records changed while loading. Reload to review them.');
 }
 export async function loadCorrectionDetail(call,w,key,{source=false}={}){
  if(!id(key)||!hasCorrectionAccess(w))fail();
