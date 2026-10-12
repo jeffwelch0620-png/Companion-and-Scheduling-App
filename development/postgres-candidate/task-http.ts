@@ -107,7 +107,7 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
    const session=await verifyToken(auth.slice(7));
    const command=resource==='commands'||resource==='week-review'?await body(request):undefined;
    if(resource==='schedule-viewer'&&url.search)throw new CommandError(400,'invalid_query');
-   const queryKeys=resource==='completed-shifts'&&!taskId?['after','limit','asOf']:resource==='attendance'&&!taskId?['after','limit','from','to','shift']:['after','limit'];
+   const queryKeys=resource==='completed-shifts'&&!taskId?['after','limit','asOf','from','to']:resource==='shift-corrections'&&!taskId?['after','limit','from','to']:resource==='attendance'&&!taskId?['after','limit','from','to','shift']:['after','limit'];
    if([...url.searchParams.keys()].some(k=>!queryKeys.includes(k)||url.searchParams.getAll(k).length>1)
     ||(resource==='commands'||resource==='week-review')&&url.search||taskId&&!['attendance-history','shift-correction-history'].includes(resource)&&url.search)
     throw new CommandError(400,'invalid_query');
@@ -119,7 +119,7 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
    const from=url.searchParams.get('from'),to=url.searchParams.get('to');
    const attendanceShift=url.searchParams.get('shift');
    if(attendanceShift!==null&&(!uuid.test(attendanceShift)||from!==null||to!==null))throw new CommandError(400,'invalid_attendance_query');
-   if((from===null)!==(to===null)||[from,to].some(value=>value!==null&&(!/^\d{4}-\d{2}-\d{2}$/.test(value)||!Number.isFinite(Date.parse(value+'T12:00:00Z'))||new Date(value+'T12:00:00Z').toISOString().slice(0,10)!==value))||from!==null&&to!==null&&from>to)throw new CommandError(400,'invalid_attendance_query');
+   if((from===null)!==(to===null)||[from,to].some(value=>value!==null&&(!/^\d{4}-\d{2}-\d{2}$/.test(value)||!Number.isFinite(Date.parse(value+'T12:00:00Z'))||new Date(value+'T12:00:00Z').toISOString().slice(0,10)!==value))||from!==null&&to!==null&&from>to)throw new CommandError(400,['completed-shifts','shift-corrections'].includes(resource)?'invalid_correction_query':'invalid_attendance_query');
    const data=await database.transaction(async connection=>{
     if(resource!=='commands')await connection.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY',[]);
     let identity:TrustedIdentity;
@@ -147,10 +147,10 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
      return result((await connection.query('SELECT candidate_operations.read_shift_correction_history($1,$2::uuid,$3,$4::uuid,$5::integer,$6::integer) AS result',[identity.subject,identity.membershipId,scope,taskId,Number(after??0),Number(limitText)])).rows[0]);
     }
     if(resource==='shift-corrections'){
-     return result((await connection.query(taskId?'SELECT candidate_operations.read_shift_correction($1,$2::uuid,$3,$4::uuid) AS result':'SELECT candidate_operations.list_shift_corrections($1,$2::uuid,$3,$4::uuid,$5::integer) AS result',taskId?[identity.subject,identity.membershipId,scope,taskId]:[identity.subject,identity.membershipId,scope,after,Number(limitText)])).rows[0]);
+     return result((await connection.query(taskId?'SELECT candidate_operations.read_shift_correction($1,$2::uuid,$3,$4::uuid) AS result':'SELECT candidate_operations.list_shift_corrections($1,$2::uuid,$3,$4::uuid,$5::integer,$6::date,$7::date) AS result',taskId?[identity.subject,identity.membershipId,scope,taskId]:[identity.subject,identity.membershipId,scope,after,Number(limitText),from,to])).rows[0]);
     }
     if(resource==='completed-shifts'){
-     return result((await connection.query(taskId?'SELECT candidate_operations.read_completed_shift_review($1,$2::uuid,$3,$4::uuid) AS result':'SELECT candidate_operations.list_completed_shifts($1,$2::uuid,$3,$4::uuid,$5::integer,$6::timestamptz) AS result',taskId?[identity.subject,identity.membershipId,scope,taskId]:[identity.subject,identity.membershipId,scope,after,Number(limitText),correctionAsOf])).rows[0]);
+     return result((await connection.query(taskId?'SELECT candidate_operations.read_completed_shift_review($1,$2::uuid,$3,$4::uuid) AS result':'SELECT candidate_operations.list_completed_shifts($1,$2::uuid,$3,$4::uuid,$5::integer,$6::timestamptz,$7::date,$8::date) AS result',taskId?[identity.subject,identity.membershipId,scope,taskId]:[identity.subject,identity.membershipId,scope,after,Number(limitText),correctionAsOf,from,to])).rows[0]);
     }
     if(resource==='attendance-history'){
      if(!taskId)throw new CommandError(400,'attendance_identifier_required');
