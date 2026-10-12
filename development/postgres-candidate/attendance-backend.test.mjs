@@ -151,11 +151,71 @@ test('attendance writes preserve completed tasks closes audit events and existin
  for(const table of Object.keys(before))assert.deepEqual(await rows(table,f.scope),before[table],table);
  const receipts=(await admin.query('SELECT * FROM candidate_operations.command_receipts WHERE restaurant_id=$1 AND request_id=$2',[f.scope,originalReceipt[0].request_id])).rows;assert.deepEqual(receipts,originalReceipt);
 });
-test('attendance advances only workspace revision and preserves reviewed weekly publication',async()=>{
+test('attendance advances workspace and attendance revisions while preserving reviewed weekly publication',async()=>{
  const f=await fixture();await admin.query('INSERT INTO candidate_operations.schedule_input_reviews(restaurant_id,time_off_complete,reviewed_at) VALUES($1,true,clock_timestamp())',[f.scope]);
  const draft=await run(f,{requestId:randomUUID(),locationId:f.scope,action:'shift.save',input:{personId:f.employee.membershipId,position:'Cook',start:'2031-05-01T13:00:00Z',end:'2031-05-01T15:00:00Z'}});
  await admin.query("INSERT INTO candidate_operations.weekly_scope_reviews(restaurant_id,workspace_revision,schedule_revision,input_revision,evidence) SELECT r.id,r.revision,c.schedule_revision,c.input_revision,'Complete fictional source fixture' FROM candidate_identity.restaurants r JOIN candidate_operations.scope_coordination c ON c.restaurant_id=r.id WHERE r.id=$1",[f.scope]);
  const review=()=>db.transaction(async c=>(await c.query('SELECT candidate_operations.weekly_review($1,$2,$3,$4,$5::jsonb) result',[f.manager.subject,f.manager.membershipId,f.scope,'2031-04-28',JSON.stringify([draft.recordId])])).rows[0].result),before=await review(),bookings=await rows('person_shift_bookings',f.scope);
  let r=await run(f,command(f));r=await run(f,change(f,r,'attendance.review',{note:'Fictional review'}));r=await run(f,correcting(f,r));await run(f,change(f,r,'attendance.void',{changeReason:'Fictional mistake'}));const later=await review();assert.equal(later.planningReview,before.planningReview);assert.equal(later.scheduleRevision,before.scheduleRevision);assert.equal(later.inputRevision,before.inputRevision);assert.ok(later.workspaceRevision>before.workspaceRevision);assert.deepEqual(await rows('person_shift_bookings',f.scope),bookings);
  await run(f,{requestId:randomUUID(),locationId:f.scope,action:'shift.publish-batch',input:{weekStart:'2031-04-28',drafts:[{id:draft.recordId,revision:draft.revision,closing:[]}],confirmed:true,planningReview:before.planningReview,note:'Fictional publication after attendance'}});
+});
+
+test('attendance revision advances once per command, survives replay and ignores schedule commands between pages',async()=>{
+ const f=await fixture(),c=command(f),r=await run(f,c);await run(f,command(f,{type:'other'}));
+ const first=await list(f,f.manager,null,1),h=await history(f,r.recordId);
+ assert.equal(first.attendanceRevision,2);assert.equal(h.attendanceRevision,2);assert.equal(h.recordRevision,1);
+ await run(f,c);assert.equal((await list(f)).attendanceRevision,2);
+ await admin.query('INSERT INTO candidate_operations.schedule_input_reviews(restaurant_id,time_off_complete,reviewed_at) VALUES($1,true,clock_timestamp())',[f.scope]);
+ await run(f,{requestId:randomUUID(),locationId:f.scope,action:'shift.save',input:{personId:f.employee.membershipId,position:'Cook',start:'2031-06-01T13:00:00Z',end:'2031-06-01T15:00:00Z'}});
+ const second=await list(f,f.manager,first.nextCursor,1);assert.equal(second.attendanceRevision,first.attendanceRevision);assert.ok(second.workspaceRevision>first.workspaceRevision);
+ const reviewed=await run(f,change(f,r,'attendance.review',{note:'Fictional follow-up'}));const later=await history(f,r.recordId);assert.equal(later.attendanceRevision,3);assert.equal(later.recordRevision,reviewed.revision);
+});
+
+test('indexed captured-date ranges match the legacy expression across DST and UTC midnight',async()=>{
+ const f=await fixture();
+ for(const [start,end] of [['2020-03-08T07:30:00Z','2020-03-08T09:30:00Z'],['2020-11-01T06:30:00Z','2020-11-01T08:30:00Z'],['2020-11-02T01:00:00Z','2020-11-02T03:00:00Z']]){
+  const s=await shift(f,{start,end});await run(f,command(f,{shiftId:s.id}));
+ }
+ for(const day of ['2020-03-08','2020-11-01','2020-11-02']){
+  const legacy=(await admin.query("SELECT id,shift_local_date::text AS local_day FROM candidate_operations.attendance_entries WHERE restaurant_id=$1 AND ((shift_snapshot->>'start')::timestamptz AT TIME ZONE (shift_snapshot->>'timezone'))::date=$2::date ORDER BY id",[f.scope,day])).rows;
+  assert.deepEqual((await list(f,f.manager,null,100,day,day)).items.map(r=>r.id),legacy.map(r=>r.id));assert.ok(legacy.every(r=>r.local_day===day));
+ }
+ const indexes=(await admin.query("SELECT indexdef FROM pg_indexes WHERE schemaname='candidate_operations' AND indexname IN ('attendance_scope_date_page','attendance_scope_shift_page')")).rows.map(r=>r.indexdef);
+ assert.ok(indexes.some(s=>s.includes('(restaurant_id, shift_local_date, id)')));assert.ok(indexes.some(s=>s.includes('(restaurant_id, shift_id, id)')));
+});
+
+test('captured local date and timezone remain immutable through corrections and reassignment',async()=>{
+ const f=await fixture(),r=await run(f,command(f));
+ const date=()=>admin.query('SELECT shift_local_date::text AS local_day FROM candidate_operations.attendance_entries WHERE id=$1',[r.recordId]);
+ const before=(await date()).rows[0].local_day;
+ await run(f,correcting(f,r));await admin.query('UPDATE candidate_operations.shift_references SET member_id=$1 WHERE id=$2',[f.replacement.membershipId,f.shift.id]);
+ assert.equal((await date()).rows[0].local_day,before);
+ await assert.rejects(admin.query("UPDATE candidate_operations.attendance_entries SET shift_local_date=shift_local_date+1 WHERE id=$1",[r.recordId]),e=>e.message==='attendance_snapshot_immutable');
+ await assert.rejects(admin.query("UPDATE candidate_operations.attendance_entries SET shift_snapshot=jsonb_set(shift_snapshot,'{timezone}','\"UTC\"') WHERE id=$1",[r.recordId]),e=>e.message==='attendance_snapshot_immutable');
+});
+
+test('per-shift HTTP read is paginated, keeps previous assignees and voids, and rejects mixed or foreign selectors',async()=>{
+ const f=await fixture(),a=await run(f,command(f));await run(f,change(f,a,'attendance.void',{changeReason:'Fictional mistake'}));
+ await admin.query('UPDATE candidate_operations.shift_references SET member_id=$1,revision=revision+1 WHERE id=$2',[f.replacement.membershipId,f.shift.id]);
+ const b=await run(f,command(f,{shiftRevision:2}));const call=http(f),first=await call('/attendance?shift='+f.shift.id+'&limit=1');assert.equal(first.status,200);assert.equal(first.body.shiftId,f.shift.id);
+ const second=await call('/attendance?shift='+f.shift.id+'&limit=1&after='+first.body.nextCursor),items=[...first.body.items,...second.body.items];
+ assert.deepEqual(items.map(r=>r.id).sort(),[a.recordId,b.recordId].sort());assert.ok(items.some(r=>r.ownerId===f.employee.membershipId&&r.data.status==='voided'));assert.ok(items.some(r=>r.ownerId===f.replacement.membershipId));
+ for(const path of ['/attendance?shift=x','/attendance?shift='+f.shift.id+'&from=2020-05-01&to=2020-05-01','/attendance?shift='+f.shift.id+'&shift='+f.shift.id])assert.equal((await call(path)).status,400);
+ const foreign=await fixture();assert.equal((await call('/attendance?shift='+foreign.shift.id)).status,403);assert.equal((await http(f,f.employee)('/attendance?shift='+f.shift.id)).status,403);
+});
+
+test('failed attendance receipt rolls back the attendance counter as well as global state',async()=>{
+ const f=await fixture(),before=(await list(f)).attendanceRevision;
+ await admin.query("CREATE FUNCTION candidate_operations.fail_attendance_scope_receipt() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.payload->>'action' LIKE 'attendance.%' THEN RAISE EXCEPTION 'fictional_scope_receipt_failure'; END IF; RETURN NEW; END; $$");
+ await admin.query('CREATE TRIGGER fail_attendance_scope_receipt BEFORE INSERT ON candidate_operations.command_receipts FOR EACH ROW EXECUTE FUNCTION candidate_operations.fail_attendance_scope_receipt()');
+ try{await assert.rejects(run(f,command(f)),e=>e.message==='fictional_scope_receipt_failure');assert.equal((await list(f)).attendanceRevision,before);}finally{await admin.query('DROP TRIGGER fail_attendance_scope_receipt ON candidate_operations.command_receipts');await admin.query('DROP FUNCTION candidate_operations.fail_attendance_scope_receipt()');}
+});
+
+test('current authorized self-actions remain allowed across two memberships pending later policy review',async()=>{
+ const f=await fixture(),self=await shift(f,{owner:f.manager.membershipId,start:'2020-05-02T13:00:00Z',end:'2020-05-02T15:00:00Z'});
+ let r=await run(f,command(f,{shiftId:self.id}));const alias=randomUUID(),other=await fixture();
+ await admin.query("INSERT INTO candidate_identity.memberships(id,person_id,restaurant_id,department,position) VALUES($1,$2,$3,'Service','Cook')",[alias,f.manager.person,other.scope]);await admin.query("INSERT INTO candidate_identity.membership_capabilities VALUES($1,'location.manage',true)",[alias]);
+ const actor=f.manager;
+ r=await run(f,change(f,r,'attendance.review',{note:'Fictional own-entry review'}),actor);r=await run(f,change(f,r,'attendance.reopen',{note:'Fictional own-entry reopening'}),actor);r=await run(f,change(f,r,'attendance.void',{changeReason:'Fictional own-entry mistake'}),actor);
+ assert.equal((await detail(f,r.recordId)).data.status,'voided');
 });
