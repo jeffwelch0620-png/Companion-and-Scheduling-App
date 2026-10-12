@@ -220,6 +220,10 @@
     {
       "file": "055_completed_shift_corrections.sql",
       "sha256": "04c5769d7e9725306585717010030105ebf6f450ea92da9edd77c3bacdbb4771"
+    },
+    {
+      "file": "056_correction_source_and_reporting.sql",
+      "sha256": "f6c164e7f951be5e254f5838ca6083facc6f4c392a3406b92586923bc02729cd"
     }
   ]
 }

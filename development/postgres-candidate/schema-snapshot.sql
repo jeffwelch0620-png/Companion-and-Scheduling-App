@@ -1005,7 +1005,7 @@ CREATE OR REPLACE FUNCTION candidate_operations.completed_correction_json(p_acto
 AS $function$
  SELECT jsonb_build_object('id',r.id,'kind','shift-correction','locationId',r.restaurant_id,'ownerId',r.member_id,'area',r.department,'revision',r.revision,'updatedAt',r.updated_at,
  'data',jsonb_build_object('shiftId',r.shift_id,'sourceRevision',r.source_revision,'currentSourceRevision',(SELECT revision FROM candidate_operations.shift_references WHERE id=r.shift_id),'employeeName',p.name,'employeeNameAtEntry',r.employee_name_at_entry,'historicalNameLabel','name at time of entry',
- 'original',r.original_snapshot,'timezone',r.timezone,'shiftLocalDate',r.shift_local_date,'effectiveSummary',r.effective_summary,'appliedRevision',r.applied_revision,
+ 'original',r.original_snapshot,'timezone',r.timezone,'shiftLocalDate',r.shift_local_date,'effectiveLocalDate',((r.effective_summary->>'start')::timestamptz AT TIME ZONE r.timezone)::date,'effectiveSummary',r.effective_summary,'appliedRevision',r.applied_revision,
  'proposal',r.proposal_summary,'proposalBaseRevision',r.proposal_base_revision,'authorId',r.author_id,'authorName',a.name,'authorNameAtEntry',r.author_name_at_entry,
  'reason',r.reason,'decisionNote',r.decision_note,'status',r.status,'actions',candidate_operations.correction_actions(p_actor,r.id),
  'warnings',jsonb_build_object('sourceChanged',NOT candidate_operations.correction_source_matches(r),
@@ -1056,7 +1056,7 @@ BEGIN
   IF creating THEN
    rec.id:=gen_random_uuid();rec.restaurant_id:=p_restaurant;rec.shift_id:=source.id;rec.source_revision:=source.revision;rec.member_id:=source.member_id;rec.department:=source.department;
    SELECT m.person_id,p.name INTO rec.person_id,rec.employee_name_at_entry FROM candidate_identity.memberships m JOIN candidate_identity.people p ON p.id=m.person_id WHERE m.id=source.member_id;
-   rec.original_snapshot:=to_jsonb(source);SELECT timezone INTO rec.timezone FROM candidate_identity.restaurants WHERE id=p_restaurant;rec.shift_local_date:=(source.starts_at AT TIME ZONE rec.timezone)::date;
+   rec.original_snapshot:=to_jsonb(source);rec.source_key:=candidate_operations.correction_source_key(rec.original_snapshot);SELECT timezone INTO rec.timezone FROM candidate_identity.restaurants WHERE id=p_restaurant;rec.shift_local_date:=(source.starts_at AT TIME ZONE rec.timezone)::date;
    rec.effective_summary:=jsonb_build_object('start',source.starts_at,'end',source.ends_at,'position',source.position);rec.applied_revision:=0;rec.revision:=0;
   ELSE
    previous:=rec;
@@ -1066,6 +1066,7 @@ BEGIN
   IF EXISTS(SELECT 1 FROM unnest(ARRAY['start','end']) k WHERE jsonb_typeof(input->k) IS DISTINCT FROM 'string' OR input->>k !~ '^\d{4}-\d{2}-\d{2}T([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9](\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$')
    OR jsonb_typeof(input->'position') IS DISTINCT FROM 'string' OR length(candidate_operations.attendance_text(input->>'position')) NOT BETWEEN 1 AND 100
    OR jsonb_typeof(input->'reason') IS DISTINCT FROM 'string' OR length(candidate_operations.attendance_text(input->>'reason')) NOT BETWEEN 1 AND 2000 THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_correction_value'; END IF;
+  IF NOT candidate_operations.correction_position_allowed(p_restaurant,rec.original_snapshot->>'position',candidate_operations.attendance_text(input->>'position')) THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='correction_position_unknown'; END IF;
   first_instant:=(input->>'start')::timestamptz;last_instant:=(input->>'end')::timestamptz;
   IF last_instant<=first_instant OR last_instant-first_instant>interval '24 hours' OR last_instant>at THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_correction_period'; END IF;
   summary:=jsonb_build_object('start',first_instant,'end',last_instant,'position',candidate_operations.attendance_text(input->>'position'));
@@ -1088,6 +1089,7 @@ BEGIN
    IF action='correction.approve' THEN
     IF NOT EXISTS(SELECT 1 FROM candidate_identity.memberships a WHERE a.id=rec.author_id AND a.person_id=rec.author_person_id AND candidate_operations.correction_allowed(a.id,p_restaurant,rec.department)) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='correction_author_denied'; END IF;
     IF NOT candidate_operations.correction_source_matches(rec) OR rec.proposal_base_revision<>rec.applied_revision THEN RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='correction_source_conflict'; END IF;
+    IF NOT candidate_operations.correction_position_allowed(p_restaurant,rec.original_snapshot->>'position',rec.proposal_summary->>'position') THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='correction_position_unknown'; END IF;
     IF (rec.proposal_summary->>'end')::timestamptz>at THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_correction_period'; END IF;rec.status:='applied';applying:=true;
    ELSE rec.status:='rejected';END IF;
   END IF;
@@ -1125,6 +1127,7 @@ AS $function$
  SELECT jsonb_build_object('shiftId',s.id,'sourceRevision',coalesce(r.source_revision,s.revision),'currentSourceRevision',s.revision,'ownerId',coalesce(r.member_id,s.member_id),'area',coalesce(r.department,s.department),'employeeName',(SELECT name FROM candidate_identity.people WHERE id=coalesce(r.person_id,m.person_id)),
  'originalSummary',CASE WHEN r.id IS NOT NULL THEN jsonb_build_object('start',r.original_snapshot->'starts_at','end',r.original_snapshot->'ends_at','position',r.original_snapshot->'position') ELSE jsonb_build_object('start',s.starts_at,'end',s.ends_at,'position',s.position) END,
  'effectiveSummary',coalesce(r.effective_summary,jsonb_build_object('start',s.starts_at,'end',s.ends_at,'position',s.position)),
+ 'effectiveLocalDate',(coalesce((r.effective_summary->>'start')::timestamptz,s.starts_at) AT TIME ZONE coalesce(r.timezone,scope.timezone))::date,
  'timezone',coalesce(r.timezone,scope.timezone),'recordRevision',coalesce(r.revision,0),'correction',candidate_operations.completed_correction_json(p_actor,r.id),
  'canPropose',CASE WHEN r.id IS NOT NULL THEN (candidate_operations.correction_actions(p_actor,r.id)->>'canPropose')::boolean ELSE s.published AND NOT s.cancelled AND s.ends_at<=statement_timestamp() AND (actor.person_id=m.person_id OR candidate_operations.correction_notice_recipients(s.restaurant_id) IS NOT NULL) END)
  FROM candidate_operations.shift_references s JOIN candidate_identity.memberships m ON m.id=s.member_id JOIN candidate_identity.people p ON p.id=m.person_id
@@ -1280,6 +1283,7 @@ AS $function$
  'canApprove',r.status='pending' AND r.revision<1000 AND m.person_id<>r.author_person_id AND m.person_id<>r.person_id
   AND r.proposal_base_revision=r.applied_revision AND candidate_operations.correction_source_matches(r)
   AND EXISTS(SELECT 1 FROM candidate_identity.memberships a WHERE a.id=r.author_id AND a.person_id=r.author_person_id AND candidate_operations.correction_allowed(a.id,r.restaurant_id,r.department))
+  AND candidate_operations.correction_position_allowed(r.restaurant_id,r.original_snapshot->>'position',r.proposal_summary->>'position')
   AND candidate_operations.correction_notice_recipients(r.restaurant_id) IS NOT NULL,
  'canReject',r.status='pending' AND r.revision<1000 AND m.person_id<>r.author_person_id AND m.person_id<>r.person_id,
  'canWithdraw',r.status='pending' AND r.revision<1000 AND m.person_id=r.author_person_id)
@@ -1330,6 +1334,30 @@ AS $function$
  THEN NULL ELSE (SELECT array_agg(person_id ORDER BY person_id) FROM candidate_operations.completed_shift_notice_policy WHERE restaurant_id=p_restaurant AND active) END;
 $function$
 
+CREATE OR REPLACE FUNCTION candidate_operations.correction_position_allowed(p_restaurant text, p_original text, p_position text)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog'
+ SET "TimeZone" TO 'UTC'
+AS $function$
+ SELECT p_position=p_original OR EXISTS(SELECT 1 FROM candidate_identity.schedule_eligibility e
+  JOIN candidate_identity.memberships m ON m.id=e.member_id
+  WHERE m.restaurant_id=p_restaurant AND e.active AND e.job=p_position);
+$function$
+
+CREATE OR REPLACE FUNCTION candidate_operations.correction_source_key(p_snapshot jsonb)
+ RETURNS jsonb
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'pg_catalog'
+ SET "TimeZone" TO 'UTC'
+AS $function$
+ SELECT jsonb_build_object('revision',p_snapshot->'revision','member_id',p_snapshot->'member_id',
+  'department',p_snapshot->'department','starts_at',p_snapshot->'starts_at','ends_at',p_snapshot->'ends_at',
+  'position',p_snapshot->'position','published',p_snapshot->'published','cancelled',p_snapshot->'cancelled');
+$function$
+
 CREATE OR REPLACE FUNCTION candidate_operations.correction_source_matches(p_rec candidate_operations.completed_shift_corrections)
  RETURNS boolean
  LANGUAGE sql
@@ -1339,7 +1367,7 @@ CREATE OR REPLACE FUNCTION candidate_operations.correction_source_matches(p_rec 
 AS $function$
  SELECT EXISTS(SELECT 1 FROM candidate_operations.shift_references s JOIN candidate_identity.memberships m ON m.id=s.member_id AND m.restaurant_id=s.restaurant_id
  WHERE s.id=p_rec.shift_id AND s.restaurant_id=p_rec.restaurant_id AND s.published AND NOT s.cancelled AND m.person_id=p_rec.person_id
- AND to_jsonb(s)=p_rec.original_snapshot);
+ AND candidate_operations.correction_source_key(to_jsonb(s))=p_rec.source_key);
 $function$
 
 CREATE OR REPLACE FUNCTION candidate_operations.dish_command(p_subject text, p_member uuid, p_restaurant text, p_request uuid, p_payload jsonb)
@@ -1616,8 +1644,8 @@ CREATE OR REPLACE FUNCTION candidate_operations.guard_completed_correction_origi
  SET "TimeZone" TO 'UTC'
 AS $function$
 BEGIN
- IF ROW(NEW.id,NEW.restaurant_id,NEW.shift_id,NEW.source_revision,NEW.member_id,NEW.person_id,NEW.department,NEW.employee_name_at_entry,NEW.original_snapshot,NEW.timezone,NEW.shift_local_date)
- IS DISTINCT FROM ROW(OLD.id,OLD.restaurant_id,OLD.shift_id,OLD.source_revision,OLD.member_id,OLD.person_id,OLD.department,OLD.employee_name_at_entry,OLD.original_snapshot,OLD.timezone,OLD.shift_local_date)
+ IF ROW(NEW.id,NEW.restaurant_id,NEW.shift_id,NEW.source_revision,NEW.member_id,NEW.person_id,NEW.department,NEW.employee_name_at_entry,NEW.original_snapshot,NEW.source_key,NEW.timezone,NEW.shift_local_date)
+ IS DISTINCT FROM ROW(OLD.id,OLD.restaurant_id,OLD.shift_id,OLD.source_revision,OLD.member_id,OLD.person_id,OLD.department,OLD.employee_name_at_entry,OLD.original_snapshot,OLD.source_key,OLD.timezone,OLD.shift_local_date)
  THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='correction_origin_immutable'; END IF;RETURN NEW;
 END;
 $function$

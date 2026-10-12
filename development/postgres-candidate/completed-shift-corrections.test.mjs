@@ -1,5 +1,6 @@
 import test,{after} from 'node:test';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';import pg from 'pg';
 import {connection} from './test-config.mjs';import {PostgresDatabase} from './postgres-driver.ts';import {executeTask,parseCommand} from './task-adapter.ts';import {createTaskHandler} from './task-http.ts';
+import {legacyCorrectionShape,upgradeCorrectionShape} from './correction-upgrade-fixture.mjs';
 const admin=new pg.Pool({...connection,user:'candidate_owner'}),db=new PostgresDatabase({...connection,user:'candidate_runtime'});after(async()=>{await admin.end();await db.close();});
 async function fixture({notice=true}={}){
  const f={scope:'correction-'+randomUUID()};await admin.query("INSERT INTO candidate_identity.restaurants(id,name,timezone,operating_departments,dish_department,dish_position,dish_aliases) VALUES($1,'Fictional correction','America/Chicago',ARRAY['Kitchen','Service'],'Kitchen','Steward',ARRAY['Steward'])",[f.scope]);
@@ -8,6 +9,8 @@ async function fixture({notice=true}={}){
   await admin.query("INSERT INTO candidate_identity.memberships(id,person_id,restaurant_id,department,position) VALUES($1,$2,$3,$4,'Cook')",[membershipId,person,f.scope,area]);await admin.query("INSERT INTO candidate_identity.schedule_eligibility VALUES($1,'Cook','schedule-job',true)",[membershipId]);
   for(const cap of caps)await admin.query('INSERT INTO candidate_identity.membership_capabilities VALUES($1,$2,true)',[membershipId,cap]);await admin.query("INSERT INTO candidate_identity.sessions(id,subject,expires_at) VALUES($1,$2,clock_timestamp()+interval '1 hour')",[sessionId,subject]);f[key]={person,membershipId,subject,sessionId};
  }
+ // Explicit known fictional jobs for amendments; correction never grants eligibility.
+ for(const job of ['Reconciled Cook','Other Cook','Alternate Cook'])await admin.query("INSERT INTO candidate_identity.schedule_eligibility VALUES($1,$2,'qualification',true)",[f.employee.membershipId,job]);
  if(notice)await admin.query("INSERT INTO candidate_operations.completed_shift_notice_policy(restaurant_id,person_id,kind) VALUES($1,$2,'owner')",[f.scope,f.owner.person]);f.shift=await source(f);return f;
 }
 async function source(f,o={}){const id=randomUUID();await admin.query("INSERT INTO candidate_operations.shift_references(id,restaurant_id,member_id,department,position,starts_at,ends_at,revision,published,cancelled) VALUES($1,$2,$3,$4,'Cook',$5,$6,1,$7,$8)",[id,f.scope,o.owner??f.employee.membershipId,o.area??'Kitchen',o.start??'2020-05-01T13:00:00Z',o.end??'2020-05-01T15:00:00Z',o.published??true,o.cancelled??false]);return {id,revision:1};}
@@ -176,4 +179,56 @@ test('source paging freezes its cutoff and exposes the schedule version independ
  const second=await call('/completed-shifts?limit=1&asOf='+encodeURIComponent(first.body.asOf)+'&after='+first.body.nextCursor);assert.equal(second.status,200);assert.deepEqual([...first.body.items,...second.body.items].map(r=>r.shiftId).sort(),[f.shift.id,other.id].sort());assert.equal(second.body.rangeComplete,true);assert.equal((await call('/completed-shifts')).body.items.length,3);
  await run(f,propose(f));const later=await call('/completed-shifts?asOf='+encodeURIComponent(cutoff));assert.equal(later.body.scheduleRevision,first.body.scheduleRevision);assert.ok(later.body.correctionRevision>first.body.correctionRevision);
  for(const value of ['2031-01-01T00:00:00Z','2020-02-30T12:00:00Z','bad','2020-05-01T24:00:00Z'])assert.equal((await call('/completed-shifts?asOf='+encodeURIComponent(value))).status,400);
+});
+
+test('unrelated source column addition does not stale pending corrections; fixed source key is immutable',async()=>{
+ const f=await fixture();f.shift=await source(f,{owner:f.manager.membershipId,start:'2020-05-12T13:00:00Z',end:'2020-05-12T15:00:00Z'});const r=await run(f,propose(f)),client=await admin.connect();
+ await assert.rejects(admin.query("UPDATE candidate_operations.completed_shift_corrections SET source_key=source_key||'{\"revision\":999}' WHERE id=$1",[r.recordId]),e=>e.message==='correction_origin_immutable');
+ await client.query('BEGIN');try{
+  await client.query("ALTER TABLE candidate_operations.shift_references ADD COLUMN unrelated_correction_probe text DEFAULT 'fictional metadata'");
+  const loaded=(await client.query('SELECT candidate_operations.read_shift_correction($1,$2,$3,$4) result',[f.approver.subject,f.approver.membershipId,f.scope,r.recordId])).rows[0].result;
+  assert.equal(loaded.data.warnings.sourceChanged,false);assert.equal(loaded.data.actions.canApprove,true);assert.equal(Object.hasOwn(loaded.data.original,'unrelated_correction_probe'),false);
+  const c=decision(f,r,'correction.approve'),applied=(await client.query('SELECT candidate_operations.completed_shift_correction_command($1,$2,$3,$4,$5::jsonb) result',[f.approver.subject,f.approver.membershipId,f.scope,c.requestId,JSON.stringify({action:c.action,recordId:c.recordId,expectedRevision:c.expectedRevision,input:c.input})])).rows[0].result;assert.equal(applied.correctionStatus,'applied');
+ }finally{await client.query('ROLLBACK');client.release();}
+});
+test('every compared source field still blocks application and later proposals',async()=>{
+ for(const field of ['revision=revision+1','member_id=$2',"department='Service'","starts_at=starts_at-interval '30 minutes'","ends_at=ends_at+interval '30 minutes'","position='Changed source job'",'published=false','cancelled=true']){
+  const f=await fixture();f.shift=await source(f,{owner:f.manager.membershipId,start:'2020-05-13T13:00:00Z',end:'2020-05-13T15:00:00Z'});const r=await run(f,propose(f));await admin.query('UPDATE candidate_operations.shift_references SET '+field+' WHERE id=$1',field.includes('$2')?[f.shift.id,f.replacement.membershipId]:[f.shift.id]);
+  const loaded=await read(f,r.recordId,f.approver);assert.equal(loaded.data.warnings.sourceChanged,true,field);assert.equal(loaded.data.actions.canApprove,false,field);await assert.rejects(run(f,decision(f,r,'correction.approve'),f.approver),e=>e.code==='correction_source_conflict');
+  await run(f,decision(f,r,'correction.reject'),f.approver);const rev=loaded.data.currentSourceRevision;await assert.rejects(run(f,propose(f,{shiftRevision:rev,expectedCorrectionRevision:2})),e=>['correction_source_conflict','correction_source_ineligible'].includes(e.code));
+ }
+});
+test('corrected position requires the original label or an active job in this store, with HTTP 400 on unknown labels',async()=>{
+ const f=await fixture(),foreign=await fixture();await admin.query("INSERT INTO candidate_identity.schedule_eligibility VALUES($1,'Foreign-only job','qualification',true)",[foreign.employee.membershipId]);await admin.query("INSERT INTO candidate_identity.schedule_eligibility VALUES($1,'Inactive job','qualification',false)",[f.employee.membershipId]);
+ const before=await counters(f);for(const position of ['Unknown job','Foreign-only job','Inactive job']){const response=await http(f)('/commands',propose(f,{position}));assert.equal(response.status,400);assert.equal(response.body.error.code,'correction_position_unknown');}
+ assert.deepEqual(await counters(f),before);assert.equal((await list(f)).items.length,0);
+ await admin.query("UPDATE candidate_identity.schedule_eligibility SET active=false WHERE member_id IN(SELECT id FROM candidate_identity.memberships WHERE restaurant_id=$1) AND job='Cook'",[f.scope]);
+ const r=await run(f,propose(f));assert.equal(r.correctionStatus,'applied');await run(f,propose(f,{expectedCorrectionRevision:1,position:'Reconciled Cook'}));assert.equal((await read(f,r.recordId)).data.effectiveSummary.position,'Reconciled Cook');
+ await assert.rejects(db.transaction(c=>c.query('SELECT candidate_operations.correction_position_allowed($1,$2,$3)',[f.scope,'Cook','Reconciled Cook'])),e=>e.code==='42501');
+});
+test('approval rechecks pending job eligibility and preserves original receipt replay after job withdrawal',async()=>{
+ const f=await fixture();f.shift=await source(f,{owner:f.manager.membershipId,start:'2020-05-14T13:00:00Z',end:'2020-05-14T15:00:00Z'});const c=propose(f,{position:'Reconciled Cook'}),r=await run(f,c),before=await counters(f);
+ await admin.query("UPDATE candidate_identity.schedule_eligibility SET active=false WHERE member_id=$1 AND job='Reconciled Cook'",[f.employee.membershipId]);const revoked=await counters(f);assert.equal((await read(f,r.recordId,f.approver)).data.actions.canApprove,false);const response=await http(f,f.approver)('/commands',decision(f,r,'correction.approve'));assert.equal(response.status,400);assert.equal(response.body.error.code,'correction_position_unknown');assert.deepEqual(await counters(f),revoked);assert.equal((await run(f,c)).replayed,true);assert.equal((await history(f,r.recordId)).items.length,1);
+ await admin.query("UPDATE candidate_identity.schedule_eligibility SET active=true WHERE member_id=$1 AND job='Reconciled Cook'",[f.employee.membershipId]);assert.equal((await read(f,r.recordId,f.approver)).data.actions.canApprove,true);assert.equal((await run(f,decision(f,r,'correction.approve'),f.approver)).correctionStatus,'applied');assert.ok((await counters(f)).correction_revision>before.correction_revision);
+});
+test('effective local reporting date follows applied summary across both DST boundaries while pending keeps original date',async()=>{
+ for(const [start,end,expected] of [['2020-03-09T00:30:00Z','2020-03-09T01:30:00Z','2020-03-08'],['2020-11-02T00:30:00Z','2020-11-02T01:30:00Z','2020-11-01'],['2020-11-01T01:30:00-05:00','2020-11-01T02:30:00-06:00','2020-11-01'],['2020-11-01T01:30:00-06:00','2020-11-01T02:30:00-06:00','2020-11-01'],['2020-03-08T01:30:00-06:00','2020-03-08T03:30:00-05:00','2020-03-08']]){
+  const f=await fixture();f.shift=await source(f,{owner:f.manager.membershipId,start:'2020-05-15T13:00:00Z',end:'2020-05-15T15:00:00Z'});const r=await run(f,propose(f,{start,end}));assert.equal((await read(f,r.recordId)).data.effectiveLocalDate,'2020-05-15');assert.equal((await http(f)('/completed-shifts/'+f.shift.id)).body.effectiveLocalDate,'2020-05-15');
+  await run(f,decision(f,r,'correction.approve'),f.approver);const loaded=await read(f,r.recordId);assert.equal(loaded.data.effectiveLocalDate,expected);assert.equal(loaded.data.shiftLocalDate,'2020-05-15');const sourceRead=await http(f)('/completed-shifts/'+f.shift.id);assert.equal(sourceRead.body.effectiveLocalDate,expected);assert.equal((await http(f)('/completed-shifts')).body.items.find(s=>s.shiftId===f.shift.id).effectiveLocalDate,expected);
+  const newProposal=await run(f,propose(f,{expectedCorrectionRevision:2,position:'Reconciled Cook'}));await run(f,decision(f,newProposal,'correction.reject'),f.approver);assert.equal((await read(f,r.recordId)).data.effectiveLocalDate,expected);
+ }
+});
+test('a notice target without scoped correction permission still receives HTTP 403 on notified detail and history',async()=>{
+ const f=await fixture(),r=await run(f,propose(f));assert.equal((await admin.query('SELECT 1 FROM candidate_operations.completed_shift_correction_outbox WHERE correction_id=$1 AND recipient_person_id=$2',[r.recordId,f.owner.person])).rowCount,1);
+ for(const path of ['/shift-corrections/'+r.recordId,'/shift-correction-history/'+r.recordId,'/completed-shifts/'+f.shift.id])assert.equal((await http(f,f.owner)(path)).status,403);
+});
+test('055 upgrade backfills captured source key without blessing drift or rewriting existing audit events and receipts',async()=>{
+ const f=await fixture(),client=await admin.connect();await client.query('BEGIN');try{
+  await legacyCorrectionShape(client);const c=propose(f),old=(await client.query('SELECT candidate_operations.completed_shift_correction_command($1,$2,$3,$4,$5::jsonb) result',[f.manager.subject,f.manager.membershipId,f.scope,c.requestId,JSON.stringify({action:c.action,input:c.input})])).rows[0].result;
+  const eventBefore=(await client.query('SELECT to_jsonb(e) value FROM candidate_operations.completed_shift_correction_events e WHERE correction_id=$1',[old.recordId])).rows[0].value,receiptBefore=(await client.query('SELECT to_jsonb(r) value FROM candidate_operations.command_receipts r WHERE restaurant_id=$1 AND request_id=$2',[f.scope,c.requestId])).rows[0].value;
+  assert.equal(Object.hasOwn(eventBefore.after_value,'source_key'),false);await client.query("UPDATE candidate_operations.shift_references SET position='Changed source job' WHERE id=$1",[f.shift.id]);
+  await upgradeCorrectionShape(client);const row=(await client.query('SELECT source_key,original_snapshot FROM candidate_operations.completed_shift_corrections WHERE id=$1',[old.recordId])).rows[0];assert.equal(row.source_key.position,'Cook');assert.equal(row.original_snapshot.position,'Cook');assert.equal((await client.query('SELECT candidate_operations.correction_source_matches(r) ok FROM candidate_operations.completed_shift_corrections r WHERE id=$1',[old.recordId])).rows[0].ok,false);
+  assert.deepEqual((await client.query('SELECT to_jsonb(e) value FROM candidate_operations.completed_shift_correction_events e WHERE correction_id=$1',[old.recordId])).rows[0].value,eventBefore);assert.deepEqual((await client.query('SELECT to_jsonb(r) value FROM candidate_operations.command_receipts r WHERE restaurant_id=$1 AND request_id=$2',[f.scope,c.requestId])).rows[0].value,receiptBefore);
+  const replay=(await client.query('SELECT candidate_operations.completed_shift_correction_command($1,$2,$3,$4,$5::jsonb) result',[f.manager.subject,f.manager.membershipId,f.scope,c.requestId,JSON.stringify({action:c.action,input:c.input})])).rows[0].result;assert.equal(replay.replayed,true);
+ }finally{await client.query('ROLLBACK');client.release();}
 });
