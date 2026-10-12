@@ -174,3 +174,7 @@ Design review follow-up: planned-hours/labor reports use the effective applied c
 ## Attendance backend preparation (053)
 
 [Attendance backend checkpoint](ATTENDANCE_BACKEND_CHECKPOINT.md) adds five manager commands, original identity/timezone snapshots, private before/after history and paged reads. Server action projections, exact receipts, coordinated duplicates and the 1,000-event limit preserve the existing contract. Workspace changes do not stale scheduling or source review. This is a separate unmerged draft from accepted PR39; attendance forms, completed-shift corrections, retrospective flag resolution and shared adoption remain open. Published 001–052 stay immutable.
+
+## Manager attendance forms preparation
+
+[Attendance UI checkpoint](ATTENDANCE_UI_CHECKPOINT.md) adds dependent manager forms, private complete date-range/history loading, server-projected action controls, saved-timezone/DST handling, malformed-entry holds and in-page exact retries. It depends on unmerged PR40 and changes no migrations or function snapshot. Both drafts require separate acceptance. M06 stays partial for completed-shift corrections, retrospective flag resolution, copying/batch edits and real source completeness. During shared UI adoption fold the candidate attendance forms/loaders into the original attendance and manager-review components, validate them, then retire the candidate UI/adapters. Durable reload recovery, shared identity, actual delivery and Inventory integration remain open.

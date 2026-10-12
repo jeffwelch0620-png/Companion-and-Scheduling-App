@@ -1,0 +1,18 @@
+import type {Workspace,RecordOf,Attendance,AttendanceFacts,AttendanceType} from '../../app/shared/types';
+export type AttendanceWorkspace=Workspace & {attendanceAreas?:string[]};
+export type AttendanceRecord=Omit<RecordOf<'attendance'>,'data'> & {data:Omit<Attendance,'history'> & {employeeNameAtEntry:string;historicalNameLabel:string;shift:Attendance['shift'] & {timezone:string};review:(NonNullable<Attendance['review']> & {actorPersonId:string;actorNameAtEntry:string})|null;actions:{canCorrect:boolean;canVoid:boolean;canReview:boolean;canReopen:boolean}}};
+export type AttendanceEvent={revision:number;action:'attendance.record'|'attendance.correct'|'attendance.void'|'attendance.review'|'attendance.reopen';actorId:string;actorName:string;actorNameAtEntry:string;historicalNameLabel:string;at:string;changeReason:string;before:AttendanceEvent['after']|null;after:{attendance_type:AttendanceType;reported_at:string;note:string;facts:AttendanceFacts;status:string}};
+export type AttendanceRange={records:AttendanceRecord[];invalid:number;complete:boolean;from:string;to:string;workspaceRevision:number;actorId:string;locationId:string};
+export type AttendanceDetailResult={record:AttendanceRecord;events:AttendanceEvent[];complete:true;workspaceRevision:number;actorId:string;locationId:string};
+export type AttendanceCall=(path:string,command?:unknown)=>Promise<{status:number;body:any}>;
+export const attendanceReviewMessage:string;
+export const attendanceTypes:Record<AttendanceType,string>;
+export function attendanceAreas(w:AttendanceWorkspace):string[];
+export function canRecordAttendance(w:AttendanceWorkspace,r:RecordOf<'shift'>):boolean;
+export function checkedAttendance(w:AttendanceWorkspace,r:unknown):AttendanceRecord;
+export function loadAttendanceRange(call:AttendanceCall,w:AttendanceWorkspace,from:string,to:string):Promise<AttendanceRange>;
+export function loadAttendanceDetail(call:AttendanceCall,w:AttendanceWorkspace,id:string):Promise<AttendanceDetailResult>;
+export function attendancePatterns(result:AttendanceRange):{employeeId:string;name:string;entries:number;pending:number;shifts:number;types:Partial<Record<AttendanceType,number>>}[];
+export function attendanceFields(w:AttendanceWorkspace,r?:AttendanceRecord,now?:string):{date:string;time:string;repeated:string};
+export function attendanceInput(w:AttendanceWorkspace,fields:Record<string,any>,r?:AttendanceRecord,shift?:RecordOf<'shift'>,now?:string):Record<string,unknown>;
+export function attendanceDecision(w:AttendanceWorkspace,r:AttendanceRecord,action:string,note:unknown):Record<string,unknown>;
