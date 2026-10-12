@@ -228,6 +228,10 @@
     {
       "file": "057_bounded_correction_board.sql",
       "sha256": "4c293838f357ebbaa8fb6fd459bb5bf632a0bf7ec6f86409b7460ccdeb4681cf"
+    },
+    {
+      "file": "058_retrospective_time_off_review.sql",
+      "sha256": "0a4dc2c632a6d07cda17d13f11fbd6c39d7a6df4345cc61e0b0ed7fe5aebfe80"
     }
   ]
 }

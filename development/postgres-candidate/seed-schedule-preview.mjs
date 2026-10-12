@@ -51,6 +51,12 @@ try {
  // Fictional correction preview only: explicitly selected owner, never inferred from a title or capability.
  await pool.query("INSERT INTO candidate_operations.completed_shift_notice_policy(restaurant_id,person_id,kind) SELECT $1,person_id,'owner' FROM candidate_identity.memberships WHERE id=$2",[scope,members['schedule-publisher']]);
  for(const actor of ['schedule-worker','schedule-manager'])await pool.query("INSERT INTO candidate_operations.shift_references(id,restaurant_id,member_id,department,position,starts_at,ends_at,revision,published) VALUES($1,$2,$3,'Kitchen','Cook',$4,$5,1,true)",[randomUUID(),scope,members[actor],localInstant(nextDate(day,-1),'10:00','America/Chicago'),localInstant(nextDate(day,-1),'12:00','America/Chicago')]);
+ // Real candidate leave commands produce retrospective flags; no attendance is inferred.
+ for(const actor of ['schedule-worker','schedule-manager']){
+  const identity={subject:sessions[actor].subject,membershipId:members[actor]},source=(await pool.query('SELECT id,revision,starts_at,ends_at FROM candidate_operations.shift_references WHERE restaurant_id=$1 AND member_id=$2 AND ends_at<clock_timestamp() ORDER BY starts_at DESC LIMIT 1',[scope,members[actor]])).rows[0];
+  const request=await executeTask(db,identity,scope,{requestId:randomUUID(),locationId:scope,action:'request.create',input:{type:'time-off',start:source.starts_at.toISOString(),end:source.ends_at.toISOString(),note:'Fictional private retrospective leave'}});
+  await executeTask(db,publisher,scope,{requestId:randomUUID(),locationId:scope,action:'request.review',recordId:request.recordId,expectedRevision:request.revision,input:{approve:true,note:'Fictional private leave decision',affectedShifts:[{id:source.id,revision:source.revision}]}});
+ }
  // Privileged seed attestation only, after all fictional inputs; the UI cannot refresh it.
  await pool.query("INSERT INTO candidate_operations.weekly_scope_reviews(restaurant_id,workspace_revision,schedule_revision,input_revision,evidence) SELECT r.id,r.revision,c.schedule_revision,c.input_revision,'Complete fictional scheduling fixture only' FROM candidate_identity.restaurants r JOIN candidate_operations.scope_coordination c ON c.restaurant_id=r.id WHERE r.id=$1",[scope]);
  writeFileSync(new URL('runtime/schedule-preview-fixture.json',import.meta.url),JSON.stringify({sessions}));

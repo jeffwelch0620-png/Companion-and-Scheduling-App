@@ -44,7 +44,14 @@ export function parseCommand(raw: unknown, restaurantId: string) {
  if(c.locationId!==restaurantId) throw new CommandError(403,'scope_mismatch');
  const requestId=identifier(c.requestId),input=object(c.input);
  let payload: Record<string,unknown>;
- if(typeof c.action==='string'&&c.action.startsWith('correction.')){
+ if(c.action==='leave.resolve'){
+  if(!Number.isSafeInteger(c.expectedRevision)||Number(c.expectedRevision)<1||Number(c.expectedRevision)>2)throw new CommandError(400,'invalid_revision');
+  keys(input,['note','reviewToken','evidence'],['note','reviewToken','evidence']);
+  if(typeof input.reviewToken!=='string'||!/^[0-9a-f]{64}$/.test(input.reviewToken)||!Array.isArray(input.evidence)||input.evidence.length>20)throw new CommandError(400,'invalid_leave_review_fields');
+  const evidence=input.evidence.map(value=>{const e=object(value);keys(e,['kind','id','revision'],['kind','id','revision']);if(typeof e.kind!=='string'||!['attendance','correction'].includes(e.kind)||!Number.isSafeInteger(e.revision)||Number(e.revision)<1||Number(e.revision)>1000)throw new CommandError(400,'invalid_leave_review_evidence');return {kind:e.kind,id:identifier(e.id),revision:e.revision};});
+  if(new Set(evidence.map(e=>e.kind+':'+e.id)).size!==evidence.length)throw new CommandError(400,'invalid_leave_review_evidence');
+  payload={action:c.action,recordId:identifier(c.recordId),expectedRevision:c.expectedRevision,input:{note:string(input.note,2000),reviewToken:input.reviewToken,evidence}};
+ }else if(typeof c.action==='string'&&c.action.startsWith('correction.')){
   if(!['correction.propose','correction.approve','correction.reject','correction.withdraw'].includes(c.action))throw new CommandError(400,'invalid_correction_action');
   const proposing=c.action==='correction.propose';
   if(proposing){
@@ -284,7 +291,9 @@ export async function executeTask(
  try {
   return await database.transaction(async connection=>{
    const response=await connection.query(
-    String(command.payload.action).startsWith('correction.')
+    command.payload.action==='leave.resolve'
+     ?'SELECT candidate_operations.leave_review_command($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
+    :String(command.payload.action).startsWith('correction.')
      ?'SELECT candidate_operations.completed_shift_correction_command($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
     :String(command.payload.action).startsWith('attendance.')
      ?'SELECT candidate_operations.attendance_command($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
@@ -334,7 +343,7 @@ export async function executeTask(
  } catch(error) {
   const e=error as {code?:string;message?:string};
   if(e.code==='42501') throw new CommandError(403,e.message??'denied');
-  if(e.code==='P0001'&&['correction_source_ineligible','correction_source_conflict','correction_pending','correction_not_pending','correction_history_limit','correction_no_change','ownership_notice_unresolved','attendance_duplicate','attendance_source_ineligible','attendance_voided','attendance_history_limit','attendance_already_reviewed','attendance_not_reviewed','request_payload_conflict','revision_conflict','phase_conflict','shift_ended','active_shift_time_conflict','shift_conflict','closing_zone_conflict','attention_pending','attention_not_pending','checkout_pending','dish_cycle_conflict','dish_shape_conflict','availability_replacement_conflict','availability_shift_conflict','draft_reference_only','schedule_inputs_incomplete','station_assignment_not_migrated','shift_overlap','approved_time_off_conflict','linked_shift_protected','linked_task_pending','linked_close_protected','time_off_impact_conflict','time_off_cancellation_not_migrated','station_name_immutable','station_title_conflict','station_setup_reference_only','goal_guide_changed','publication_review_required','publication_linked_work_held','station_goal_reviewer_unavailable','staffing_overlap','staffing_publication_review_required','closing_publication_review_required','planning_review_conflict','weekly_scope_review_required','closing_selection_conflict','closing_transfer_selection_conflict','completed_close_protected','coverage_offer_exists','offer_changed','volunteer_missing','volunteer_conflict','replacement_consent_required','replacement_no_longer_eligible'].includes(e.message??''))
+  if(e.code==='P0001'&&['leave_review_changed','leave_review_resolved','leave_review_source_unavailable','leave_review_evidence_changed','correction_source_ineligible','correction_source_conflict','correction_pending','correction_not_pending','correction_history_limit','correction_no_change','ownership_notice_unresolved','attendance_duplicate','attendance_source_ineligible','attendance_voided','attendance_history_limit','attendance_already_reviewed','attendance_not_reviewed','request_payload_conflict','revision_conflict','phase_conflict','shift_ended','active_shift_time_conflict','shift_conflict','closing_zone_conflict','attention_pending','attention_not_pending','checkout_pending','dish_cycle_conflict','dish_shape_conflict','availability_replacement_conflict','availability_shift_conflict','draft_reference_only','schedule_inputs_incomplete','station_assignment_not_migrated','shift_overlap','approved_time_off_conflict','linked_shift_protected','linked_task_pending','linked_close_protected','time_off_impact_conflict','time_off_cancellation_not_migrated','station_name_immutable','station_title_conflict','station_setup_reference_only','goal_guide_changed','publication_review_required','publication_linked_work_held','station_goal_reviewer_unavailable','staffing_overlap','staffing_publication_review_required','closing_publication_review_required','planning_review_conflict','weekly_scope_review_required','closing_selection_conflict','closing_transfer_selection_conflict','completed_close_protected','coverage_offer_exists','offer_changed','volunteer_missing','volunteer_conflict','replacement_consent_required','replacement_no_longer_eligible'].includes(e.message??''))
    throw new CommandError(409,e.message??'conflict');
   if(e.code?.startsWith('22')||e.code==='23514') throw new CommandError(400,e.message??'invalid_command');
   throw error; // Network/database failures must remain failures, never confirmed empty or applied.

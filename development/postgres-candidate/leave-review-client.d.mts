@@ -1,0 +1,15 @@
+import type {Workspace} from '../../app/shared/types';
+export type LeaveWorkspace=Workspace;
+export type LeaveEvidence={kind:'attendance'|'correction';id:string;revision:number;label?:string};
+export type LeaveShift={id:string;member_id:string;department:string;position:string;revision:number;starts_at:string;ends_at:string;published:boolean;cancelled:boolean};
+export type LeaveResolution={note:string;reviewerId:string;reviewerPersonId:string;reviewerNameAtEntry:string;reviewedAt:string;kind:'planning-history'|'reviewed';evidence:LeaveEvidence[];restrictedEvidence?:boolean};
+export type LeaveReview={id:string;kind:'leave-review';locationId:string;ownerId:string;area:string;revision:number;data:{personId:string;requestId:string;shiftId:string;employeeName:string;employeeNameAtCapture:string;identityCapture:'migration058'|'flag-created';reason:'ended_shift'|'cross_store_review';status:'pending'|'resolved';recordedAt:string;shiftLocalDate:string;timezone:string;reviewToken:string;context:{originalShift:LeaveShift;currentShift:LeaveShift;request:null|{id:string;restaurantId:string;start:string;end:string;status:'approved';revision:number};sourceAvailable:boolean;sourceChanged:boolean;sameCurrentPerson:boolean};actions:{canResolve:boolean;canRecordAttendance:boolean;blockedReason:string};evidenceOptions:LeaveEvidence[];moreEvidence:boolean;resolution:LeaveResolution|null;history:{revision:number;action:'leave.resolve';actorId:string;actorPersonId:string;actorName:string;note:string;at:string;resolution:LeaveResolution}[]}};
+export type LeaveCall=(path:string)=>Promise<{status:number;body:any}>;
+export type LeavePage={records:LeaveReview[];invalid:number;nextCursor:string|null;rangeComplete:boolean;from:string|null;to:string|null;status:string;leaveReviewRevision:number;accessKey:string};
+export const leaveReviewMessage:string;
+export function hasLeaveReviewAccess(w:LeaveWorkspace):boolean;
+export function leaveAccessKey(w:LeaveWorkspace):string;
+export function checkedLeaveReview(w:LeaveWorkspace,r:unknown):LeaveReview;
+export function loadLeaveReviews(call:LeaveCall,w:LeaveWorkspace,options?:{after?:string|null;from?:string|null;to?:string|null;status?:string}):Promise<LeavePage>;
+export function loadLeaveReviewDetail(call:LeaveCall,w:LeaveWorkspace,key:string):Promise<{record:LeaveReview;accessKey:string}>;
+export function leaveResolutionInput(w:LeaveWorkspace,r:LeaveReview,note:unknown,references:LeaveEvidence[],confirmed:boolean):{note:string;reviewToken:string;evidence:LeaveEvidence[]};

@@ -94,7 +94,7 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
  return async(request:Request):Promise<Response>=>{
   try{
    const url=new URL(request.url);
-   const route=/^\/api\/operations\/([a-zA-Z0-9_-]{1,100})\/(commands|week-review|tasks|goals|staffing|completed-shifts|shift-corrections|shift-correction-history|attendance|attendance-history|publication-review|cancellation-review|closes|dish-cycles|overnight|shifts|schedule-viewer|schedule-shifts|schedule-roster|schedule-availability|schedule-requests|schedule-stations|schedule-coverage|schedule-swaps|schedule-leadership)(?:\/([0-9a-f-]{36}))?$/.exec(url.pathname);
+   const route=/^\/api\/operations\/([a-zA-Z0-9_-]{1,100})\/(commands|week-review|leave-reviews|tasks|goals|staffing|completed-shifts|shift-corrections|shift-correction-history|attendance|attendance-history|publication-review|cancellation-review|closes|dish-cycles|overnight|shifts|schedule-viewer|schedule-shifts|schedule-roster|schedule-availability|schedule-requests|schedule-stations|schedule-coverage|schedule-swaps|schedule-leadership)(?:\/([0-9a-f-]{36}))?$/.exec(url.pathname);
    if(!route)return json({error:{code:'route_not_found'}},404);
    const [,scope,resource,taskId]=route;
    if((resource.startsWith('schedule-')||resource==='goals'||resource==='staffing')&&(taskId||url.searchParams.getAll('after').length>1||url.searchParams.getAll('limit').length>1))
@@ -107,7 +107,7 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
    const session=await verifyToken(auth.slice(7));
    const command=resource==='commands'||resource==='week-review'?await body(request):undefined;
    if(resource==='schedule-viewer'&&url.search)throw new CommandError(400,'invalid_query');
-   const queryKeys=resource==='completed-shifts'&&!taskId?['after','limit','asOf','from','to']:resource==='shift-corrections'&&!taskId?['after','limit','from','to']:resource==='attendance'&&!taskId?['after','limit','from','to','shift']:['after','limit'];
+   const queryKeys=resource==='leave-reviews'&&!taskId?['after','limit','from','to','status']:resource==='completed-shifts'&&!taskId?['after','limit','asOf','from','to']:resource==='shift-corrections'&&!taskId?['after','limit','from','to']:resource==='attendance'&&!taskId?['after','limit','from','to','shift']:['after','limit'];
    if([...url.searchParams.keys()].some(k=>!queryKeys.includes(k)||url.searchParams.getAll(k).length>1)
     ||(resource==='commands'||resource==='week-review')&&url.search||taskId&&!['attendance-history','shift-correction-history'].includes(resource)&&url.search)
     throw new CommandError(400,'invalid_query');
@@ -119,7 +119,7 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
    const from=url.searchParams.get('from'),to=url.searchParams.get('to');
    const attendanceShift=url.searchParams.get('shift');
    if(attendanceShift!==null&&(!uuid.test(attendanceShift)||from!==null||to!==null))throw new CommandError(400,'invalid_attendance_query');
-   if((from===null)!==(to===null)||[from,to].some(value=>value!==null&&(!/^\d{4}-\d{2}-\d{2}$/.test(value)||!Number.isFinite(Date.parse(value+'T12:00:00Z'))||new Date(value+'T12:00:00Z').toISOString().slice(0,10)!==value))||from!==null&&to!==null&&from>to)throw new CommandError(400,['completed-shifts','shift-corrections'].includes(resource)?'invalid_correction_query':'invalid_attendance_query');
+   if((from===null)!==(to===null)||[from,to].some(value=>value!==null&&(!/^\d{4}-\d{2}-\d{2}$/.test(value)||!Number.isFinite(Date.parse(value+'T12:00:00Z'))||new Date(value+'T12:00:00Z').toISOString().slice(0,10)!==value))||from!==null&&to!==null&&from>to)throw new CommandError(400,resource==='leave-reviews'?'invalid_leave_review_query':['completed-shifts','shift-corrections'].includes(resource)?'invalid_correction_query':'invalid_attendance_query');
    const data=await database.transaction(async connection=>{
     if(resource!=='commands')await connection.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY',[]);
     let identity:TrustedIdentity;
@@ -136,6 +136,9 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
     if(resource==='commands'){
      const sameTransaction:Database={transaction:operation=>operation(connection)};
      return executeTask(sameTransaction,identity,scope,command);
+    }
+    if(resource==='leave-reviews'){
+     return result((await connection.query(taskId?'SELECT candidate_operations.read_leave_review($1,$2::uuid,$3,$4::uuid) AS result':'SELECT candidate_operations.list_leave_reviews($1,$2::uuid,$3,$4::uuid,$5::integer,$6::date,$7::date,$8) AS result',taskId?[identity.subject,identity.membershipId,scope,taskId]:[identity.subject,identity.membershipId,scope,after,Number(limitText),from,to,url.searchParams.get('status')??'pending'])).rows[0]);
     }
     if(resource==='week-review'){
      const review=command as {weekStart?:unknown;draftIds?:unknown};
