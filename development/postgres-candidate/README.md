@@ -52,6 +52,10 @@ Open `http://127.0.0.1:6610/schedule-forms`, `/checkout-forms`, `/overnight-form
 
 The isolated [correction backend checkpoint](COMPLETED_SHIFT_CORRECTION_CHECKPOINT.md) adds corrective 055 after accepted PR41 main `c69792d`. It preserves original ended shifts and work while providing explicit correction permission, a separate effective planned summary, own-person approval and atomic ownership notices. A private fictional owner bridge holds application until resolvable recipients are configured; shared ownership/permission resolution and delivery remain separate. The dependent [correction UI checkpoint](CORRECTION_UI_CHECKPOINT.md) adds private planned-detail forms, independent decisions and complete history without changing migrations. Both drafts require separate acceptance. Retrospective leave-flag resolution remains next; this is not hosted adoption or reporting integration.
 
+## Completed planned-shift correction preparation
+
+The isolated [correction backend checkpoint](COMPLETED_SHIFT_CORRECTION_CHECKPOINT.md) adds corrective 055 after accepted PR41 main `c69792d`. It preserves original ended shifts and work while providing explicit correction permission, a separate effective planned summary, own-person approval and atomic ownership notices. A private fictional owner bridge holds application until resolvable recipients are configured; shared ownership/permission resolution and delivery remain separate. Correction forms and retrospective leave-flag resolution are next. This draft is not hosted adoption or reporting integration.
+
 ## Scope and evidence
 
 See [migration readiness and remaining workflow coverage](MIGRATION_READINESS.md) for the current checklist and implementation order. The source inventory/classification check runs with `node development/postgres-candidate/readiness-inventory.mjs` from the repository root. Tested candidate slices do not establish whole-app PostgreSQL readiness.
@@ -119,3 +123,5 @@ PR30 store configuration and corrective safeguards (041–043) were separately a
 [Coverage and named replacement UI](COVERAGE_SWAP_UI_CHECKPOINT.md) connects scoped offers, captured duties, explicit consent, independent approval and department-change review. PR33 has normally incorporated accepted PR34 main `e0479d1` and remains a draft for separate approval.
 
 [Published shift UI preparation](PUBLISHED_SHIFT_UI_CHECKPOINT.md) connects existing published edits and protected cancellation to server-projected controls, required reasons, before/after review and frozen receipt retries. PR36 is accepted at `1c536d1` with 614/614 merged-main CI tests. The new slice remains a draft with separate merge approval; hosted application and Inventory integration remain open.
+
+PR42 was approved and squash-merged at `b922ea7` from tested backend head `b9d930c` (740/740 exact-head CI). PR43 normally incorporates that accepted main and remains a separately reviewed, unmerged draft. Published migrations 001–056, their manifest and the function snapshot are unchanged by this refresh. Fresh fictional-database, regression, type and preview results and exact refreshed-head CI links are recorded on PR43. The correction policy is unchanged; shared adoption, hosted services and Inventory integration remain separate.
