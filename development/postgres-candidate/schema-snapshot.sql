@@ -280,9 +280,10 @@ BEGIN
  THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_attendance_reason'; END IF;
  IF p_payload ? 'clientCapturedAt' THEN PERFORM (p_payload->>'clientCapturedAt')::timestamptz; END IF;
  rec.updated_at:=at;
- IF creating THEN INSERT INTO candidate_operations.attendance_entries SELECT rec.*;
+ IF creating THEN INSERT INTO candidate_operations.attendance_entries SELECT rec.* RETURNING * INTO rec;
  ELSE UPDATE candidate_operations.attendance_entries SET attendance_type=rec.attendance_type,reported_at=rec.reported_at,note=rec.note,facts=rec.facts,status=rec.status,review=rec.review,revision=rec.revision,updated_at=at WHERE id=rec.id; END IF;
  INSERT INTO candidate_operations.attendance_events VALUES(rec.id,p_restaurant,rec.revision,actor.id,actor.person_id,actor_name,action,candidate_operations.attendance_text(reason),CASE WHEN creating THEN NULL ELSE to_jsonb(previous) END,to_jsonb(rec),at);
+ UPDATE candidate_operations.scope_coordination SET attendance_revision=attendance_revision+1 WHERE restaurant_id=p_restaurant;
  UPDATE candidate_identity.restaurants SET revision=revision+1 WHERE id=p_restaurant RETURNING revision INTO workspace_revision;
  result:=jsonb_build_object('recordId',rec.id,'revision',rec.revision,'workspaceRevision',workspace_revision,'requestId',p_request,'appliedAt',at,'replayed',false);
  INSERT INTO candidate_operations.command_receipts VALUES(p_restaurant,p_member,p_request,p_payload,encode(sha256(convert_to(p_payload::text,'UTF8')),'hex'),result);
@@ -461,6 +462,23 @@ AS $function$
  AND NOT coalesce(p_data->'excludedDates','[]') @> to_jsonb(ARRAY[anchor::text])
  AND minute >= (p_data->>'startMinute')::integer-(p_data->>'beforeMinutes')::integer
  AND minute < (p_data->>'endMinute')::integer+(p_data->>'afterMinutes')::integer);
+$function$
+
+CREATE OR REPLACE FUNCTION candidate_operations.capture_attendance_local_date()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'pg_catalog'
+AS $function$
+BEGIN
+ IF TG_OP='INSERT' THEN
+  NEW.shift_local_date:=((NEW.shift_snapshot->>'start')::timestamptz AT TIME ZONE (NEW.shift_snapshot->>'timezone'))::date;
+ ELSIF NEW.shift_local_date IS DISTINCT FROM OLD.shift_local_date
+  OR NEW.shift_snapshot->>'start' IS DISTINCT FROM OLD.shift_snapshot->>'start'
+  OR NEW.shift_snapshot->>'timezone' IS DISTINCT FROM OLD.shift_snapshot->>'timezone' THEN
+  RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='attendance_snapshot_immutable';
+ END IF;
+ RETURN NEW;
+END;
 $function$
 
 CREATE OR REPLACE FUNCTION candidate_operations.change_schedule(p_subject text, p_member uuid, p_restaurant text, p_request uuid, p_payload jsonb)
@@ -1541,7 +1559,7 @@ BEGIN
 END;
 $function$
 
-CREATE OR REPLACE FUNCTION candidate_operations.list_attendance(p_subject text, p_member uuid, p_restaurant text, p_after uuid DEFAULT NULL::uuid, p_limit integer DEFAULT 50, p_from date DEFAULT NULL::date, p_to date DEFAULT NULL::date)
+CREATE OR REPLACE FUNCTION candidate_operations.list_attendance(p_subject text, p_member uuid, p_restaurant text, p_after uuid DEFAULT NULL::uuid, p_limit integer DEFAULT 50, p_from date DEFAULT NULL::date, p_to date DEFAULT NULL::date, p_shift uuid DEFAULT NULL::uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
  STABLE SECURITY DEFINER
@@ -1550,14 +1568,16 @@ AS $function$
 DECLARE actor candidate_identity.memberships;selected uuid[];items jsonb;next_cursor uuid;
 BEGIN
  actor:=candidate_operations.attendance_actor(p_subject,p_member,p_restaurant);
- IF p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 100 OR (p_from IS NULL)<>(p_to IS NULL) OR p_from>p_to THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_attendance_query'; END IF;
+ IF p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 100 OR (p_from IS NULL)<>(p_to IS NULL) OR p_from>p_to OR p_shift IS NOT NULL AND (p_from IS NOT NULL OR p_to IS NOT NULL) THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_attendance_query'; END IF;
+ IF p_shift IS NOT NULL AND NOT EXISTS(SELECT 1 FROM candidate_operations.shift_references WHERE id=p_shift AND restaurant_id=p_restaurant) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='attendance_denied'; END IF;
  SELECT array_agg(id ORDER BY id) INTO selected FROM (SELECT r.id FROM candidate_operations.attendance_entries r
  WHERE r.restaurant_id=p_restaurant AND candidate_operations.attendance_allowed(actor.id,p_restaurant,r.department) AND (p_after IS NULL OR r.id>p_after)
- AND (p_from IS NULL OR ((r.shift_snapshot->>'start')::timestamptz AT TIME ZONE (r.shift_snapshot->>'timezone'))::date BETWEEN p_from AND p_to)
+ AND (p_from IS NULL OR r.shift_local_date BETWEEN p_from AND p_to) AND (p_shift IS NULL OR r.shift_id=p_shift)
  ORDER BY r.id LIMIT p_limit+1) page;
  SELECT coalesce(jsonb_agg(candidate_operations.attendance_record_json(id) ORDER BY id),'[]') INTO items FROM candidate_operations.attendance_entries WHERE id=ANY(selected[1:p_limit]);
  IF cardinality(selected)>p_limit THEN next_cursor:=selected[p_limit]; END IF;
- RETURN jsonb_build_object('items',items,'nextCursor',next_cursor,'rangeComplete',next_cursor IS NULL,'from',p_from,'to',p_to,'workspaceRevision',(SELECT revision FROM candidate_identity.restaurants WHERE id=p_restaurant));
+ RETURN jsonb_build_object('items',items,'nextCursor',next_cursor,'rangeComplete',next_cursor IS NULL,'from',p_from,'to',p_to,'shiftId',p_shift,
+ 'attendanceRevision',(SELECT attendance_revision FROM candidate_operations.scope_coordination WHERE restaurant_id=p_restaurant),'workspaceRevision',(SELECT revision FROM candidate_identity.restaurants WHERE id=p_restaurant));
 END;
 $function$
 
@@ -2456,10 +2476,10 @@ BEGIN
  IF NOT FOUND OR NOT candidate_operations.attendance_allowed(actor.id,p_restaurant,rec.department) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='attendance_denied'; END IF;
  IF p_after IS NULL OR p_after NOT BETWEEN 0 AND 1000 OR p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 100 THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_attendance_query'; END IF;
  SELECT array_agg(revision ORDER BY revision) INTO selected FROM (SELECT revision FROM candidate_operations.attendance_events WHERE attendance_id=rec.id AND revision>p_after ORDER BY revision LIMIT p_limit+1) page;
- SELECT coalesce(jsonb_agg(jsonb_build_object('revision',e.revision,'action',e.action,'actorId',e.actor_id,'actorName',p.name,'actorNameAtEntry',e.actor_name_at_entry,'historicalNameLabel','name at time of entry','at',e.recorded_at,'changeReason',e.change_reason,'before',e.before_value,'after',e.after_value) ORDER BY e.revision),'[]')
+ SELECT coalesce(jsonb_agg(jsonb_build_object('revision',e.revision,'action',e.action,'actorId',e.actor_id,'actorName',p.name,'actorNameAtEntry',e.actor_name_at_entry,'historicalNameLabel','name at time of entry','at',e.recorded_at,'changeReason',e.change_reason,'before',e.before_value-'shift_local_date','after',e.after_value-'shift_local_date') ORDER BY e.revision),'[]')
  INTO items FROM candidate_operations.attendance_events e JOIN candidate_identity.people p ON p.id=e.actor_person_id WHERE e.attendance_id=rec.id AND e.revision=ANY(selected[1:p_limit]);
  IF cardinality(selected)>p_limit THEN next_cursor:=selected[p_limit]; END IF;
- RETURN jsonb_build_object('items',items,'nextCursor',next_cursor,'attendanceRevision',rec.revision,'historyComplete',next_cursor IS NULL);
+ RETURN jsonb_build_object('items',items,'nextCursor',next_cursor,'recordRevision',rec.revision,'attendanceRevision',(SELECT attendance_revision FROM candidate_operations.scope_coordination WHERE restaurant_id=p_restaurant),'historyComplete',next_cursor IS NULL);
 END;
 $function$
 
@@ -3193,7 +3213,7 @@ BEGIN
  'capabilities',(SELECT coalesce(jsonb_agg(capability ORDER BY capability),'[]') FROM candidate_identity.membership_capabilities WHERE membership_id=actor.id AND active),
  'qualifications',(SELECT coalesce(jsonb_agg(job ORDER BY job),'[]') FROM candidate_identity.schedule_eligibility WHERE member_id=actor.id AND active AND source='qualification'),
  'scheduleJobs',(SELECT coalesce(jsonb_agg(job ORDER BY job),'[]') FROM candidate_identity.schedule_eligibility WHERE member_id=actor.id AND active AND source='schedule-job')) INTO me FROM candidate_identity.people p WHERE p.id=actor.person_id;
- RETURN jsonb_build_object('location',jsonb_build_object('id',scope.id,'name',scope.name,'timezone',scope.timezone,'revision',scope.revision,'configuration',jsonb_build_object('operatingDepartments',scope.operating_departments,'dishDepartment',scope.dish_department,'dishPosition',scope.dish_position,'dishAliases',scope.dish_aliases)),'me',me,'attendanceAreas',(SELECT coalesce(jsonb_agg(area ORDER BY area),'[]') FROM unnest(scope.operating_departments) area WHERE candidate_operations.attendance_allowed(actor.id,p_restaurant,area)),'leadershipOptions',(SELECT coalesce(jsonb_agg(jsonb_build_object('area',area,'leaders',(SELECT coalesce(jsonb_agg(jsonb_build_object('id',m.id,'name',p.name) ORDER BY p.name,m.id),'[]') FROM candidate_identity.memberships m JOIN candidate_identity.people p ON p.id=m.person_id WHERE candidate_operations.leadership_target_allowed(m.id,p_restaurant,area))) ORDER BY area),'[]') FROM unnest(scope.operating_departments) area WHERE candidate_operations.goal_authorized(actor.id,area,'schedule.publish')),'workspaceRevision',scope.revision,'scheduleRevision',(SELECT schedule_revision FROM candidate_operations.scope_coordination WHERE restaurant_id=p_restaurant),'inputRevision',(SELECT input_revision FROM candidate_operations.scope_coordination WHERE restaurant_id=p_restaurant));
+ RETURN jsonb_build_object('location',jsonb_build_object('id',scope.id,'name',scope.name,'timezone',scope.timezone,'revision',scope.revision,'configuration',jsonb_build_object('operatingDepartments',scope.operating_departments,'dishDepartment',scope.dish_department,'dishPosition',scope.dish_position,'dishAliases',scope.dish_aliases)),'me',me,'attendanceAreas',(SELECT coalesce(jsonb_agg(area ORDER BY area),'[]') FROM unnest(scope.operating_departments) area WHERE candidate_operations.attendance_allowed(actor.id,p_restaurant,area)),'leadershipOptions',(SELECT coalesce(jsonb_agg(jsonb_build_object('area',area,'leaders',(SELECT coalesce(jsonb_agg(jsonb_build_object('id',m.id,'name',p.name) ORDER BY p.name,m.id),'[]') FROM candidate_identity.memberships m JOIN candidate_identity.people p ON p.id=m.person_id WHERE candidate_operations.leadership_target_allowed(m.id,p_restaurant,area))) ORDER BY area),'[]') FROM unnest(scope.operating_departments) area WHERE candidate_operations.goal_authorized(actor.id,area,'schedule.publish')),'attendanceRevision',coalesce((SELECT attendance_revision FROM candidate_operations.scope_coordination WHERE restaurant_id=p_restaurant),0),'workspaceRevision',scope.revision,'scheduleRevision',(SELECT schedule_revision FROM candidate_operations.scope_coordination WHERE restaurant_id=p_restaurant),'inputRevision',(SELECT input_revision FROM candidate_operations.scope_coordination WHERE restaurant_id=p_restaurant));
 END;
 $function$
 

@@ -107,7 +107,7 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
    const session=await verifyToken(auth.slice(7));
    const command=resource==='commands'||resource==='week-review'?await body(request):undefined;
    if(resource==='schedule-viewer'&&url.search)throw new CommandError(400,'invalid_query');
-   const queryKeys=resource==='attendance'&&!taskId?['after','limit','from','to']:['after','limit'];
+   const queryKeys=resource==='attendance'&&!taskId?['after','limit','from','to','shift']:['after','limit'];
    if([...url.searchParams.keys()].some(k=>!queryKeys.includes(k)||url.searchParams.getAll(k).length>1)
     ||(resource==='commands'||resource==='week-review')&&url.search||taskId&&resource!=='attendance-history'&&url.search)
     throw new CommandError(400,'invalid_query');
@@ -115,6 +115,8 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
    if(after!==null&&(resource==='attendance-history'?!/^(0|[1-9][0-9]{0,2}|1000)$/.test(after):!uuid.test(after))||!/^([1-9]|[1-9][0-9]|100)$/.test(limitText))
     throw new CommandError(400,'invalid_pagination');
    const from=url.searchParams.get('from'),to=url.searchParams.get('to');
+   const attendanceShift=url.searchParams.get('shift');
+   if(attendanceShift!==null&&(!uuid.test(attendanceShift)||from!==null||to!==null))throw new CommandError(400,'invalid_attendance_query');
    if((from===null)!==(to===null)||[from,to].some(value=>value!==null&&(!/^\d{4}-\d{2}-\d{2}$/.test(value)||!Number.isFinite(Date.parse(value+'T12:00:00Z'))||new Date(value+'T12:00:00Z').toISOString().slice(0,10)!==value))||from!==null&&to!==null&&from>to)throw new CommandError(400,'invalid_attendance_query');
    const data=await database.transaction(async connection=>{
     if(resource!=='commands')await connection.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY',[]);
@@ -143,7 +145,7 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
      return result((await connection.query('SELECT candidate_operations.read_attendance_history($1,$2::uuid,$3,$4::uuid,$5::integer,$6::integer) AS result',[identity.subject,identity.membershipId,scope,taskId,Number(after??0),Number(limitText)])).rows[0]);
     }
     if(resource==='attendance'){
-     return result((await connection.query(taskId?'SELECT candidate_operations.read_attendance($1,$2::uuid,$3,$4::uuid) AS result':'SELECT candidate_operations.list_attendance($1,$2::uuid,$3,$4::uuid,$5::integer,$6::date,$7::date) AS result',taskId?[identity.subject,identity.membershipId,scope,taskId]:[identity.subject,identity.membershipId,scope,after,Number(limitText),from,to])).rows[0]);
+     return result((await connection.query(taskId?'SELECT candidate_operations.read_attendance($1,$2::uuid,$3,$4::uuid) AS result':'SELECT candidate_operations.list_attendance($1,$2::uuid,$3,$4::uuid,$5::integer,$6::date,$7::date,$8::uuid) AS result',taskId?[identity.subject,identity.membershipId,scope,taskId]:[identity.subject,identity.membershipId,scope,after,Number(limitText),from,to,attendanceShift])).rows[0]);
     }
     if(resource==='schedule-viewer'){return result((await connection.query('SELECT candidate_operations.schedule_viewer($1,$2::uuid,$3) AS result',[identity.subject,identity.membershipId,scope])).rows[0]);}
     if(resource==='staffing'){
