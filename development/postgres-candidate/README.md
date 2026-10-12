@@ -31,7 +31,7 @@ npm run check:types --prefix development/postgres-candidate
 npm run build:preview --prefix development/postgres-candidate
 ```
 
-Bootstrap verifies the versioned hash manifest and applies 001–054 in order, inserts fictional base actors after 001 so later capability conversion can run, and creates fictional sessions after migration. Migration 037 requires PostgreSQL's trusted btree_gist extension for person booking exclusion. All candidate connection helpers use the selected database/port. Tests run serially because rollback checks create temporary failure triggers. The core concurrency tests use independent Node/PostgreSQL bridge processes; Python and machine-specific library paths are no longer required.
+Bootstrap verifies the versioned hash manifest and applies 001–055 in order, inserts fictional base actors after 001 so later capability conversion can run, and creates fictional sessions after migration. Migration 037 requires PostgreSQL's trusted btree_gist extension for person booking exclusion. All candidate connection helpers use the selected database/port. Tests run serially because rollback checks create temporary failure triggers. The core concurrency tests use independent Node/PostgreSQL bridge processes; Python and machine-specific library paths are no longer required.
 
 The GitHub `candidate-validation` gate performs this sequence when candidate dependencies change, and reports a successful intentional skip for unrelated changes. Its dependency detection includes application, database, package/configuration, shared UI and build inputs. Validation uses a fresh disposable PostgreSQL service. Passing candidate checks does not prove the complete application is migrated or deployed.
 
@@ -47,6 +47,10 @@ npm run preview:serve --prefix development/postgres-candidate
 ```
 
 Open `http://127.0.0.1:6610/schedule-forms`, `/checkout-forms`, `/overnight-forms` or `/forms` locally. The scheduling screen covers day/week/personal reads, individual drafts, availability/time-off requests, reviewed weekly publication and coverage/named replacement consent with independent approval. Dated leadership assignment/edit/revocation and reactivation are included. Published shift edits, protected reason-only changes and explicit covering-shift cancellation are included. See [closing-transfer review](CLOSING_TRANSFER_UI_CHECKPOINT.md). Private manager attendance forms/history are included in the dependent [attendance UI preparation](ATTENDANCE_UI_CHECKPOINT.md). Copying and completed-shift corrections remain pending. Run seed once per fresh database; it refuses the existing fictional scheduling restaurant. The server binds only to loopback and issues short-lived, locally signed fictional tokens. Never deploy this fixture-token server. Stop it with Ctrl+C. Runtime fixture JSON, generated reference modules and preview build output stay ignored. Run browser checks after regression tests to avoid competing fictional business dates.
+
+## Completed planned-shift correction preparation
+
+The isolated [correction backend checkpoint](COMPLETED_SHIFT_CORRECTION_CHECKPOINT.md) adds corrective 055 after accepted PR41 main `c69792d`. It preserves original ended shifts and work while providing explicit correction permission, a separate effective planned summary, own-person approval and atomic ownership notices. A private fictional owner bridge holds application until resolvable recipients are configured; shared ownership/permission resolution and delivery remain separate. Correction forms and retrospective leave-flag resolution are next. This draft is not hosted adoption or reporting integration.
 
 ## Scope and evidence
 

@@ -216,6 +216,10 @@
     {
       "file": "054_attendance_read_coordination.sql",
       "sha256": "4f00971eefde3f55aab8ce707964d8711ce9afce33d482fd11327a60394fcc68"
+    },
+    {
+      "file": "055_completed_shift_corrections.sql",
+      "sha256": "04c5769d7e9725306585717010030105ebf6f450ea92da9edd77c3bacdbb4771"
     }
   ]
 }
