@@ -1,0 +1,37 @@
+# Attendance backend preparation (053–054)
+
+This isolated candidate starts from accepted PR39 main `11a6931`. PR39 records the owner-selected correction permission for GM/ownership and designated department managers, independent approval for the author's own shift, and manager-only initial attendance visibility. This slice implements existing manager attendance only; it does not grant completed-shift correction permission or implement its ledger/approval workflow. Neither the active backend nor Inventory nor hosted services adopt this code.
+
+## Stored facts and history
+
+Corrective 053 adds private `attendance_entries` and append-only runtime-protected `attendance_events`. It preserves the original member/person, department, published shift revision, planned period/job and store timezone. Current employee and actor names resolve from candidate identity at read time; retained names are separately labelled `name at time of entry`. Shared adoption must use the shared employee repository.
+
+Commands are `attendance.record`, `attendance.correct`, `attendance.void`, `attendance.review` and `attendance.reopen`. A recorded type is unique per original person/shift/store; correction checks the same uniqueness. Recorded entries carry explicit contact/coverage/emergency unknowns. Correcting reopens review, voiding retains review/history, and the existing 1,000-event ceiling remains. Reported time has the existing 60-second tolerance, and a no-show cannot precede the captured scheduled start. Contact guidance remains informational. Attendance is never transformed into hours, discipline, emergency classification or completed work.
+
+Creating requires a current published, noncancelled source revision; ended/released published shifts are eligible. Later attendance commands address the original entry and preserve its identity even after reassignment/cancellation/release. A voided entry cannot receive a new mutation; the exact original receipt may still replay after later mutations.
+
+## Authorization and atomicity
+
+Active nonschedule-only actors require `location.manage` or department-scoped `people.manage`. The configured checkout position is excluded even with those capabilities. Scheduling authority alone and ownership of an attendance entry do not grant access. Commands, list/detail/history and server action projections enforce this rule. Unauthorized reads do not return private notes or counts. Direct runtime table/helper access is revoked.
+
+The command acquires `lock_scope` before authorization or record locks. Receipt lookup precedes mutable source/status/revision validation; replay still checks current original-department access and exact payload. Entry, before/after event, workspace increment and receipt commit together. Failures roll back all four. Duplicate requests and different concurrent requests are coordinated. Policy/import writers retain the whole-transaction `40001` retry contract, with the same request identity. Attendance has no new notification intent: ownership correction notices belong to the later correction workflow and delivery remains separate.
+
+Attendance advances the global workspace revision and the private attendance revision together. It neither advances scheduling/source counters nor changes shifts, bookings, completed tasks/closes or their history/receipts. A regression reviews a week, records/reviews/corrects/voids attendance, and publishes with the original still-current planning token. Receipt replay does not advance either counter. An unrelated schedule command between attendance pages does not advance the attendance counter.
+
+The owner elected to retain current self-action permissions for now and revisit them later. No new self-review/reopen/void restriction is implemented; authorized managers retain those existing attendance actions on their own entries. This does not alter the separately approved completed-shift correction policy or grant additional scheduling authority. The optional reported-time ±24-hour bound is deferred; existing validation remains.
+
+## Read contract
+
+- `GET /attendance`: scoped UUID pagination, limit 1–100, optional paired inclusive `from`/`to` dates using the immutable captured `shift_local_date`. Corrective 054 backfills from the original snapshot timezone, captures the value on insert, and refuses changes to that date or its captured start/timezone. The index is `(restaurant_id, shift_local_date, id)`. Voided entries remain available for history.
+- The same list accepts `shift=<uuid>` instead of `from`/`to`, with index `(restaurant_id, shift_id, id)`. It retains authorized original-assignee entries even if the shift was later reassigned. Foreign/nonexistent shift selectors are denied. Mixed date/shift selectors are refused. The old seven-argument function is explicitly replaced by one eight-argument function with the new final default, avoiding ambiguous overloads.
+- `GET /attendance/:id`: private current record and current server action flags, without unbounded event history.
+- `GET /attendance-history/:id`: ascending revision cursor (`after` 0–1000), limit 1–100, before/after events and current/historical actor names. `recordRevision` binds the individual entry; `attendanceRevision` is the separate store-wide attendance counter. The internal captured date is omitted from projected before/after values so old 053 events and later events retain the same comparison contract.
+- Existing schedule viewer adds `attendanceAreas`; published shift references add `attendanceActions.canRecord`, including historical published shifts already visible to people managers. No attendance notes join general employee shift reads.
+
+Each HTTP read uses one read-only repeatable-read transaction for session, authority and data. List `rangeComplete` and history `historyComplete` mean no further page after the returned cursor, not proof that a caller loaded all prior pages. The client must drain pages with the same `attendanceRevision` before claiming complete totals, and recheck viewer identity, current permissions and applicable configuration before/after. The schedule viewer returns the attendance counter too. Global workspace/scheduling changes alone must not invalidate this read; attendance or relevant authorization changes do. Count only recorded entries and distinct original shifts for attendance patterns. This slice adds no reporting consumer.
+
+## Validation and remaining work
+
+Fresh fictional loopback PostgreSQL 17 migrations through 054 and generated function snapshot matching, focused serial regressions, backend/UI types and the existing preview build are checked before push. Exact-head CI results and final test counts are recorded in the draft PR. The source-copy gate remains enabled. Shared 001–053 and their manifest hashes stay unchanged. The follow-up snapshot changes `attendance_command`, `list_attendance`, `read_attendance_history`, `schedule_viewer`, and adds `capture_attendance_local_date`; explicit definitions are used, with no runtime regex patching.
+
+Attendance manager forms are next; no attendance screen/browser adoption is claimed here. Completed-record correction commands/forms, retrospective flag resolution, source completeness, shared authz, notification delivery, copied-component retirement and Inventory integration remain separate. This draft requires separate review and merge approval; no deployment or hosted database application is authorized.
