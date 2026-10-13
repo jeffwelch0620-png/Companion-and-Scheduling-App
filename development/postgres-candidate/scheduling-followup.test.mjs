@@ -9,6 +9,8 @@ import {PostgresDatabase} from './postgres-driver.ts';
 import {executeTask,parseCommand} from './task-adapter.ts';
 import {verifyMigrationManifest} from './migration-manifest.mjs';
 import {functionSnapshot} from './schema-snapshot.mjs';
+import {createTaskHandler} from './task-http.ts';
+import {ScheduleScreenSender} from './schedule-screen-client.mjs';
 const admin=new pg.Pool({...connection,user:'candidate_owner',max:5});
 const db=new PostgresDatabase({...connection,user:'candidate_runtime',max:3});
 after(async()=>{await admin.end();await db.close();});
@@ -41,6 +43,17 @@ async function publication(f,r){
 async function leave(f,from=start,to=end){return run(f,{requestId:randomUUID(),locationId:f.scope,action:'request.create',input:{type:'time-off',start:from,end:to,note:'Private fictional leave reason'}},f.worker);}
 const approval=(f,r,affected=[])=>({requestId:randomUUID(),locationId:f.scope,action:'request.review',recordId:r.recordId,expectedRevision:r.revision,input:{approve:true,note:'Private fictional decision',affectedShifts:affected}});
 const review=(f,r)=>db.transaction(async c=>(await c.query('SELECT candidate_operations.weekly_review($1,$2,$3,$4,$5::jsonb) result',[f.manager.subject,f.manager.membershipId,f.scope,'2035-11-01',JSON.stringify([r.recordId])])).rows[0].result);
+const leaveState=async(a,b,request)=>(await admin.query(`SELECT jsonb_build_object(
+ 'request',(SELECT to_jsonb(q) FROM candidate_operations.time_off_references q WHERE id=$1),
+ 'flags',(SELECT coalesce(jsonb_agg(to_jsonb(f) ORDER BY shift_id),'[]') FROM candidate_operations.time_off_shift_flags f WHERE request_id=$1),
+ 'events',(SELECT coalesce(jsonb_agg(to_jsonb(e) ORDER BY revision),'[]') FROM candidate_operations.time_off_events e WHERE request_id=$1),
+ 'outbox',(SELECT coalesce(jsonb_agg(to_jsonb(o) ORDER BY revision,recipient_id),'[]') FROM candidate_operations.time_off_outbox o WHERE request_id=$1),
+ 'conflictOutbox',(SELECT coalesce(jsonb_agg(to_jsonb(o) ORDER BY shift_id,recipient_id),'[]') FROM candidate_operations.time_off_conflict_outbox o WHERE request_id=$1),
+ 'receipts',(SELECT coalesce(jsonb_agg(to_jsonb(c) ORDER BY restaurant_id,actor_id,request_id),'[]') FROM candidate_operations.command_receipts c WHERE restaurant_id=ANY($2::text[])),
+ 'stores',(SELECT jsonb_agg(to_jsonb(r) ORDER BY id) FROM candidate_identity.restaurants r WHERE id=ANY($2::text[])),
+ 'coordination',(SELECT jsonb_agg(to_jsonb(c) ORDER BY restaurant_id) FROM candidate_operations.scope_coordination c WHERE restaurant_id=ANY($2::text[])),
+ 'shifts',(SELECT coalesce(jsonb_agg(to_jsonb(s) ORDER BY id),'[]') FROM candidate_operations.shift_references s WHERE restaurant_id=ANY($2::text[]))
+ ) result`,[request.recordId,[a.scope,b.scope]])).rows[0].result;
 
 test('person-wide leave blocks drafts and publication, invalidates weekly tokens and flags foreign work privately',async()=>{
  const [a,b]=await fixture(),r=await run(b,draft(b)),before=await review(b,r),pub=await publication(b,r),request=await leave(a);
@@ -112,13 +125,37 @@ test('ended unpublished drafts leave live lists and cannot enter weekly or indiv
 });
 
 test('time-off writers retry the whole transaction while another store is scheduling',async()=>{
- const [a,b]=await fixture(),r=await leave(a),command=approval(a,r),lock=await admin.connect();
+ const [a,b]=await fixture(),shift=await run(b,draft(b)),r=await leave(a),command=approval(a,r),before=await leaveState(a,b,r),lock=await admin.connect();
+ assert.equal(before.flags.length,0);assert.equal(before.request.status,'pending');
  try{
   await lock.query('BEGIN');await lock.query('SELECT candidate_operations.lock_scope($1)',[b.scope]);
   await assert.rejects(run(a,command),e=>e.code==='40001'&&e.message==='scope_coordination_retry');
   assert.equal((await admin.query('SELECT status FROM candidate_operations.time_off_references WHERE id=$1',[r.recordId])).rows[0].status,'pending');
   assert.equal((await admin.query('SELECT count(*)::int n FROM candidate_operations.command_receipts WHERE request_id=$1',[command.requestId])).rows[0].n,0);
-  await lock.query('COMMIT');await run(a,command);assert.equal((await run(a,command)).replayed,true);
+  assert.deepEqual(await leaveState(a,b,r),before);
+  await lock.query('COMMIT');await run(a,command);const committed=await leaveState(a,b,r);
+  assert.equal(committed.request.status,'approved');assert.equal(committed.flags.length,1);assert.equal(committed.flags[0].shift_id,shift.recordId);assert.equal(committed.flags[0].restaurant_id,b.scope);assert.equal(committed.flags[0].reason,'cross_store_review');assert.deepEqual(committed.shifts,before.shifts);
+  assert.equal((await run(a,command)).replayed,true);assert.deepEqual(await leaveState(a,b,r),committed);
+ }finally{await lock.query('ROLLBACK');lock.release();}
+});
+
+test('request-review HTTP coordination holds preserve the frozen approval and retry without refusing or duplicating foreign flags',async()=>{
+ const [a,b]=await fixture(),draftShift=await run(b,draft(b)),shift=await run(b,await publication(b,draftShift)),request=await leave(a),sessionId=randomUUID();
+ await admin.query("INSERT INTO candidate_identity.sessions(id,subject,expires_at) VALUES($1,$2,clock_timestamp()+interval '1 hour')",[sessionId,a.manager.subject]);
+ const handler=createTaskHandler(db,async()=>({subject:a.manager.subject,sessionId})),sender=new ScheduleScreenSender(),sent=[],responses=[];
+ const call=async(path,command)=>{sent.push(structuredClone(command));const response=await handler(new Request('http://candidate.invalid/api/operations/'+a.scope+path,{method:'POST',headers:{Authorization:'Bearer fictional','Content-Type':'application/json'},body:JSON.stringify(command)}));const result={status:response.status,body:await response.json()};responses.push(result);return result;};
+ const record={id:request.recordId,kind:'request',revision:request.revision,data:{type:'time-off'}},input=approval(a,request).input,before=await leaveState(a,b,request),lock=await admin.connect();
+ try{
+  await lock.query('BEGIN');await lock.query('SELECT candidate_operations.lock_scope($1)',[b.scope]);
+  await assert.rejects(sender.send(call,a.scope,'request.review',input,record),e=>e.status===503&&/Retry the original submission/.test(e.message));
+  assert.equal(responses[0].body.error.code,'service_unavailable');assert.ok(sender.pending);const frozen=structuredClone(sender.pending.command);
+  await assert.rejects(sender.send(call,a.scope,'request.review',{...input,note:'Changed decision'},record),/Retry the previous submission/);assert.equal(sent.length,1);
+  await assert.rejects(sender.retry(call),e=>e.status===503&&/Retry the original submission/.test(e.message));assert.deepEqual(sent[1],frozen);assert.deepEqual(await leaveState(a,b,request),before);
+  assert.equal((await admin.query('SELECT count(*)::integer n FROM candidate_operations.command_receipts WHERE request_id=$1',[frozen.requestId])).rows[0].n,0);
+  await lock.query('COMMIT');const saved=await sender.retry(call);assert.equal(saved.replayed,false);assert.equal(saved.requestId,frozen.requestId);assert.equal(sender.pending,null);assert.deepEqual(sent[2],frozen);
+  const committed=await leaveState(a,b,request);assert.equal(committed.request.status,'approved');assert.equal(committed.request.revision,request.revision+1);assert.equal(committed.flags.length,1);assert.equal(committed.flags[0].shift_id,shift.recordId);assert.equal(committed.flags[0].restaurant_id,b.scope);assert.equal(committed.flags[0].review_status,'pending');assert.deepEqual(committed.shifts,before.shifts);
+  assert.equal(committed.receipts.filter(r=>r.request_id===frozen.requestId).length,1);assert.ok(committed.conflictOutbox.length>0);
+  const replay=await call('/commands',frozen);assert.equal(replay.status,200);assert.equal(replay.body.replayed,true);assert.deepEqual(sent[3],frozen);assert.deepEqual(await leaveState(a,b,request),committed);
  }finally{await lock.query('ROLLBACK');lock.release();}
 });
 
