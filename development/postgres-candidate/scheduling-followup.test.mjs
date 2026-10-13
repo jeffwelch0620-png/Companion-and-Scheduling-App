@@ -147,8 +147,8 @@ test('request-review HTTP coordination holds preserve the frozen approval and re
  const record={id:request.recordId,kind:'request',revision:request.revision,data:{type:'time-off'}},input=approval(a,request).input,before=await leaveState(a,b,request),lock=await admin.connect();
  try{
   await lock.query('BEGIN');await lock.query('SELECT candidate_operations.lock_scope($1)',[b.scope]);
-  await assert.rejects(sender.send(call,a.scope,'request.review',input,record),e=>e.status===503&&/Retry the original submission/.test(e.message));
-  assert.equal(responses[0].body.error.code,'service_unavailable');assert.ok(sender.pending);const frozen=structuredClone(sender.pending.command);
+  await assert.rejects(sender.send(call,a.scope,'request.review',input,record),e=>e.status===503&&e.message==='Another store is updating these records. Retry the original submission.');
+  assert.equal(responses[0].body.error.code,'coordination_retry');assert.ok(sender.pending);const frozen=structuredClone(sender.pending.command);
   await assert.rejects(sender.send(call,a.scope,'request.review',{...input,note:'Changed decision'},record),/Retry the previous submission/);assert.equal(sent.length,1);
   await assert.rejects(sender.retry(call),e=>e.status===503&&/Retry the original submission/.test(e.message));assert.deepEqual(sent[1],frozen);assert.deepEqual(await leaveState(a,b,request),before);
   assert.equal((await admin.query('SELECT count(*)::integer n FROM candidate_operations.command_receipts WHERE request_id=$1',[frozen.requestId])).rows[0].n,0);
