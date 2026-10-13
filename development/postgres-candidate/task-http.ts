@@ -1,6 +1,6 @@
 import {createRemoteJWKSet,jwtVerify} from 'jose';
 import type {JWTVerifyGetKey} from 'jose';
-import {CommandError,executeTask,parseCopySelection} from './task-adapter.ts';
+import {CommandError,executeTask,parseCopySelection,parseBatchSelection} from './task-adapter.ts';
 import type {Database,TrustedIdentity} from './task-adapter.ts';
 
 type VerifiedSession={subject:string;sessionId:string};
@@ -94,22 +94,22 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
  return async(request:Request):Promise<Response>=>{
   try{
    const url=new URL(request.url);
-   const route=/^\/api\/operations\/([a-zA-Z0-9_-]{1,100})\/(commands|copy-review|week-review|leave-reviews|tasks|goals|staffing|completed-shifts|shift-corrections|shift-correction-history|attendance|attendance-history|publication-review|cancellation-review|closes|dish-cycles|overnight|shifts|schedule-viewer|schedule-shifts|schedule-roster|schedule-availability|schedule-requests|schedule-stations|schedule-coverage|schedule-swaps|schedule-leadership)(?:\/([0-9a-f-]{36}))?$/.exec(url.pathname);
+   const route=/^\/api\/operations\/([a-zA-Z0-9_-]{1,100})\/(commands|batch-review|copy-review|week-review|leave-reviews|tasks|goals|staffing|completed-shifts|shift-corrections|shift-correction-history|attendance|attendance-history|publication-review|cancellation-review|closes|dish-cycles|overnight|shifts|schedule-viewer|schedule-shifts|schedule-roster|schedule-availability|schedule-requests|schedule-stations|schedule-coverage|schedule-swaps|schedule-leadership)(?:\/([0-9a-f-]{36}))?$/.exec(url.pathname);
    if(!route)return json({error:{code:'route_not_found'}},404);
    const [,scope,resource,taskId]=route;
    if((resource.startsWith('schedule-')||resource==='goals'||resource==='staffing')&&(taskId||url.searchParams.getAll('after').length>1||url.searchParams.getAll('limit').length>1))
     throw new CommandError(400,'invalid_query');
-   if(['commands','week-review','copy-review'].includes(resource)&&(request.method!=='POST'||taskId)
-    ||!['commands','week-review','copy-review'].includes(resource)&&request.method!=='GET')return json({error:{code:'method_not_allowed'}},405);
+   if(['commands','week-review','copy-review','batch-review'].includes(resource)&&(request.method!=='POST'||taskId)
+    ||!['commands','week-review','copy-review','batch-review'].includes(resource)&&request.method!=='GET')return json({error:{code:'method_not_allowed'}},405);
    if(taskId&&!uuid.test(taskId))throw new CommandError(400,'invalid_identifier');
    const auth=request.headers.get('authorization');
    if(!auth?.startsWith('Bearer ')||auth.length>16384)throw new CommandError(401,'authentication_required');
    const session=await verifyToken(auth.slice(7));
-   const command=['commands','week-review','copy-review'].includes(resource)?await body(request):undefined;
+   const command=['commands','week-review','copy-review','batch-review'].includes(resource)?await body(request):undefined;
    if(resource==='schedule-viewer'&&url.search)throw new CommandError(400,'invalid_query');
    const queryKeys=resource==='leave-reviews'&&!taskId?['after','limit','from','to','status']:resource==='completed-shifts'&&!taskId?['after','limit','asOf','from','to']:resource==='shift-corrections'&&!taskId?['after','limit','from','to']:resource==='attendance'&&!taskId?['after','limit','from','to','shift']:['after','limit'];
    if([...url.searchParams.keys()].some(k=>!queryKeys.includes(k)||url.searchParams.getAll(k).length>1)
-    ||['commands','week-review','copy-review'].includes(resource)&&url.search||taskId&&!['attendance-history','shift-correction-history'].includes(resource)&&url.search)
+    ||['commands','week-review','copy-review','batch-review'].includes(resource)&&url.search||taskId&&!['attendance-history','shift-correction-history'].includes(resource)&&url.search)
     throw new CommandError(400,'invalid_query');
    const after=url.searchParams.get('after'),limitText=url.searchParams.get('limit')??'50';
    const correctionAsOf=url.searchParams.get('asOf');
@@ -138,6 +138,7 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
      return executeTask(sameTransaction,identity,scope,command);
     }
     if(resource==='copy-review')return result((await connection.query('SELECT candidate_operations.read_schedule_copy_review($1,$2::uuid,$3,$4::jsonb) AS result',[identity.subject,identity.membershipId,scope,JSON.stringify(parseCopySelection(command))])).rows[0]);
+    if(resource==='batch-review')return result((await connection.query('SELECT candidate_operations.read_schedule_batch_review($1,$2::uuid,$3,$4::jsonb) AS result',[identity.subject,identity.membershipId,scope,JSON.stringify(parseBatchSelection(command))])).rows[0]);
     if(resource==='leave-reviews'){
      return result((await connection.query(taskId?'SELECT candidate_operations.read_leave_review($1,$2::uuid,$3,$4::uuid) AS result':'SELECT candidate_operations.list_leave_reviews($1,$2::uuid,$3,$4::uuid,$5::integer,$6::date,$7::date,$8) AS result',taskId?[identity.subject,identity.membershipId,scope,taskId]:[identity.subject,identity.membershipId,scope,after,Number(limitText),from,to,url.searchParams.get('status')??'pending'])).rows[0]);
     }
