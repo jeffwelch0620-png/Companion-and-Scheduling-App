@@ -1373,14 +1373,14 @@ AS $function$
 DECLARE scope candidate_identity.restaurants;options jsonb;kind text;entry jsonb;s candidate_operations.shift_references;n candidate_operations.staffing_needs;
  owner candidate_identity.memberships;st candidate_operations.station_references;source jsonb;context jsonb;row_value jsonb;rows jsonb:='[]';final_rows jsonb:='[]';
  issue text;first_at timestamptz;last_at timestamptz;days integer;department_name text;job text;original_start timestamptz;original_end timestamptz;current_revision integer;
- duplicate_id uuid;related jsonb;bookings jsonb;leaves jsonb;avail jsonb;jobs jsonb;station_context jsonb;close_ids jsonb;
+ duplicate_id uuid;related jsonb;bookings jsonb;leaves jsonb;avail jsonb;jobs jsonb;station_context jsonb;close_ids jsonb;staffing_overlaps jsonb;warnings jsonb;
 BEGIN
  options:=candidate_operations.copy_selection(p_selection);SELECT * INTO scope FROM candidate_identity.restaurants WHERE id=p_restaurant;
  IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='scope_denied'; END IF;
  IF (options->>'targetWeek')::date<(clock_timestamp() AT TIME ZONE scope.timezone)::date THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='invalid_copy_week'; END IF;
  days:=(options->>'targetWeek')::date-(options->>'sourceWeek')::date;
  FOR kind,entry IN SELECT 'shift',value FROM jsonb_array_elements(options->'shifts') UNION ALL SELECT 'staffing',value FROM jsonb_array_elements(options->'staffing') LOOP
-  source:=NULL;owner:=NULL;st:=NULL;context:=NULL;issue:='';first_at:=NULL;last_at:=NULL;duplicate_id:=NULL;close_ids:='[]';
+  source:=NULL;owner:=NULL;st:=NULL;context:=NULL;issue:='';first_at:=NULL;last_at:=NULL;duplicate_id:=NULL;close_ids:='[]';warnings:='[]';
   row_value:=jsonb_build_object('kind',kind,'id',entry->'id','sourceRevision',entry->'revision');
   IF kind='shift' THEN
    SELECT * INTO s FROM candidate_operations.shift_references WHERE id=(entry->>'id')::uuid AND restaurant_id=p_restaurant;
@@ -1441,15 +1441,27 @@ BEGIN
     ELSIF candidate_operations.person_shift_conflict(owner.id,first_at,last_at,NULL) THEN issue:='shift_overlap'; END IF;
    END IF;
   END IF;
+  IF kind='staffing' AND issue='' THEN
+   -- Draft creation stays available. Approval uses this same store/department/job
+   -- overlap predicate; only a minimal warning is exposed to the authorized viewer.
+   SELECT coalesce(jsonb_agg(jsonb_build_object('id',approved.id,'revision',approved.revision,'start',approved.starts_at,'end',approved.ends_at) ORDER BY approved.id),'[]') INTO staffing_overlaps
+   FROM candidate_operations.staffing_needs approved
+   WHERE approved.restaurant_id=p_restaurant AND approved.department=department_name AND approved.position=job
+   AND approved.status='approved' AND approved.starts_at<last_at AND approved.ends_at>first_at;
+   context:=context||jsonb_build_object('approvedStaffingOverlaps',staffing_overlaps);
+   IF jsonb_array_length(staffing_overlaps)>0 THEN warnings:=jsonb_build_array(jsonb_build_object('code','staffing_overlap_at_approval','message','This staffing draft overlaps an approved need. Resolve the overlap before approval.')); END IF;
+  END IF;
+  row_value:=row_value||jsonb_build_object('warnings',warnings);
   row_value:=row_value||jsonb_build_object('start',first_at,'end',last_at,'existingCopyId',duplicate_id,'status',CASE WHEN issue='' THEN 'ready' ELSE 'rejected' END,'issues',CASE WHEN issue='' THEN '[]'::jsonb ELSE jsonb_build_array(jsonb_build_object('code',issue)) END,'context',context);
   rows:=rows||jsonb_build_array(row_value);
  END LOOP;
  -- Copy proposals have no old destination slots to restore. Both conflicting new
- -- slots are permanent seeds; independent staffing rows never enter this graph.
+ -- slots are permanent seeds only after fixed external preflight passes on both
+ -- sides. Rejected rows and independent staffing never enter this pair graph.
  FOR row_value IN SELECT value FROM jsonb_array_elements(rows) ORDER BY value->>'kind',value->>'id' LOOP
-  IF row_value->>'kind'='shift' AND (row_value->>'status'='ready' OR row_value->'issues'->0->>'code'='shift_overlap') THEN
+  IF row_value->>'kind'='shift' AND row_value->>'status'='ready' THEN
    SELECT coalesce(jsonb_agg(other->'id' ORDER BY other->>'id'),'[]') INTO related FROM jsonb_array_elements(rows) other
-   WHERE other->>'kind'='shift' AND (other->>'status'='ready' OR other->'issues'->0->>'code'='shift_overlap') AND other->>'id'<>row_value->>'id' AND other->>'personKey'=row_value->>'personKey'
+   WHERE other->>'kind'='shift' AND other->>'status'='ready' AND other->>'id'<>row_value->>'id' AND other->>'personKey'=row_value->>'personKey'
    AND (other->>'start')::timestamptz<(row_value->>'end')::timestamptz AND (other->>'end')::timestamptz>(row_value->>'start')::timestamptz;
    IF jsonb_array_length(related)>0 THEN row_value:=row_value||jsonb_build_object('status','rejected','issues',(row_value->'issues')||jsonb_build_array(jsonb_build_object('code','proposed_shift_overlap','sourceIds',related))); END IF;
   END IF;

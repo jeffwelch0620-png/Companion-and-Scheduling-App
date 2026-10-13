@@ -236,6 +236,10 @@
     {
       "sha256": "7c4bbcb97673d9d1053b5ac5fdca4299006983606b761e25edec2f3cbc9c3b9f",
       "file": "059_schedule_copy_backend.sql"
+    },
+    {
+      "sha256": "703a95dee08c75a24efed04b40ddeb8da8605afe00d0fb5ad1b848f8ff31d371",
+      "file": "060_schedule_copy_review_alignment.sql"
     }
   ]
 }

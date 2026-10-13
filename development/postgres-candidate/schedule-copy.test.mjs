@@ -81,11 +81,11 @@ test('new proposals collapsing onto the same destination slot reject both, indep
  const result=await run(f,command(f,s,r));assert.equal(result.savedCount,1);assert.equal(result.rejectedCount,2);assert.equal(row(result,c.recordId).status,'saved');
 });
 
-test('an external conflict cannot choose a winner between two otherwise eligible conflicting new proposals',async()=>{
+test('an externally rejected proposal does not seed rejection of a ready overlapping proposal, independent of order',async()=>{
  const f=await fixture(),a=await create(f,f.worker,'2035-11-04T05:10Z','2035-11-04T05:40Z'),b=await create(f,f.worker,'2035-11-04T06:30Z','2035-11-04T06:50Z');
  await create(f,f.worker,'2035-11-11T06:05Z','2035-11-11T06:15Z');const s=selection([a,b],[],'2035-11-04','2035-11-11'),r=await review(f,s);
- assert.deepEqual(row(r,a.recordId).issues.map(i=>i.code),['shift_overlap','proposed_shift_overlap']);assert.equal(row(r,b.recordId).issues[0].code,'proposed_shift_overlap');assert.deepEqual(await review(f,{...s,shifts:[...s.shifts].reverse()}),r);
- assert.equal((await run(f,command(f,s,r))).savedCount,0);
+ assert.deepEqual(row(r,a.recordId).issues,[{code:'shift_overlap'}]);assert.equal(row(r,b.recordId).status,'ready');assert.deepEqual(row(r,b.recordId).issues,[]);assert.deepEqual(await review(f,{...s,shifts:[...s.shifts].reverse()}),r);
+ const saved=await run(f,command(f,s,r));assert.equal(saved.savedCount,1);assert.equal(saved.rejectedCount,1);assert.equal(row(saved,a.recordId).status,'rejected');assert.equal(row(saved,b.recordId).status,'saved');
 });
 
 test('retained station is copied with current metadata, or rejected for individual review without being cleared',async()=>{
@@ -183,4 +183,30 @@ test('successful copy changes weekly publication planning but all-rejected copy 
  const weekly=()=>db.transaction(async c=>(await c.query('SELECT candidate_operations.weekly_review($1,$2,$3,$4,$5::jsonb) result',[f.manager.subject,f.manager.membershipId,f.scope,s.sourceWeek,JSON.stringify([a.recordId])])).rows[0].result);
  const original=await weekly(),copied=await run(f,command(f,s,await review(f,s))),changed=await weekly();assert.notEqual(original.planningReview,changed.planningReview);assert.ok(Number(copied.scheduleRevision)>Number(before));
  const duplicate=command(f,s,await review(f,s)),rejected=await run(f,duplicate);assert.equal(rejected.savedCount,0);assert.equal((await weekly()).planningReview,changed.planningReview);await run(f,duplicate);assert.equal((await weekly()).planningReview,changed.planningReview);
+});
+
+test('an approved staffing overlap warns without blocking independent drafts, but approval still refuses it and replay preserves the warning',async()=>{
+ const f=await fixture(),a=await create(f),n=await staffing(f),approved=randomUUID();
+ await admin.query("INSERT INTO candidate_operations.staffing_needs(id,restaurant_id,department,owner_id,title,position,starts_at,ends_at,minimum,source,status) VALUES($1,$2,'BOH',$3,'Private existing title','Cook','2035-10-30T17:00Z','2035-10-30T18:00Z',1,'Private existing source','approved')",[approved,f.scope,f.manager.membershipId]);await complete(f);
+ const s=selection([a],[n]),r=await review(f,s),item=row(r,n.recordId);assert.equal(item.status,'ready');assert.deepEqual(item.issues,[]);assert.deepEqual(item.warnings,[{code:'staffing_overlap_at_approval',message:'This staffing draft overlaps an approved need. Resolve the overlap before approval.'}]);
+ const serialized=JSON.stringify(r);for(const privateValue of [approved,'Private existing title','Private existing source'])assert.equal(serialized.includes(privateValue),false);
+ const c=command(f,s,r),saved=await run(f,c);assert.equal(saved.savedCount,2);assert.equal(row(saved,n.recordId).status,'saved');assert.deepEqual(row(saved,n.recordId).warnings,item.warnings);const before=await state(f);
+ const replay=await run(f,c);assert.equal(replay.replayed,true);assert.deepEqual(replay.items,saved.items);assert.deepEqual(await state(f),before);
+ await assert.rejects(run(f,{requestId:randomUUID(),locationId:f.scope,action:'staffing.approve',recordId:row(saved,n.recordId).recordId,expectedRevision:1,input:{note:'Fictional review',confirmed:true}}),e=>e.code==='staffing_overlap');assert.deepEqual(await state(f),before);
+});
+
+test('changed approved staffing overlap context invalidates the entire old copy review without writes',async()=>{
+ const f=await fixture(),a=await create(f),n=await staffing(f),s=selection([a],[n]),r=await review(f,s);assert.deepEqual(row(r,n.recordId).warnings,[]);
+ await admin.query("INSERT INTO candidate_operations.staffing_needs(restaurant_id,department,owner_id,title,position,starts_at,ends_at,minimum,source,status) VALUES($1,'BOH',$2,'Fictional changed need','Cook','2035-10-30T17:00Z','2035-10-30T18:00Z',1,'Fictional changed source','approved')",[f.scope,f.manager.membershipId]);await complete(f);
+ const before=await state(f);await assert.rejects(run(f,command(f,s,r)),e=>e.code==='copy_review_changed');assert.deepEqual(await state(f),before);
+ const fresh=await review(f,s);assert.notEqual(fresh.reviewToken,r.reviewToken);assert.equal(row(fresh,n.recordId).warnings[0].code,'staffing_overlap_at_approval');assert.equal((await run(f,command(f,s,fresh))).savedCount,2);
+});
+
+test('staffing warning uses approval department/job overlap rules and excludes touching endpoints and draft needs',async()=>{
+ const f=await fixture(),a=await create(f),n=await staffing(f),s=selection([a],[n]),r=await review(f,s);
+ for(const [department,job,start,end,status] of [['BOH','Cook','2035-10-30T14:00Z','2035-10-30T16:00Z','approved'],['BOH','Cook','2035-10-30T20:00Z','2035-10-30T21:00Z','approved'],['FOH','Cook','2035-10-30T17:00Z','2035-10-30T18:00Z','approved'],['BOH','Server','2035-10-30T17:00Z','2035-10-30T18:00Z','approved'],['BOH','Cook','2035-10-30T17:00Z','2035-10-30T18:00Z','draft']]){
+  await admin.query("INSERT INTO candidate_operations.staffing_needs(restaurant_id,department,owner_id,title,position,starts_at,ends_at,minimum,source,status) VALUES($1,$2,$3,'Fictional non-conflicting need',$4,$5,$6,1,'Fictional source',$7)",[f.scope,department,f.manager.membershipId,job,start,end,status]);
+ }await complete(f);
+ const fresh=await review(f,s);assert.equal(fresh.reviewToken,r.reviewToken);assert.deepEqual(row(fresh,n.recordId).warnings,[]);const saved=await run(f,command(f,s,r));assert.equal(saved.savedCount,2);
+ const approved=await run(f,{requestId:randomUUID(),locationId:f.scope,action:'staffing.approve',recordId:row(saved,n.recordId).recordId,expectedRevision:1,input:{note:'Fictional non-conflicting approval',confirmed:true}});assert.equal(approved.revision,2);
 });
