@@ -37,6 +37,24 @@ function instant(value: unknown): string {
   throw new CommandError(400,'invalid_time');
  return new Date(value).toISOString();
 }
+export function parseCopySelection(raw: unknown) {
+ const selection=object(raw);keys(selection,['sourceWeek','targetWeek','shifts','staffing'],['sourceWeek','targetWeek','shifts','staffing']);
+ for(const key of ['sourceWeek','targetWeek']){
+  const day=selection[key];if(typeof day!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(day)||!Number.isFinite(Date.parse(day+'T12:00:00Z'))||new Date(day+'T12:00:00Z').toISOString().slice(0,10)!==day)throw new CommandError(400,'invalid_copy_week');
+ }
+ const days=(Date.parse(String(selection.targetWeek))-Date.parse(String(selection.sourceWeek)))/86400000;
+ if(days<7||days>364||days%7!==0)throw new CommandError(400,'invalid_copy_week');
+ const checked=(family:'shifts'|'staffing')=>{
+  const values=selection[family];if(!Array.isArray(values)||values.length>100||family==='shifts'&&values.length===0)throw new CommandError(400,'invalid_copy_selection');
+  const rows=values.map(value=>{const row=object(value);keys(row,['id','revision','startOccurrence','endOccurrence'],['id','revision']);
+   if(!Number.isSafeInteger(row.revision)||Number(row.revision)<1||Number(row.revision)>2147483646)throw new CommandError(400,'invalid_revision');
+   const occurrence=(key:string)=>{const value=row[key]??'';if(typeof value!=='string'||!['','earlier','later'].includes(value)||Object.hasOwn(row,key)&&row[key]===null)throw new CommandError(400,'invalid_copy_occurrence');return value;};
+   return {id:identifier(row.id).toLowerCase(),revision:Number(row.revision),startOccurrence:occurrence('startOccurrence'),endOccurrence:occurrence('endOccurrence')};
+  }).sort((a,b)=>a.id.localeCompare(b.id));
+  if(new Set(rows.map(row=>row.id)).size!==rows.length)throw new CommandError(400,'invalid_copy_selection');return rows;
+ };
+ return {sourceWeek:selection.sourceWeek as string,targetWeek:selection.targetWeek as string,shifts:checked('shifts'),staffing:checked('staffing')};
+}
 export function parseCommand(raw: unknown, restaurantId: string) {
  const c=object(raw);
  keys(c,['requestId','locationId','action','recordId','expectedRevision','input','clientCapturedAt'],
@@ -44,7 +62,13 @@ export function parseCommand(raw: unknown, restaurantId: string) {
  if(c.locationId!==restaurantId) throw new CommandError(403,'scope_mismatch');
  const requestId=identifier(c.requestId),input=object(c.input);
  let payload: Record<string,unknown>;
- if(c.action==='leave.resolve'){
+ if(c.action==='shift.copy-week'){
+  if(Object.hasOwn(c,'recordId')||Object.hasOwn(c,'expectedRevision'))throw new CommandError(400,'invalid_copy_command');
+  keys(input,['sourceWeek','targetWeek','shifts','staffing','reviewToken','note','confirmed'],['sourceWeek','targetWeek','shifts','staffing','reviewToken','note','confirmed']);
+  if(input.confirmed!==true||typeof input.reviewToken!=='string'||!/^[0-9a-f]{64}$/.test(input.reviewToken))throw new CommandError(400,'invalid_copy_command');
+  const {reviewToken,note,confirmed,...selection}=input;
+  payload={action:c.action,input:{...parseCopySelection(selection),reviewToken,note:string(note,2000),confirmed}};
+ }else if(c.action==='leave.resolve'){
   if(!Number.isSafeInteger(c.expectedRevision)||Number(c.expectedRevision)<1||Number(c.expectedRevision)>2)throw new CommandError(400,'invalid_revision');
   keys(input,['note','reviewToken','evidence'],['note','reviewToken','evidence']);
   if(typeof input.reviewToken!=='string'||!/^[0-9a-f]{64}$/.test(input.reviewToken)||!Array.isArray(input.evidence)||input.evidence.length>20)throw new CommandError(400,'invalid_leave_review_fields');
@@ -291,7 +315,9 @@ export async function executeTask(
  try {
   return await database.transaction(async connection=>{
    const response=await connection.query(
-    command.payload.action==='leave.resolve'
+    command.payload.action==='shift.copy-week'
+     ?'SELECT candidate_operations.copy_schedule_week($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
+    :command.payload.action==='leave.resolve'
      ?'SELECT candidate_operations.leave_review_command($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
     :String(command.payload.action).startsWith('correction.')
      ?'SELECT candidate_operations.completed_shift_correction_command($1,$2::uuid,$3,$4::uuid,$5::jsonb) AS result'
@@ -338,10 +364,20 @@ export async function executeTask(
    if(!result||!uuid.test(result.recordId)||!Number.isInteger(result.revision)||!Number.isInteger(result.workspaceRevision)
     ||result.requestId!==command.requestId||typeof result.appliedAt!=='string'||typeof result.replayed!=='boolean')
     throw new Error('invalid_database_result');
+   if(command.payload.action==='shift.copy-week'){
+    const selection=command.payload.input as ReturnType<typeof parseCopySelection>,expected=new Set([...selection.shifts.map(row=>'shift:'+row.id),...selection.staffing.map(row=>'staffing:'+row.id)]);
+    if(result.recordId!==command.requestId||result.revision!==1||!Array.isArray(result.items)||result.items.length!==expected.size)throw new Error('invalid_copy_result');
+    let saved=0;for(const item of result.items){const key=item?.kind+':'+item?.id;
+     if(!expected.delete(key)||!['saved','rejected'].includes(item.status)||!Array.isArray(item.issues)||item.status==='saved'&&(!uuid.test(item.recordId)||item.revision!==1||item.issues.length)||item.status==='rejected'&&(!item.issues.length||item.recordId!==undefined))throw new Error('invalid_copy_result');
+     if(item.status==='saved')saved++;
+    }
+    if(result.savedCount!==saved||result.rejectedCount!==result.items.length-saved||!Number.isSafeInteger(result.scheduleRevision)||!Number.isSafeInteger(result.inputRevision))throw new Error('invalid_copy_result');
+   }
    return result as TaskResult;
   });
  } catch(error) {
   const e=error as {code?:string;message?:string};
+  if(e.code==='P0001'&&e.message==='copy_review_changed')throw new CommandError(409,e.message);
   if(e.code==='42501') throw new CommandError(403,e.message??'denied');
   if(e.code==='P0001'&&['leave_review_changed','leave_review_resolved','leave_review_source_unavailable','leave_review_evidence_changed','correction_source_ineligible','correction_source_conflict','correction_pending','correction_not_pending','correction_history_limit','correction_no_change','ownership_notice_unresolved','attendance_duplicate','attendance_source_ineligible','attendance_voided','attendance_history_limit','attendance_already_reviewed','attendance_not_reviewed','request_payload_conflict','revision_conflict','phase_conflict','shift_ended','active_shift_time_conflict','shift_conflict','closing_zone_conflict','attention_pending','attention_not_pending','checkout_pending','dish_cycle_conflict','dish_shape_conflict','availability_replacement_conflict','availability_shift_conflict','draft_reference_only','schedule_inputs_incomplete','station_assignment_not_migrated','shift_overlap','approved_time_off_conflict','linked_shift_protected','linked_task_pending','linked_close_protected','time_off_impact_conflict','time_off_cancellation_not_migrated','station_name_immutable','station_title_conflict','station_setup_reference_only','goal_guide_changed','publication_review_required','publication_linked_work_held','station_goal_reviewer_unavailable','staffing_overlap','staffing_publication_review_required','closing_publication_review_required','planning_review_conflict','weekly_scope_review_required','closing_selection_conflict','closing_transfer_selection_conflict','completed_close_protected','coverage_offer_exists','offer_changed','volunteer_missing','volunteer_conflict','replacement_consent_required','replacement_no_longer_eligible'].includes(e.message??''))
    throw new CommandError(409,e.message??'conflict');

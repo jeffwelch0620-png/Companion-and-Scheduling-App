@@ -232,6 +232,10 @@
     {
       "file": "058_retrospective_time_off_review.sql",
       "sha256": "0a4dc2c632a6d07cda17d13f11fbd6c39d7a6df4345cc61e0b0ed7fe5aebfe80"
+    },
+    {
+      "sha256": "7c4bbcb97673d9d1053b5ac5fdca4299006983606b761e25edec2f3cbc9c3b9f",
+      "file": "059_schedule_copy_backend.sql"
     }
   ]
 }
