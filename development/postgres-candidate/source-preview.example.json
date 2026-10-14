@@ -1,0 +1,187 @@
+{
+  "version": 1,
+  "organizationId": "fictional-source-org",
+  "source": {
+    "system": "reviewed-snapshot",
+    "tenant": "fictional-source-tenant",
+    "capturedAt": "2035-11-01T12:00:00Z",
+    "scopes": [
+      {
+        "storeId": "fictional-store-a",
+        "externalStoreId": "external-a",
+        "timezone": "America/New_York",
+        "watermark": "fictional-file-1",
+        "endOfSource": true,
+        "coverage": {
+          "roster": {
+            "complete": true,
+            "count": 1,
+            "inactiveIncluded": true,
+            "scheduleOnlyIncluded": true
+          },
+          "timeOff": {
+            "complete": true,
+            "count": 0,
+            "from": "2035-11-01",
+            "to": "2035-11-07"
+          }
+        },
+        "members": [
+          {
+            "sourceId": "fixture-worker",
+            "sourceRevision": 2,
+            "name": "Fictional employee",
+            "department": "Kitchen",
+            "position": "Cook",
+            "active": true,
+            "scheduleOnly": false,
+            "scheduleJobs": [
+              "Cook",
+              "Prep"
+            ]
+          }
+        ],
+        "timeOff": []
+      },
+      {
+        "storeId": "fictional-store-b",
+        "externalStoreId": "external-b",
+        "timezone": "America/New_York",
+        "watermark": "fictional-file-1",
+        "endOfSource": true,
+        "coverage": {
+          "roster": {
+            "complete": true,
+            "count": 1,
+            "inactiveIncluded": true,
+            "scheduleOnlyIncluded": true
+          },
+          "timeOff": {
+            "complete": true,
+            "count": 1,
+            "from": "2035-11-01",
+            "to": "2035-11-07"
+          }
+        },
+        "members": [
+          {
+            "sourceId": "fixture-worker",
+            "sourceRevision": 3,
+            "name": "Fictional employee",
+            "department": "Kitchen",
+            "position": "Cook",
+            "active": true,
+            "scheduleOnly": false,
+            "scheduleJobs": [
+              "Cook",
+              "Prep"
+            ]
+          }
+        ],
+        "timeOff": [
+          {
+            "sourceId": "fixture-leave",
+            "sourceRevision": 1,
+            "memberSourceId": "fixture-worker",
+            "department": "Kitchen",
+            "start": "2035-11-04T01:30:00-04:00",
+            "end": "2035-11-04T01:30:00-05:00",
+            "status": "approved"
+          }
+        ]
+      }
+    ]
+  },
+  "mappings": [
+    {
+      "storeId": "fictional-store-a",
+      "externalStoreId": "external-a",
+      "kind": "member",
+      "sourceId": "fixture-worker",
+      "sourceRevision": 2,
+      "targetId": "10000000-0000-0000-0000-000000000010",
+      "personId": "10000000-0000-0000-0000-000000000001",
+      "mappingRevision": 1,
+      "expectedTargetRevision": 7
+    },
+    {
+      "storeId": "fictional-store-b",
+      "externalStoreId": "external-b",
+      "kind": "member",
+      "sourceId": "fixture-worker",
+      "sourceRevision": 3,
+      "targetId": "10000000-0000-0000-0000-000000000011",
+      "personId": "10000000-0000-0000-0000-000000000001",
+      "mappingRevision": 1,
+      "expectedTargetRevision": null
+    },
+    {
+      "storeId": "fictional-store-b",
+      "externalStoreId": "external-b",
+      "kind": "timeOff",
+      "sourceId": "fixture-leave",
+      "sourceRevision": 1,
+      "targetId": "10000000-0000-0000-0000-000000000020",
+      "mappingRevision": 1,
+      "expectedTargetRevision": null
+    }
+  ],
+  "target": {
+    "organizationId": "fictional-source-org",
+    "capturedAt": "2035-11-01T12:05:00Z",
+    "people": [
+      {
+        "id": "10000000-0000-0000-0000-000000000001",
+        "name": "Fictional employee",
+        "active": true
+      }
+    ],
+    "stores": [
+      {
+        "id": "fictional-store-a",
+        "timezone": "America/New_York",
+        "departments": [
+          "Kitchen",
+          "Service"
+        ],
+        "jobs": [
+          "Cook",
+          "Prep"
+        ],
+        "inputRevision": 11,
+        "members": [
+          {
+            "id": "10000000-0000-0000-0000-000000000010",
+            "personId": "10000000-0000-0000-0000-000000000001",
+            "revision": 7,
+            "name": "Fictional employee",
+            "department": "Kitchen",
+            "position": "Cook",
+            "active": true,
+            "scheduleOnly": false,
+            "scheduleJobs": [
+              "Cook",
+              "Prep"
+            ]
+          }
+        ],
+        "timeOff": []
+      },
+      {
+        "id": "fictional-store-b",
+        "timezone": "America/New_York",
+        "departments": [
+          "Kitchen",
+          "Service"
+        ],
+        "jobs": [
+          "Cook",
+          "Prep"
+        ],
+        "inputRevision": 8,
+        "members": [],
+        "timeOff": []
+      }
+    ]
+  }
+}
