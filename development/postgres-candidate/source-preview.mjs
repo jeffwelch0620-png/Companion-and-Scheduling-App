@@ -1,6 +1,7 @@
 // Read-only normalized-file review. No database, filesystem or network dependency.
 import {createHash} from 'node:crypto';
 export const sourcePreviewLimits=Object.freeze({bytes:2*1024*1024,stores:20,people:2000,rowsPerFamily:2000,mappings:8000});
+const reviewRequired=new Set(['target_record_omitted_review','unused_mapping']);
 const bad=code=>{throw new TypeError(code);};
 const object=x=>x!==null&&typeof x==='object'&&!Array.isArray(x)&&Object.getPrototypeOf(x)===Object.prototype;
 function shape(x,keys){if(!object(x)||Object.keys(x).some(k=>!keys.includes(k))||keys.some(k=>!Object.hasOwn(x,k)))bad('invalid_snapshot_shape');}
@@ -36,7 +37,7 @@ function memberShape(m,source){
 function leaveShape(r,source){
  shape(r,source?['sourceId','sourceRevision','memberSourceId','department','start','end','status']:['id','revision','memberId','department','start','end','status']);
  const start=instant(r.start),end=instant(r.end);
- if(!(source?text(r.sourceId)&&rev(r.sourceRevision)&&text(r.memberSourceId):uuid(r.id)&&rev(r.revision)&&uuid(r.memberId))||!text(r.department)||start===null||end===null||end<=start||!['pending','approved','declined'].includes(r.status))bad('invalid_leave_snapshot');
+ if(!(source?text(r.sourceId)&&rev(r.sourceRevision)&&text(r.memberSourceId):uuid(r.id)&&rev(r.revision)&&uuid(r.memberId))||!text(r.department)||start===null||end===null||end<=start||!(source?['pending','approved','declined','cancelled','withdrawn']:['pending','approved','declined']).includes(r.status))bad('invalid_leave_snapshot');
 }
 
 export function parseSourcePreviewFile(body){
@@ -61,7 +62,7 @@ export function previewSourceMapping(input){
  list(source.scopes,sourcePreviewLimits.stores);list(target.stores,sourcePreviewLimits.stores);list(target.people,sourcePreviewLimits.people);list(mappings,sourcePreviewLimits.mappings);
  if(!source.scopes.length)bad('empty_snapshot_scope');
  const issues=[],rows=[],scopes=[],seenTargets=new Set(),seenStores=new Set(),seenExternalStores=new Set(),usedMappings=new Set();
- const issue=(code,storeId,kind,sourceId)=>issues.push({code,storeId,kind,sourceId});
+ const issue=(code,storeId,kind,sourceId,memberSourceId)=>issues.push({code,severity:reviewRequired.has(code)?'review_required':'blocking',storeId,kind,sourceId,...(memberSourceId===undefined?{}:{memberSourceId})});
  const people=new Map();for(const p of target.people){shape(p,['id','name','active']);if(!uuid(p.id)||!text(p.name)||typeof p.active!=='boolean'||people.has(p.id.toLowerCase()))bad('invalid_person_snapshot');people.set(p.id.toLowerCase(),p);}
  const stores=new Map(),targetIds=new Set();
  for(const t of target.stores){
@@ -90,8 +91,13 @@ export function previewSourceMapping(input){
   const mappedMembers=new Map(),sourcePeople=new Map(),sourceCounts=new Map(),represented=new Set();
   for(const [kind,records]of[['member',s.members],['timeOff',s.timeOff]])for(const r of records){const k=key(s.storeId,s.externalStoreId,kind,r.sourceId);sourceCounts.set(k,(sourceCounts.get(k)??0)+1);if(kind==='member'){const m=map.get(k);if(m){const person=m.personId.toLowerCase();sourcePeople.set(person,(sourcePeople.get(person)??0)+1);}}}
   function review(kind,r){
-   const k=key(s.storeId,s.externalStoreId,kind,r.sourceId),codes=[],m=map.get(k);const add=code=>{codes.push(code);issue(code,s.storeId,kind,r.sourceId);};
+   const k=key(s.storeId,s.externalStoreId,kind,r.sourceId),codes=[],m=map.get(k);const add=(code,memberSourceId)=>{codes.push(code);issue(code,s.storeId,kind,r.sourceId,memberSourceId);};
    if(sourceCounts.get(k)>1)add('duplicate_source_record');
+   // Members are reviewed first; report their failed dependency even when the leave's own alias is absent.
+   if(kind==='timeOff'){
+    if(!mappedMembers.has(r.memberSourceId))add(sourceCounts.has(key(s.storeId,s.externalStoreId,'member',r.memberSourceId))?'leave_member_blocked':'leave_member_mapping_required',r.memberSourceId);
+    if(['cancelled','withdrawn'].includes(r.status))add('leave_withdrawal_policy_required');
+   }
    if(!m)add('identity_mapping_required');else{
     usedMappings.add(k);if(m.sourceRevision!==r.sourceRevision)add('source_mapping_stale');
     const id=m.targetId.toLowerCase(),all=(kind==='member'?t?.members:t?.timeOff)??[],existing=all.find(x=>x.id.toLowerCase()===id);
@@ -105,7 +111,7 @@ export function previewSourceMapping(input){
      if(t&&(!t.departments.includes(r.department)||!t.jobs.includes(r.position)||r.scheduleJobs.some(j=>!t.jobs.includes(j))))add('job_or_department_mapping_required');
      if(!codes.length)mappedMembers.set(r.sourceId,{id,department:r.department});
     }else{
-     const member=mappedMembers.get(r.memberSourceId);if(!member)add('leave_member_mapping_required');
+     const member=mappedMembers.get(r.memberSourceId);
      if(t&&!t.departments.includes(r.department))add('leave_department_mapping_required');
      if(existing&&member&&existing.memberId.toLowerCase()!==member.id)add('leave_owner_binding_conflict');
      if(existing&&existing.department!==r.department)add('leave_scope_binding_conflict');
@@ -115,7 +121,7 @@ export function previewSourceMapping(input){
      rows.push({storeId:s.storeId,kind,sourceId:r.sourceId,targetId:id,personId:kind==='member'?m.personId.toLowerCase():null,sourceRevision:r.sourceRevision,mappingRevision:m.mappingRevision,expectedTargetRevision:m.expectedTargetRevision,status:existing?(equal(before,after)?'unchanged':'changed'):'new',changedFields:before?Object.keys(after).filter(k=>!equal(before[k],after[k])):[],issues:[]});return;
     }
    }
-   rows.push({storeId:s.storeId,kind,sourceId:r.sourceId,targetId:m?.targetId.toLowerCase()??null,status:'blocked',changedFields:[],issues:codes});
+   rows.push({storeId:s.storeId,kind,sourceId:r.sourceId,targetId:m?.targetId.toLowerCase()??null,status:'blocked',changedFields:[],issues:codes,...(kind==='timeOff'&&codes.some(code=>['leave_member_blocked','leave_member_mapping_required'].includes(code))?{memberSourceId:r.memberSourceId}:{})});
   }
   s.members.forEach(r=>review('member',r));s.timeOff.forEach(r=>review('timeOff',r));
   if(t)for(const [kind,entries] of [['member',t.members],['timeOff',t.timeOff]])for(const r of entries){
@@ -125,7 +131,7 @@ export function previewSourceMapping(input){
   scopes.push({storeId:s.storeId,externalStoreId:s.externalStoreId,timezone:s.timezone,watermark:s.watermark,inputRevision:t?.inputRevision??null,coverageClaim:scopeIssues.some(c=>['source_coverage_incomplete','source_count_mismatch'].includes(c))?'incomplete':'declared_complete',coverage:{rosterCount:s.members.length,timeOffCount:s.timeOff.length,from:c.timeOff.from,to:c.timeOff.to},targetContext:t&&t.timezone===s.timezone?'supplied':'needs_review',issues:scopeIssues});
  }
  for(const [k,m] of map)if(!usedMappings.has(k))issue('unused_mapping',m.storeId,m.kind,m.sourceId);
- const sort=(a,b)=>{const x=key(a.storeId,a.kind??'',a.sourceId??'',a.targetId??'',a.code??''),y=key(b.storeId,b.kind??'',b.sourceId??'',b.targetId??'',b.code??'');return x<y?-1:x>y?1:0;};
+ const sort=(a,b)=>{const x=key(a.storeId,a.kind??'',a.sourceId??'',a.targetId??'',a.code??''),y=key(b.storeId,b.kind??'',b.sourceId??'',b.targetId??'',b.code??'');if(x!==y)return x<y?-1:1;const ax=JSON.stringify(canonical(a)),bx=JSON.stringify(canonical(b));return ax<bx?-1:ax>bx?1:0;};
  rows.sort(sort);issues.sort(sort);scopes.sort(sort);
- return {purpose:'read-only-source-mapping-preview',version:1,status:issues.length?'blocked':'reviewable',organizationId:input.organizationId,source:{system:source.system,tenant:source.tenant,capturedAt:source.capturedAt,digest:digest(source)},target:{capturedAt:target.capturedAt,digest:digest(target)},mappingDigest:digest(mappings),canApply:false,completenessCertified:false,accessProvisioned:false,requires:['verified-source-coverage','current-authorized-target-read','independent-identity-access-review','reviewed-application-contract'],scopes,rows,issues,counts:Object.fromEntries(['new','unchanged','changed','omitted','blocked'].map(status=>[status,rows.filter(r=>r.status===status).length]))};
+ return {purpose:'read-only-source-mapping-preview',version:1,status:issues.some(i=>i.severity==='blocking')?'blocked':issues.length?'review_required':'reviewable',organizationId:input.organizationId,source:{system:source.system,tenant:source.tenant,capturedAt:source.capturedAt,digest:digest(source)},target:{capturedAt:target.capturedAt,digest:digest(target)},mappingDigest:digest(mappings),canApply:false,completenessCertified:false,accessProvisioned:false,requires:['verified-source-coverage','current-authorized-target-read','independent-identity-access-review','reviewed-application-contract'],scopes,rows,issues,counts:Object.fromEntries(['new','unchanged','changed','omitted','blocked'].map(status=>[status,rows.filter(r=>r.status===status).length]))};
 }
