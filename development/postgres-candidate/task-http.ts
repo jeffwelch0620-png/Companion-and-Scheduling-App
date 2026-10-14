@@ -107,7 +107,7 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
    const session=await verifyToken(auth.slice(7));
    const command=['commands','week-review','copy-review','batch-review'].includes(resource)?await body(request):undefined;
    if(resource==='schedule-viewer'&&url.search)throw new CommandError(400,'invalid_query');
-   const queryKeys=resource==='leave-reviews'&&!taskId?['after','limit','from','to','status']:resource==='completed-shifts'&&!taskId?['after','limit','asOf','from','to']:resource==='shift-corrections'&&!taskId?['after','limit','from','to']:resource==='attendance'&&!taskId?['after','limit','from','to','shift']:['after','limit'];
+   const queryKeys=resource==='staffing'?['after','limit','from','to','status','copyRequest']:resource==='leave-reviews'&&!taskId?['after','limit','from','to','status']:resource==='completed-shifts'&&!taskId?['after','limit','asOf','from','to']:resource==='shift-corrections'&&!taskId?['after','limit','from','to']:resource==='attendance'&&!taskId?['after','limit','from','to','shift']:['after','limit'];
    if([...url.searchParams.keys()].some(k=>!queryKeys.includes(k)||url.searchParams.getAll(k).length>1)
     ||['commands','week-review','copy-review','batch-review'].includes(resource)&&url.search||taskId&&!['attendance-history','shift-correction-history'].includes(resource)&&url.search)
     throw new CommandError(400,'invalid_query');
@@ -117,9 +117,11 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
    if(after!==null&&(['attendance-history','shift-correction-history'].includes(resource)?!/^(0|[1-9][0-9]{0,2}|1000)$/.test(after):!uuid.test(after))||!/^([1-9]|[1-9][0-9]|100)$/.test(limitText))
     throw new CommandError(400,'invalid_pagination');
    const from=url.searchParams.get('from'),to=url.searchParams.get('to');
+   const staffingStatus=resource==='staffing'?url.searchParams.get('status'):null,copyRequest=resource==='staffing'?url.searchParams.get('copyRequest'):null;
+   if(staffingStatus!==null&&!['draft','approved','retired'].includes(staffingStatus)||copyRequest!==null&&!uuid.test(copyRequest))throw new CommandError(400,'invalid_staffing_query');
    const attendanceShift=url.searchParams.get('shift');
    if(attendanceShift!==null&&(!uuid.test(attendanceShift)||from!==null||to!==null))throw new CommandError(400,'invalid_attendance_query');
-   if((from===null)!==(to===null)||[from,to].some(value=>value!==null&&(!/^\d{4}-\d{2}-\d{2}$/.test(value)||!Number.isFinite(Date.parse(value+'T12:00:00Z'))||new Date(value+'T12:00:00Z').toISOString().slice(0,10)!==value))||from!==null&&to!==null&&from>to)throw new CommandError(400,resource==='leave-reviews'?'invalid_leave_review_query':['completed-shifts','shift-corrections'].includes(resource)?'invalid_correction_query':'invalid_attendance_query');
+   if((from===null)!==(to===null)||[from,to].some(value=>value!==null&&(!/^\d{4}-\d{2}-\d{2}$/.test(value)||!Number.isFinite(Date.parse(value+'T12:00:00Z'))||new Date(value+'T12:00:00Z').toISOString().slice(0,10)!==value))||from!==null&&to!==null&&from>to)throw new CommandError(400,resource==='staffing'?'invalid_staffing_query':resource==='leave-reviews'?'invalid_leave_review_query':['completed-shifts','shift-corrections'].includes(resource)?'invalid_correction_query':'invalid_attendance_query');
    const data=await database.transaction(async connection=>{
     if(resource!=='commands')await connection.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY',[]);
     let identity:TrustedIdentity;
@@ -166,7 +168,7 @@ export function createTaskHandler(database:Database,verifyToken:(token:string)=>
     }
     if(resource==='schedule-viewer'){return result((await connection.query('SELECT candidate_operations.schedule_viewer($1,$2::uuid,$3) AS result',[identity.subject,identity.membershipId,scope])).rows[0]);}
     if(resource==='staffing'){
-     return result((await connection.query('SELECT candidate_operations.list_staffing($1,$2::uuid,$3,$4::uuid,$5::integer) AS result',[identity.subject,identity.membershipId,scope,after,Number(limitText)])).rows[0]);
+     return result((await connection.query('SELECT candidate_operations.list_staffing($1,$2::uuid,$3,$4::uuid,$5::integer,$6::date,$7::date,$8,$9::uuid) AS result',[identity.subject,identity.membershipId,scope,after,Number(limitText),from,to,staffingStatus,copyRequest])).rows[0]);
     }
     if(resource==='cancellation-review'){
      if(!taskId)throw new CommandError(400,'shift_identifier_required');

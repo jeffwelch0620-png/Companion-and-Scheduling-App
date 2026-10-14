@@ -34,4 +34,8 @@ export function groupIssueMessage(issue:GroupIssue):string;
 export function groupRecovery(storage:any,scope:string,actor:string):{requestId:string;action:GroupAction;locationId:string;actorId:string}|null;
 export function setGroupRecovery(storage:any,command:any,actor:string):void;
 export function clearGroupRecovery(storage:any,scope:string,actor:string):void;
-export function loadCopyStaffing(call:GroupCall,w:Workspace):Promise<RecordOf<'staffing'>[]>;
+export function loadCopyStaffing(call:GroupCall,w:Workspace,sourceWeek:string):Promise<RecordOf<'staffing'>[]>;
+
+export function loadCopiedStaffing(call:GroupCall,w:Workspace,requestId:string):Promise<RecordOf<'staffing'>[]>;
+export function refreshCopySelection(selection:CopySelection,sources:{shifts:RecordOf<'shift'>[];staffing:RecordOf<'staffing'>[]}):{selection:CopySelection;dropped:{kind:string;id:string}[]};
+export function refreshRejectedCopy(call:GroupCall,w:Workspace,selection:CopySelection):Promise<{selection:CopySelection;dropped:{kind:string;id:string}[];staffing:RecordOf<'staffing'>[]}>;

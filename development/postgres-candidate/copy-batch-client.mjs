@@ -93,23 +93,41 @@ export function checkedGroupResult(action,body,command){
 }
 export function rejectedSelection(action,selection,result){const canonical=groupSelection(action,selection),rejected=new Set(result.items.filter(r=>r.status==='rejected').map(r=>r.kind+':'+r.id));return action==='shift.copy-week'?{...canonical,shifts:canonical.shifts.filter(r=>rejected.has('shift:'+r.id)),staffing:canonical.staffing.filter(r=>rejected.has('staffing:'+r.id))}:{...canonical,drafts:canonical.drafts.filter(r=>rejected.has('shift:'+r.id))};}
 export function restrictGroupSources(sources,selection){if(!selection)return sources;const shifts=new Set((selection.shifts??selection.drafts).map(r=>r.id)),staffing=new Set((selection.staffing??[]).map(r=>r.id));return {shifts:sources.shifts.filter(r=>shifts.has(r.id)),staffing:sources.staffing.filter(r=>staffing.has(r.id))};}
+export function refreshCopySelection(selection,sources){
+ const dropped=[];const refresh=(family,kind)=>selection[family].flatMap(row=>{const source=sources[family].find(r=>r.id===row.id);if(!source){dropped.push({kind,id:row.id});return [];}return [{...row,revision:source.revision}];});
+ return {selection:{...selection,shifts:refresh('shifts','shift'),staffing:refresh('staffing','staffing')},dropped};
+}
 const messages={revision_conflict:'The source changed. Reload and review the current record.',copy_source_unavailable:'This source is unavailable for copying.',copy_source_week_conflict:'This source is outside the selected week.',copy_duplicate:'An active copy already exists in the destination week.',copy_destination_started:'The destination start has passed. Refresh and choose future dates.',copy_occurrence_required:'Choose a separate first or second occurrence for the repeated start or end.',copy_time_nonexistent:'This local time does not exist when clocks change.',batch_occurrence_required:'Choose the first or second occurrence for each repeated time.',batch_time_nonexistent:'This local time does not exist when clocks change.',batch_source_unavailable:'This source is unavailable. Reload current drafts.',batch_source_ineligible:'This record needs individual review and cannot be batch edited.',batch_source_started:'The original shift has started. Refresh and use individual review.',batch_destination_started:'The proposed start has passed. Refresh and choose a future time.',batch_week_conflict:'The original and proposed starts must be in the selected week.',draft_reference_only:'Imported drafts need individual review.',linked_shift_protected:'Linked work needs individual review.',owner_denied:'This employee is not currently eligible in the shift’s department.',schedule_job_denied:'This scheduling job needs current eligibility.',station_needs_individual_review:'The retained station needs individual review; it will not be cleared.',approved_time_off_conflict:'Approved leave conflicts with this shift.',availability_shift_conflict:'Approved availability conflicts with this shift.',shift_overlap:'This employee has another booking at this time.',proposed_shift_overlap:'Selected proposed shifts conflict with each other.',depends_on_rejected_row:'This change depends on a rejected row vacating its original slot.',invalid_draft_duration:'The shift must last more than zero and no more than 24 elapsed hours.',invalid_staffing_department:'The staffing department needs an eligible roster.',staffing_overlap_at_approval:'This staffing draft overlaps an approved need and will need review before approval.'};
 export const groupIssueMessage=issue=>messages[issue.code]??'This row needs individual review ('+issue.code.replaceAll('_',' ')+').';
 const recoveryKey=(scope,actor)=>'jmax-copy-batch-recovery:'+encodeURIComponent(scope)+':'+encodeURIComponent(actor);
 export function groupRecovery(storage,scope,actor){try{const r=JSON.parse(storage?.getItem(recoveryKey(scope,actor))??'null');return r?.locationId===scope&&r.actorId===actor&&uuid(r.requestId)&&isGroupAction(r.action)?r:null;}catch{return null;}}
 export function setGroupRecovery(storage,command,actor){if(actor)try{storage?.setItem(recoveryKey(command.locationId,actor),JSON.stringify({locationId:command.locationId,actorId:actor,requestId:command.requestId,action:command.action}));}catch{}}
 export function clearGroupRecovery(storage,scope,actor){try{storage?.removeItem(recoveryKey(scope,actor));}catch{}}
-// The existing staffing endpoint is paged across the store. Refuse incomplete history rather than silently truncate it.
-export async function loadCopyStaffing(call,w){
- if(!hasGroupAccess(w))return [];const items=[],seen=new Set();let after=null,revisionValue=null;
- for(let page=0;page<100;page++){
-  const r=await call('/staffing?limit=100'+(after?'&after='+after:''));const b=r.body;
-  if(r.status!==200||!Array.isArray(b?.items)||b.items.length>100||!counter(b.workspaceRevision)||b.nextCursor!==null&&!uuid(b.nextCursor))throw Error('Staffing history is unavailable. No partial selection is shown.');
-  revisionValue??=b.workspaceRevision;if(b.workspaceRevision!==revisionValue)throw Error('Staffing changed while loading. Reload and review again.');
-  for(const row of b.items){if(row?.kind!=='staffing'||row.locationId!==w.location.id||!uuid(row.id)||!revision(row.revision)||!areaAllowed(w,row.area)||!instant(row.data?.start)||!instant(row.data?.end)||!['draft','approved','retired'].includes(row.data.status)||typeof row.data.title!=='string'||typeof row.data.position!=='string'||!Number.isInteger(row.data.minimum)||row.data.minimum<1||seen.has(row.id))throw invalid();seen.add(row.id);items.push(row);}
-  if(b.nextCursor===null){const fence=await call('/schedule-viewer');
-   if(fence.status!==200||fence.body?.workspaceRevision!==revisionValue||JSON.stringify(fence.body.me)!==JSON.stringify(w.me)||JSON.stringify({...fence.body.location,revision:0})!==JSON.stringify({...w.location,revision:0}))throw Error('Staffing or access changed. Reload and review again.');return items;}
-  if(!b.items.length||b.items.at(-1).id!==b.nextCursor||after&&b.nextCursor<=after)throw invalid();after=b.nextCursor;
+// Keep areaAllowed aligned with goal_authorized; any future leadership-based manage grant must change both.
+async function loadStaffingScope(call,w,query){
+ if(!hasGroupAccess(w))return [];
+ const params=new URLSearchParams(Object.entries(query).filter(([,value])=>value!==null));
+ for(let attempt=0;attempt<3;attempt++){
+  const items=[],seen=new Set();let after=null,version=null,changed=false;
+  for(let page=0;page<100;page++){
+   const response=await call('/staffing?limit=100&'+params.toString()+(after?'&after='+after:'')),b=response.body;
+   if(response.status!==200||!Array.isArray(b?.items)||b.items.length>100||!counter(b.inputRevision)||b.nextCursor!==null&&!uuid(b.nextCursor)||!fields(b.query,['from','to','status','copyRequest'])||Object.entries(query).some(([key,value])=>b.query[key]!==value))throw Error('Staffing records are unavailable. No partial selection is shown.');
+   version??=b.inputRevision;if(b.inputRevision!==version){changed=true;break;}
+   for(const row of b.items){if(row?.kind!=='staffing'||row.locationId!==w.location.id||!uuid(row.id)||!revision(row.revision)||!areaAllowed(w,row.area)||!instant(row.data?.start)||!instant(row.data?.end)||!['draft','approved','retired'].includes(row.data.status)||typeof row.data.title!=='string'||typeof row.data.position!=='string'||!Number.isInteger(row.data.minimum)||row.data.minimum<1||seen.has(row.id)||query.status!==null&&row.data.status!==query.status||query.from!==null&&(localDay(row.data.start,w.location.timezone)<query.from||localDay(row.data.start,w.location.timezone)>query.to))throw invalid();seen.add(row.id);items.push(row);}
+   if(b.nextCursor===null){const fence=await call('/schedule-viewer');
+    if(fence.status!==200||JSON.stringify(fence.body?.me)!==JSON.stringify(w.me)||JSON.stringify({...fence.body?.location,revision:0})!==JSON.stringify({...w.location,revision:0}))throw Error('Staffing access or configuration changed. Reload and review again.');
+    if(fence.body.inputRevision!==version){changed=true;break;}return items;
+   }
+   if(!b.items.length||b.items.at(-1).id!==b.nextCursor||after&&b.nextCursor<=after)throw invalid();after=b.nextCursor;
+   if(page===99)throw Error('Choose a shorter range; no partial staffing history is shown.');
+  }
+  if(!changed)throw invalid();
  }
- throw Error('Staffing history exceeds the complete-read limit. No partial staffing history is shown. Contact an administrator.');
+ throw Error('Staffing inputs changed while loading. Reload and review again; no partial selection is shown.');
 }
+export async function loadCopyStaffing(call,w,sourceWeek){if(!validDay(sourceWeek))throw invalid();return loadStaffingScope(call,w,{from:sourceWeek,to:nextDay(sourceWeek,6),status:'approved',copyRequest:null});}
+export async function refreshRejectedCopy(call,w,selection){
+ const staffing=selection.staffing.length?await loadCopyStaffing(call,w,selection.sourceWeek):[];
+ return {...refreshCopySelection(selection,groupSources({...w,records:[...w.records.filter(r=>r.kind!=='staffing'),...staffing]},selection.sourceWeek,'copy')),staffing};
+}
+export async function loadCopiedStaffing(call,w,requestId){if(!uuid(requestId))throw invalid();return loadStaffingScope(call,w,{from:null,to:null,status:null,copyRequest:requestId.toLowerCase()});}
