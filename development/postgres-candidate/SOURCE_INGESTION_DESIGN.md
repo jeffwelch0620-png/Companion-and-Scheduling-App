@@ -1,6 +1,6 @@
 # Reviewed source ingestion and scheduling completeness - design review
 
-Draft alongside [shared identity/access](SHARED_EMPLOYEE_IDENTITY_ACCESS_DESIGN.md), from PR50 main `ce1d3a7`. Source inspection and existing fictional evidence establish preparation boundaries. No exporter, live connector, import command, migration or completeness certification is added here.
+Design accepted in PR51 alongside [shared identity/access](SHARED_EMPLOYEE_IDENTITY_ACCESS_DESIGN.md), from PR50 main `ce1d3a7`. Source inspection and existing fictional evidence establish preparation boundaries. No exporter, live connector, import command, migration or completeness certification is added here.
 
 ## What exists and what is missing
 
@@ -71,9 +71,9 @@ A new mapping to a different person can change conflicts in every associated sto
 
 | ID | Decision | Current recommendation / status |
 | --- | --- | --- |
-| S01 | First source and format, plus who may certify completeness | Reviewed file/snapshot first; explicitly delegated importer/reviewer capability rather than `location.manage` alone. **Pending owner selection.** |
+| S01 | First source and format, plus who may certify completeness | Reviewed snapshot files first **selected by owner after PR51 acceptance**. Live connectors follow later. Who may certify completeness/import and their explicit capabilities remain **pending owner selection**; no `location.manage` shortcut. |
 | S02 | Field ownership and how external changes reconcile newer canonical edits | Canonical identity/access always shared; jobs/leave/availability/shift ownership explicitly assigned per source/scope. **Pending source selection and owner review.** |
-| S03 | Import failure semantics | Atomic per declared complete scope, no partial completeness; bounded batches whose coverage joins only after every part is verified. **Pending owner selection.** Schedule copy/batch partial saves remain selected. |
+| S03 | Import failure semantics | Atomic per declared completeness scope **selected by owner after PR51 acceptance**. No partial completeness; bounded parts join only after every part is verified. Schedule copy/batch partial saves remain selected. |
 | S04 | Missing/inactive source employee, withdrawn leave or removed job | Show a review finding; no automatic archive, deletion, consent or leave cancellation. **Pending detailed reconciliation policy.** |
 | S05 | Source coverage bounds, file size/row limits, retention and reviewer visibility | Specify from actual authorized source exports and platform limits, not arbitrary implementation defaults. **Pending real sanitized fixture and owner review.** |
 
@@ -101,3 +101,7 @@ No live export is needed to accept this design. A real importer, however, cannot
 First review this contract and the shared identity decisions. Next implement a read-only normalized mapping/coverage preview using fictional snapshots and one representative authorized sanitized format; it changes neither access nor scheduling completeness. Then add the separately reviewed coordinated application path and evidence gates, followed by real-source connector automation only when its source guarantees, scope and secrets are configured.
 
 Repository docs/fictional tests, real source ingestion, shared database application and Inventory integration are distinct milestones. No current source archive, retired table, person record or migration receipt is deleted by this design.
+
+## First read-only implementation
+
+The owner authorized the [normalized-file mapping preview](SOURCE_MAPPING_PREVIEW_CHECKPOINT.md). Version 1 supports bounded roster/job and time-off snapshots, explicit UUID aliases, supplied target revisions and internally checked coverage declarations. It never certifies completeness or supplies an application command. A sanitized representative real export/normalizer, current authorized target reader, remaining source policies and coordinated application remain separate.
