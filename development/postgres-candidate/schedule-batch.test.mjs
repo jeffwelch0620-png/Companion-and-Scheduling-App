@@ -1,6 +1,7 @@
 import test,{after} from 'node:test';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';import pg from 'pg';
 import {connection} from './test-config.mjs';import {fictionalStoreInsert} from './store-fixture.mjs';import {PostgresDatabase} from './postgres-driver.ts';
 import {executeTask,parseBatchSelection,parseCommand} from './task-adapter.ts';import {createTaskHandler} from './task-http.ts';
+import {ScheduleScreenSender} from './schedule-screen-client.mjs';
 const admin=new pg.Pool({...connection,user:'candidate_owner',max:5}),db=new PostgresDatabase({...connection,user:'candidate_runtime',max:5});
 after(async()=>{await db.close();await admin.end();});
 async function fixture(){
@@ -170,6 +171,32 @@ test('a receipt failure after final updates restores old slots and all audit/rev
  const f=await fixture(),a=await create(f),s=selection([proposal(a,f.worker)]),c=command(f,s,await review(f,s)),before=await state(f),fn='batch_receipt_'+randomUUID().replaceAll('-','');
  await admin.query(`CREATE FUNCTION candidate_operations.${fn}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.restaurant_id='${f.scope}' AND NEW.payload->>'action'='shift.save-batch' THEN RAISE EXCEPTION USING ERRCODE='22023',MESSAGE='fictional_batch_receipt_failure'; END IF; RETURN NEW; END $$`);await admin.query(`CREATE TRIGGER ${fn} BEFORE INSERT ON candidate_operations.command_receipts FOR EACH ROW EXECUTE FUNCTION candidate_operations.${fn}()`);
  try{await assert.rejects(run(f,c),e=>e.code==='fictional_batch_receipt_failure');assert.deepEqual(await state(f),before);}finally{await admin.query(`DROP TRIGGER ${fn} ON candidate_operations.command_receipts`);await admin.query(`DROP FUNCTION candidate_operations.${fn}()`);}
+});
+
+test('a forced final booking invariant rolls back the batch and returns non-retryable HTTP 500, clearing the frozen submission',async()=>{
+ const f=await fixture(),a=await create(f),b=await create(f,f.worker,'2035-10-23T17:00Z','2035-10-23T18:00Z'),s=selection([proposal(a,f.worker),proposal(b,f.worker,'2035-10-23T12:00','2035-10-23T13:00')]),c=command(f,s,await review(f,s)),before=await state(f),fn='zzz_batch_invariant_'+randomUUID().replaceAll('-','');
+ // Test-only AFTER trigger runs after the normal booking sync, without changing production SQL or disabling guards.
+ await admin.query(`CREATE FUNCTION candidate_operations.${fn}() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$ BEGIN IF NEW.restaurant_id='${f.scope}' AND NEW.revision>1 THEN DELETE FROM candidate_operations.person_shift_bookings WHERE shift_id=NEW.id; END IF; RETURN NEW; END $$`);
+ await admin.query(`CREATE TRIGGER ${fn} AFTER UPDATE ON candidate_operations.shift_references FOR EACH ROW EXECUTE FUNCTION candidate_operations.${fn}()`);
+ const handler=createTaskHandler(db,async()=>({subject:f.manager.subject,sessionId:f.manager.sessionId})),sender=new ScheduleScreenSender();
+ // Supply the backend's frozen envelope directly; batch forms remain a later slice and are not enabled here.
+ sender.pending={signature:JSON.stringify(c),command:structuredClone(c)};
+ try{
+  await assert.rejects(sender.retry(async(path,payload)=>{
+   assert.equal(path,'/commands');assert.deepEqual(payload,c);
+   const response=await handler(new Request(`http://candidate.invalid/api/operations/${f.scope}/commands`,{method:'POST',headers:{Authorization:'Bearer fictional','Content-Type':'application/json'},body:JSON.stringify(payload)}));
+   const body=await response.json();assert.equal(response.status,500);assert.deepEqual(body,{error:{code:'internal_invariant'}});return {status:response.status,body};
+  }),e=>e.status===500&&e.code==='internal_invariant'&&e.message==='Reload current drafts and contact an administrator.');
+  assert.equal(sender.pending,null);assert.deepEqual(await state(f),before);
+ }finally{await admin.query(`DROP TRIGGER ${fn} ON candidate_operations.shift_references`);await admin.query(`DROP FUNCTION candidate_operations.${fn}()`);}
+ const saved=await run(f,c);assert.equal(saved.savedCount,2);
+});
+
+test('only the exact database invariant maps to a known internal failure; unrelated errors remain uncertain',async()=>{
+ const f=await fixture(),a=await create(f),s=selection([proposal(a,f.worker)]),c=command(f,s,await review(f,s));
+ for(const [code,message] of [['XX000','different_internal_failure'],['08006','batch_booking_invariant_failure'],['40001','scope_coordination_retry']]){
+  const failure=Object.assign(Error(message),{code});await assert.rejects(executeTask({transaction:async()=>{throw failure;}},f.manager,f.scope,c),e=>e===failure);
+ }
 });
 
 test('both old and proposed people scopes are coordinated; held peer scope returns precise frozen-request retry without writes',async()=>{
