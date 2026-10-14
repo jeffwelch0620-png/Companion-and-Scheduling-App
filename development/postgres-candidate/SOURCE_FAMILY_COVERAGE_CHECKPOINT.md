@@ -1,0 +1,52 @@
+# V2 per-family source coverage and inactive leave review
+
+Prepared October 14, 2026, from accepted PR54 main `fd3dc3cc2422aa53a76c7b8b3439fbabd86f9ed0`, reviewed head `847bcb8ba4a0ead5be9b9a8feb371643ffffe6f9`. [Merged-main CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/38563485997) passed 913/913 with fresh migrations/snapshot, strict types and previews. This slice follows the reviewed sequence: family coverage first, then the owner-confirmed inactive historical leave rule. It remains draft preparation requiring its own review and merge approval.
+
+## Versioned family contract
+
+V1 inputs retain their accepted format, conservative combined coverage gate, row categories, report structure and behavior. Existing examples/tests remain. An exact V1 example-report SHA-256 regression protects byte-for-byte compatibility. The CLI accepts V1 and V2 through the same explicit-file path; neither can apply or certify anything.
+
+V2 keeps the root organization/source/target/mappings envelope but sets `version:2`. Each source scope has store/external-store/timezone/watermark, `coverage`, `members` and `timeOff`. Remove the old scope-level `endOfSource`; available families now carry their own end marker.
+
+| Source family | Exact declaration / records |
+| --- | --- |
+| Available roster | `coverage.roster` contains `available:true`, boolean `complete`, `count`, boolean `endOfSource`, `inactiveIncluded` and `scheduleOnlyIncluded`; `members` is the bounded array. |
+| Available time off | `coverage.timeOff` contains `available:true`, boolean `complete`, `count`, boolean `endOfSource`, inclusive local `from`/`to`; `timeOff` is the bounded array of overlapping records. |
+| Unavailable family | Its declaration is exactly `{ "available": false }` and the corresponding record field is `null`. No count, dates, complete flag or empty list is invented. Extra fields or a non-null list are refused. |
+| Explicit complete empty family | Available/complete/end marker are true, count is zero and records are `[]`, with roster inclusion flags or leave dates as appropriate. This differs from unavailable in the input, digest and report. |
+
+Each V2 report scope has `families.roster` and `families.timeOff`. Unavailable has `available:false`, `coverageClaim:'unavailable'`, `status:'unavailable'` and no count. Available has `coverageClaim:'declared_complete'` or `'incomplete'`, actual count, date range when applicable, `targetAvailable`, independent status, issue codes and row counts. No aggregate scope completeness is asserted. Claims still describe supplied declarations only; none is verified provider coverage or certification.
+
+Unavailable source families generate no comparisons, omissions or unused-alias findings for that family and cannot make another available family incomplete. Validating the envelope, configured store and reviewed identity dependencies still matters. A malformed or contradictory supplied input is refused rather than ignored. Available-family coverage errors are tagged with their family; another complete family can remain independently reviewable even when the overall report has blockers. If every family in a scope is unavailable, `source_families_unavailable` requires review without claiming a complete empty source.
+
+The supplied target retains its V1 member/person/configuration projection. V2 target `timeOff` may additionally be `null` to mean unavailable target leave data. A roster-only comparison can proceed without inventing target leave. If source leave is available but target leave is null, that family/its rows are blocked with `target_family_unavailable`; other families remain independently inspectable. Null never establishes target absence. Supplied target leave arrays still accept only pending/approved/declined. **Cancelled/withdrawn target states remain unsupported while candidate cancellation is unmigrated; revisit this with the shared target reader.**
+
+For leave-only source input, existing reviewed member aliases can resolve against the supplied target member's exact UUID/person/store/revision. This does not create a roster proposal or claim available roster coverage. Missing, new, wrong-store, rebound or stale aliases leave the dependent record blocked. Current source-member revisions cannot be verified when roster is unavailable; no roster source freshness or complete-person-wide conflict proof is inferred from that alias read.
+
+## Owner-confirmed inactive historical leave rule
+
+On October 14 the owner confirmed S04's exception: declined/cancelled/withdrawn source leave with no reviewed mapping and no matching target is a review-required `inactive_source_leave_untracked` finding, rather than an actionable new record or a blocker. This exception is V2-only so V1 behavior remains unchanged. It records the historical review obligation without changing leave, identities, memberships or grants.
+
+The current supplied-target format has no authoritative external-source absence lookup. Therefore this implementation establishes absence conservatively only when there is no leave mapping and the supplied target leave array is explicitly empty. A nonempty target without an alias remains unresolved; matching names, dates or departments cannot prove that a target is absent. A null target family is unavailable, not empty. The shared authorized target reader must later supply reviewed scoped absence/binding evidence to support broader negative lookups; an offline empty array is not proof of live database absence.
+
+Untracked inactive rows must still be structurally valid, unique and inside the declared leave window. Their historical department/member labels need not establish a current actionable identity because no reference is proposed. They remain review-required even if the former member no longer appears in the roster. V2 adds a `review_required` row category/count for these historical obligations; ordinary omission/unused-alias findings keep their existing row classifications.
+
+Cancelled/withdrawn rows with reviewed mappings remain blocked by `leave_withdrawal_policy_required`, including mappings to existing target leave. A mapping that proposes a new UUID is not equivalent to an untracked historical row and stays held. Unknown target identity, duplicates, outside-window records and malformed/unsupported states remain closed. A leave cancellation command/audit/resolution policy is not selected or implemented by this exception.
+
+## Fictional example and read-only limits
+
+```sh
+npm run source:preview --prefix development/postgres-candidate -- source-preview-v2.example.json
+```
+
+The [V2 fixture](source-preview-v2.example.json) is synthetic normalized input, **not a Toast export or a claim about Toast's raw schema**. It reports one unchanged roster member; source and target time off are explicitly unavailable. All reports retain `canApply:false`, `completenessCertified:false` and `accessProvisioned:false`. Overall exit codes remain 0 reviewable, 3 review-required, 2 blocked and 1 malformed/unavailable file. These statuses do not open scheduling or grant any permission.
+
+Bounds, explicit UTF-8 file handling, duplicate-key rejection, namespace/store/UUID validation, exact timestamps/DST and minimized diagnostic output remain. Preview reports are sensitive operator artifacts: never commit them or attach them to PRs. Public fixtures are fictional inputs only; private source/report material requires restricted handling.
+
+## Validation and next slice
+
+The focused V1/V2/follow-up/reference-mapping/manifest suite passes 56/56, with 15 new tests covering exact V1 compatibility, roster-only/unavailable families, complete empty versus missing leave, nullable target leave, unsupported target cancellation, independent coverage failures, leave-only alias dependency checks, all-unavailable review, inactive historical policy and unresolved/existing targets, malformed/duplicate/outside-window rows, ordering, CLI exits and byte/privacy preservation. Acceptance counts and full exact-head CI are recorded on the draft PR after validation.
+
+Only candidate preview/CLI/tests/fictional input and documentation change. Published 001-063, manifest and function snapshot remain unchanged; no SQL functions or migration are added. Any later separately needed SQL starts at the next free number, currently 064. Active Companion, Inventory and hosted services stay separate.
+
+Next: reviewed V2 fingerprint encoding/provenance and a pure Toast employee/job normalizer against the **owner-supplied authorized sanitized representative sample**. The selected source family is known; its exact schema/version, export filters, inactive/job coverage and consistency guarantees are not yet supplied. This V2 family envelope still requires reviewed integer record revisions and informational digests; it does not implement provider content fingerprints or invent revisions to accommodate Toast. Version the fingerprint extension explicitly before accepting a provider without trustworthy integer revisions. Do not normalize a guessed raw format, fetch live Toast or turn unavailable leave into complete empty coverage. Shared authz/target reads, certification, application and Inventory integration remain later authorized slices.
