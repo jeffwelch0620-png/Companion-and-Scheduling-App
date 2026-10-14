@@ -66,6 +66,8 @@ Names below describe the logical shared contract, not installed tables or approv
 
 An organization owner without a store employment membership must still have a verifiable person actor. Do not create fictitious employment rows merely to satisfy candidate actor foreign keys. Candidate commands currently bind member actors; the port must review person actor columns plus optional acting-membership attribution and update those definitions explicitly. Existing member actor IDs and snapshots remain historical evidence.
 
+Sharing a directory does not expose every person's fields to both interfaces. Employee projections include only authorized names and operational fields; contact information, compensation, other-store memberships, coworker grants and private personnel history need their own scoped reads. Both apps resolve display names through this controlled projection, not unrestricted SELECT on people or a copied complete directory. Ending one store membership does not disable another approved membership; global person suspension is a separate audited action.
+
 ## Identity and authorization boundary
 
 1. Personal sign-in proves a provider subject/session. The server verifies issuer, audience, signature, expiry and supported session claims. A client-selected name, member ID, store PIN, `owner_admin` title or capability array never proves the actor.
