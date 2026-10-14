@@ -248,6 +248,10 @@
     {
       "sha256": "0d92d483f4c47bde4ff7ff346d826c3eca41f8ecefc148cf2743fee4cc3f8146",
       "file": "062_batch_source_privacy.sql"
+    },
+    {
+      "sha256": "e3871b45ed4916eebe3057ac03417c3b50294f93265490ea34861081abd94b40",
+      "file": "063_bounded_staffing_reads.sql"
     }
   ]
 }

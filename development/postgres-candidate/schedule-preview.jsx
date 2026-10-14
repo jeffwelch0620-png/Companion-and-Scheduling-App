@@ -16,6 +16,8 @@ import {ScheduleRequests} from '../../app/team/schedule-requests';
 import {ScheduleBoard} from './ui-schedule-board';
 import {ShiftEditor} from './ui-shift-editor';
 import {WeeklyPublicationReview} from './ui-weekly-publication';
+import {CopyBatchForms,CopyBatchRecovery} from './ui-copy-batch';
+import {groupSelection,isGroupAction,hasGroupAccess,groupRecovery,clearGroupRecovery,groupRecoveryMessage} from './copy-batch-client.mjs';
 import {loadWeeklyPublicationReview,publishableDrafts} from './weekly-publication-client.mjs';
 import {manages} from '../../app/shared/types';
 import {localDate,nextDate,displayTime} from '../../app/shared/local-time';
@@ -35,17 +37,25 @@ async function call(actor,path,command){
 function Preview(){
  const [actor,setActor]=useState('schedule-worker'),[w,setWorkspace]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[view,setView]=useState(null),[screen,setScreen]=useState('schedule'),[week,setWeek]=useState(''),[boardView,setBoardView]=useState('day'),[draftDay,setDraftDay]=useState(''),[selectedIds,setSelectedIds]=useState([]),[publicationReview,setPublicationReview]=useState(null);
  const [recovery,setRecovery]=useState(null);
+ const [groupMode,setGroupMode]=useState('copy'),[groupOutcome,setGroupOutcome]=useState(null),[groupProblem,setGroupProblem]=useState(null),[groupWarning,setGroupWarning]=useState(null);
  const sender=useRef(new ScheduleScreenSender()),generation=useRef(0),inFlight=useRef(false);
  function deviceStorage(){try{return sessionStorage;}catch{return null;}}
- async function refresh(who=actor){const id=++generation.current;setWorkspace(null);setRecovery(null);setSelectedIds([]);setPublicationReview(null);try{const next=await loadScheduleScreen((...args)=>call(who,...args));if(id===generation.current){setWorkspace(next);setRecovery(publicationRecovery(deviceStorage(),scope,next.me.id));if(!sender.current.pending)sender.current=new ScheduleScreenSender({storage:deviceStorage(),actorId:next.me.id});}}catch(e){if(id===generation.current)setError(e.message);}}
- useEffect(()=>{sender.current=new ScheduleScreenSender();setView(null);setScreen('schedule');setError('');setMessage('');refresh(actor);return()=>{generation.current++;};},[actor]);
+ async function refresh(who=actor){const id=++generation.current;setWorkspace(null);setRecovery(null);setSelectedIds([]);setPublicationReview(null);try{const next=await loadScheduleScreen((...args)=>call(who,...args));if(id===generation.current){setWorkspace(next);setRecovery(publicationRecovery(deviceStorage(),scope,next.me.id));setGroupWarning(groupRecovery(deviceStorage(),scope,next.me.id));if(!sender.current.pending)sender.current=new ScheduleScreenSender({storage:deviceStorage(),actorId:next.me.id});}}catch(e){if(id===generation.current)setError(e.message);}}
+ useEffect(()=>{sender.current=new ScheduleScreenSender();setGroupOutcome(null);setGroupProblem(null);setGroupWarning(null);setView(null);setScreen('schedule');setError('');setMessage('');refresh(actor);return()=>{generation.current++;};},[actor]);
  async function send(action,input,record){
   if(inFlight.current)throw Error('Please wait for the current submission.');inFlight.current=true;setBusy(true);setError('');setMessage('');
   try{await sender.current.send((...args)=>call(actor,...args),scope,action,input,record);setView(null);setMessage('Submission saved.');await refresh();return true;}
   catch(e){setError(e.message);if(!sender.current.pending){setPublicationReview(null);await refresh();}throw e;}finally{inFlight.current=false;setBusy(false);}
  }
  async function reviewSelection(){if(inFlight.current)return;inFlight.current=true;setBusy(true);setError('');setMessage('');setPublicationReview(null);try{setPublicationReview(await loadWeeklyPublicationReview((...args)=>call(actor,...args),w,weekStart,selectedIds));}catch(e){setError(e.message);}finally{inFlight.current=false;setBusy(false);}}
- async function retrySubmission(){if(inFlight.current)return;inFlight.current=true;setBusy(true);setError('');setMessage('');try{await sender.current.retry((...args)=>call(actor,...args));setView(null);setMessage('Submission saved.');await refresh();}catch(e){setError(e.message);if(!sender.current.pending){setPublicationReview(null);await refresh();}}finally{inFlight.current=false;setBusy(false);}}
+ async function sendGroup(action,input){
+  if(inFlight.current)throw Error('Please wait for the current submission.');if(groupWarning)throw Error(groupRecoveryMessage);
+  const selection=groupSelection(action,input);inFlight.current=true;setBusy(true);setError('');setMessage('');
+  try{const result=await sender.current.send((...args)=>call(actor,...args),scope,action,input);setGroupOutcome({action,selection,result});setGroupProblem(null);}
+  catch(e){setError(e.message);if(!sender.current.pending)setGroupProblem({code:e.code,sequence:Date.now()});throw e;}finally{inFlight.current=false;setBusy(false);}
+ }
+ async function reloadGroupWorkspace(){const current=generation.current,who=actor;const next=await loadScheduleScreen((...args)=>call(who,...args));if(current!==generation.current)throw Error('Preview identity or records changed. Reload before continuing.');setWorkspace(next);return next;}
+ async function retrySubmission(){if(inFlight.current||!sender.current.pending)return;inFlight.current=true;setBusy(true);setError('');setMessage('');const frozen=structuredClone(sender.current.pending.command);try{const result=await sender.current.retry((...args)=>call(actor,...args));if(isGroupAction(frozen.action)){setGroupOutcome({action:frozen.action,selection:groupSelection(frozen.action,frozen.input),result});setGroupProblem(null);}else{setView(null);setMessage('Submission saved.');await refresh();}}catch(e){setError(e.message);if(!sender.current.pending){if(isGroupAction(frozen.action))setGroupProblem({code:e.code,sequence:Date.now()});else{setPublicationReview(null);await refresh();}}}finally{inFlight.current=false;setBusy(false);}}
  const selected=w&&view?.id?w.records.find(r=>r.id===view.id):null,now=new Date().toISOString(),day=w?localDate(now,w.location.timezone):'';
  const monday=day?nextDate(day,-((new Date(day+'T12:00:00Z').getUTCDay()+6)%7)):'',weekStart=week||monday,days=weekStart?Array.from({length:7},(_,i)=>nextDate(weekStart,i)):[];
  const shifts=w?w.records.filter(r=>r.kind==='shift'&&!r.data.cancelled&&days.includes(localDate(r.data.start,w.location.timezone))):[];
@@ -54,14 +64,16 @@ function Preview(){
  function changeWeek(next){setMessage('');setError('');setWeek(next);setSelectedIds([]);setPublicationReview(null);setView(null);}
  function selectDraft(r,checked){setPublicationReview(null);setSelectedIds(old=>checked?old.includes(r.id)?old:[...old,r.id].slice(0,100):old.filter(id=>id!==r.id));}
  return <main className="shared-ui jmax-combined" style={{maxWidth:960,margin:'24px auto',padding:24}}>
-  <h1>Companion scheduling | local preview</h1><p>Fictional records. Scheduling, dated leadership and private manager attendance. Coverage and named replacement requests include explicit consent and independent approval. Completed-shift corrections are private planned summaries; copying remains a separate preparation step.</p>
+  <h1>Companion scheduling | local preview</h1><p>Fictional records. Scheduling, dated leadership and private manager attendance. Coverage and named replacement requests include explicit consent and independent approval. Completed-shift corrections are private planned summaries; copying and group draft edits keep safe partial results and separate publication.</p>
   <label>Preview employee <select aria-label="Preview employee" value={actor} disabled={busy||!!sender.current.pending} onChange={e=>setActor(e.target.value)}><option value="schedule-worker">Fictional employee</option><option value="schedule-replacement">Fictional replacement employee</option><option value="schedule-manager">Fictional schedule manager</option><option value="schedule-publisher">Fictional schedule publisher</option><option value="schedule-corrector">Fictional independent corrector</option><option value="schedule-foreign">Fictional other-department manager</option></select></label>
   <button disabled={busy||!!sender.current.pending} onClick={()=>{setView(null);setError('');refresh();}}>Reload current records</button>
   {error&&<p role="alert" className="shared-error">{error}</p>}<p role="status">{message}</p>
   {w&&recovery&&<section role="alert"><p>{publicationRecoveryMessage}</p><button disabled={busy||!!sender.current.pending} onClick={()=>{clearPublicationRecovery(deviceStorage(),scope,w.me.id);setRecovery(null);}}>I checked current published shifts</button></section>}
   {sender.current.pending&&!busy&&<p>Keep this page open and retry the original submission. Scheduling requests require a connection; they are not saved in the employee task offline queue.</p>}
   {sender.current.pending&&!busy&&<button disabled={busy} onClick={retrySubmission}>Retry original submission</button>}
+  {w&&groupWarning&&<section role="alert"><p>{groupRecoveryMessage}</p><CopyBatchRecovery key={actor+':'+groupWarning.requestId} w={w} requestId={groupWarning.requestId} call={path=>call(actor,path)} busy={busy||!!sender.current.pending} onAcknowledged={()=>{clearGroupRecovery(deviceStorage(),scope,w.me.id);setGroupWarning(null);}}/></section>}
   {w?<fieldset disabled={busy||!!sender.current.pending} style={{border:0,padding:0}}>
+   {!view&&screen==='copy-batch'&&<CopyBatchForms key={actor+':'+groupMode+':'+weekStart} w={w} week={weekStart} mode={groupMode} call={(...args)=>call(actor,...args)} send={sendGroup} busy={busy||!!groupWarning} outcome={groupOutcome} problem={groupProblem} onClearResult={()=>setGroupOutcome(null)} onReload={reloadGroupWorkspace} onBack={()=>{setGroupOutcome(null);setGroupProblem(null);setScreen('schedule');refresh();}}/>}
    {!view&&screen==='requests'&&<ScheduleRequests w={{...w,records:w.records.filter(r=>!isOffer(r))}} now={now} busy={busy} onBack={()=>setScreen('schedule')} onTimeOff={()=>setView({kind:'time-off'})} onAvailability={()=>setView({kind:'availability'})} onOpen={r=>setView({id:r.id})}/>}
    {!view&&screen==='leadership'&&<LeadershipBoard w={w} onOpen={r=>setView({id:r.id})} onCreate={()=>setView({kind:'leadership'})} onBack={()=>setScreen('schedule')}/>}
    {!view&&screen==='coverage'&&<CoverageSwapBoard w={w} onOpen={r=>setView({id:r.id})} onBack={()=>setScreen('schedule')}/>}
@@ -74,6 +86,7 @@ function Preview(){
     <button onClick={()=>setScreen('leadership')}>Dated shift leadership</button>
     {Array.isArray(w.attendanceAreas)&&w.attendanceAreas.length>0&&<button onClick={()=>setScreen('attendance')}>Attendance history</button>}
     <button onClick={()=>setScreen('coverage')}>Coverage and replacement requests</button>{w.offerReviewNotices>0&&<p role="status">Some replacement requests need review. Open coverage requests to review the notice or contact a manager.</p>}
+    {hasGroupAccess(w)&&<div className="shared-actions"><button disabled={!!groupWarning} onClick={()=>{setGroupMode('copy');setGroupOutcome(null);setGroupProblem(null);setScreen('copy-batch');}}>Copy schedule week</button><button disabled={!!groupWarning} onClick={()=>{setGroupMode('batch');setGroupOutcome(null);setGroupProblem(null);setScreen('copy-batch');}}>Edit draft group</button></div>}
     {canDraft&&<button className="shared-primary" onClick={()=>{setDraftDay(days.includes(draftDay)?draftDay:days.includes(day)?day:weekStart);setView({kind:'draft'});}}>Create shift draft</button>}
     {eligible.length>0&&!publicationReview&&<div className="schedule-draft-actions"><p>{selectedIds.length} selected drafts; up to 100 per publication.</p><div className="shared-actions"><button onClick={()=>setSelectedIds(eligible.slice(0,100).map(r=>r.id))}>Select eligible drafts</button><button disabled={!selectedIds.length} onClick={()=>setSelectedIds([])}>Clear selection</button><button disabled={!selectedIds.length} onClick={reviewSelection}>Review selected drafts</button></div></div>}
     {publicationReview&&<WeeklyPublicationReview w={w} review={publicationReview} now={now} busy={busy} send={send} onError={setError} onBack={()=>setPublicationReview(null)}/>}
