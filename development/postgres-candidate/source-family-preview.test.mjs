@@ -62,18 +62,59 @@ test('leave-only source resolves existing reviewed target-member aliases without
 });
 
 test('leave-only dependency still requires exact existing identity, store and target-member revision',()=>{
- for(const edit of [f=>f.mappings[1].expectedTargetRevision++,f=>f.mappings[1].targetId=id(10),f=>f.mappings[1].personId=id(2),f=>{f.mappings.splice(1,1);},f=>{f.target.stores[1].members=[];f.mappings[1].expectedTargetRevision=null;}]){
+ for(const edit of [f=>f.mappings[1].targetId=id(10),f=>{f.mappings.splice(1,1);},f=>{f.target.stores[1].members=[];f.mappings[1].expectedTargetRevision=null;}]){
   const f=v2();targetMember(f);unavailable(f.source.scopes[1],'roster');edit(f);f.source.scopes=[f.source.scopes[1]];f.mappings=f.mappings.filter(m=>m.storeId===f.source.scopes[0].storeId);const r=previewSourceMapping(f),row=r.rows.find(row=>row.kind==='timeOff');assert.equal(row.status,'blocked');assert.ok(row.issues.includes('leave_member_mapping_required'));assert.equal(row.memberSourceId,f.source.scopes[0].timeOff[0].memberSourceId);assert.equal(r.scopes[0].families.roster.status,'unavailable');readOnly(r);
  }
 });
 
-test('all unavailable families produce an explicit review obligation rather than a complete empty source',()=>{
- const f=v2();for(const s of f.source.scopes)for(const family of ['roster','timeOff'])unavailable(s,family);const r=previewSourceMapping(f);
- assert.equal(r.status,'review_required');assert.equal(r.rows.length,0);assert.ok(r.issues.every(i=>i.code==='source_families_unavailable'&&i.severity==='review_required'));assert.ok(r.scopes.every(s=>Object.values(s.families).every(f=>f.coverageClaim==='unavailable')));readOnly(r);
+test('snapshots with every family unavailable are invalid input',()=>{
+ const f=v2();for(const s of f.source.scopes)for(const family of ['roster','timeOff'])unavailable(s,family);assert.throws(()=>previewSourceMapping(f),/source_families_unavailable/);
+});
+
+test('a mixed snapshot retains unavailable scopes without blocking available families',()=>{
+ const f=v2();for(const family of ['roster','timeOff'])unavailable(f.source.scopes[0],family);const r=previewSourceMapping(f);
+ assert.equal(r.status,'review_required');assert.ok(r.issues.some(i=>i.code==='source_families_unavailable'&&i.severity==='review_required'));assert.ok(Object.values(r.scopes[0].families).every(c=>c.status==='unavailable'));assert.equal(r.scopes[1].families.roster.status,'reviewable');assert.equal(r.scopes[1].families.timeOff.status,'reviewable');readOnly(r);
+});
+
+test('leave-only stale revision or person aliases have a distinct blocking dependency code',()=>{
+ for(const edit of [f=>f.mappings[1].expectedTargetRevision++,f=>f.mappings[1].personId=id(2)]){
+  const f=v2();targetMember(f);unavailable(f.source.scopes[1],'roster');edit(f);const r=previewSourceMapping(f),row=r.rows.find(r=>r.kind==='timeOff');
+  assert.equal(row.status,'blocked');assert.ok(row.issues.includes('leave_member_alias_stale'));assert.ok(!row.issues.includes('leave_member_mapping_required'));assert.equal(row.memberSourceId,f.source.scopes[1].timeOff[0].memberSourceId);assert.ok(r.issues.some(i=>i.code==='leave_member_alias_stale'&&i.severity==='blocking'&&i.memberSourceId===row.memberSourceId));readOnly(r);
+ }
+});
+
+test('inactive leave absence ignores other employees leave by exact membership id',()=>{
+ for(const rosterAvailable of [true,false])for(const status of ['declined','cancelled','withdrawn']){
+  const f=v2(),t=targetMember(f),s=f.source.scopes[1];f.mappings.pop();s.timeOff[0].status=status;if(!rosterAvailable)unavailable(s,'roster');
+  f.target.people.push({id:id(2),name:'Other fictional employee',active:true});t.members.push({...t.members[0],id:id(12),personId:id(2)});
+  t.timeOff=[{id:id(30),revision:2,memberId:id(12),department:'Kitchen',start:s.timeOff[0].start,end:s.timeOff[0].end,status:'approved'}];
+  const before=structuredClone(f),r=previewSourceMapping(f),row=r.rows.find(r=>r.sourceId===s.timeOff[0].sourceId);
+  assert.equal(row.status,'review_required');assert.deepEqual(row.issues,['inactive_source_leave_untracked']);assert.equal(row.targetId,null);assert.deepEqual(f,before);readOnly(r);
+ }
+});
+
+test('inactive leave absence checks the full declared window rather than matching source dates',()=>{
+ for(const dates of [['2035-11-07T23:00:00-05:00','2035-11-08T00:00:00-05:00'],['2035-10-31T23:00:00-04:00','2035-11-01T00:00:00-04:00'],['2035-11-08T00:00:00-05:00','2035-11-08T01:00:00-05:00']]){
+  const f=v2(),t=targetMember(f),s=f.source.scopes[1];f.mappings.pop();s.timeOff[0].status='declined';unavailable(s,'roster');
+  t.timeOff=[{id:id(30),revision:2,memberId:id(11),department:'Kitchen',start:dates[0],end:dates[1],status:'approved'}];const row=previewSourceMapping(f).rows.find(r=>r.sourceId===s.timeOff[0].sourceId);
+  if(dates[0].startsWith('2035-11-07')){assert.equal(row.status,'blocked');assert.ok(row.issues.includes('identity_mapping_required'));}else{assert.equal(row.status,'review_required');assert.deepEqual(row.issues,['inactive_source_leave_untracked']);}
+ }
+});
+
+test('inactive leave for an unresolved member remains blocked even with an empty target family',()=>{
+ for(const rosterAvailable of [true,false]){
+  const f=v2();targetMember(f);f.mappings.pop();const s=f.source.scopes[1];s.timeOff[0].status='withdrawn';s.timeOff[0].memberSourceId='unresolved-member';if(!rosterAvailable)unavailable(s,'roster');const r=previewSourceMapping(f),row=r.rows.find(r=>r.kind==='timeOff');
+  assert.equal(row.status,'blocked');assert.ok(row.issues.includes('leave_member_mapping_required'));assert.ok(row.issues.includes('identity_mapping_required'));assert.ok(!row.issues.includes('inactive_source_leave_untracked'));readOnly(r);
+ }
+});
+
+test('all-unavailable CLI input exits 1 with a fixed public error and preserves input bytes',()=>{
+ const dir=mkdtempSync(join(tmpdir(),'jmax-source-unavailable-')),file=join(dir,'private-source.json');
+ try{const f=v2();for(const s of f.source.scopes)for(const family of ['roster','timeOff'])unavailable(s,family);const bytes=Buffer.from(JSON.stringify(f));writeFileSync(file,bytes);const run=spawnSync(process.execPath,[cli,file],{encoding:'utf8',windowsHide:true});assert.equal(run.status,1);assert.deepEqual(JSON.parse(run.stdout),{status:'blocked',canApply:false,error:'source_families_unavailable'});assert.equal(run.stdout.includes(file),false);assert.deepEqual(readFileSync(file),bytes);}finally{unlinkSync(file);rmdirSync(dir);}
 });
 
 test('untracked inactive historical leave is review-required only in V2 with established target absence',()=>{
- for(const status of ['declined','cancelled','withdrawn']){const f=v2();f.mappings.pop();const s=f.source.scopes[1];s.timeOff[0].status=status;s.timeOff[0].department='Former historical label';s.timeOff[0].memberSourceId='former-private-member';unavailable(s,'roster');const before=structuredClone(f),r=previewSourceMapping(f),row=r.rows.find(row=>row.kind==='timeOff');
+ for(const status of ['declined','cancelled','withdrawn']){const f=v2();targetMember(f);f.mappings.pop();const s=f.source.scopes[1];s.timeOff[0].status=status;s.timeOff[0].department='Former historical label';unavailable(s,'roster');const before=structuredClone(f),r=previewSourceMapping(f),row=r.rows.find(row=>row.kind==='timeOff');
   assert.equal(r.status,'review_required');assert.equal(row.status,'review_required');assert.deepEqual(row.issues,['inactive_source_leave_untracked']);assert.equal(row.targetId,null);assert.equal(r.counts.review_required,1);assert.equal(r.scopes[1].families.timeOff.status,'review_required');assert.ok(r.issues.some(i=>i.code==='inactive_source_leave_untracked'&&i.family==='timeOff'&&i.severity==='review_required'));readOnly(r);assert.deepEqual(f,before);assert.equal(JSON.stringify(r).includes('Former historical label'),false);
  }
  const active=v2();active.mappings.pop();assert.equal(previewSourceMapping(active).status,'blocked');
@@ -101,7 +142,7 @@ test('actual CLI supports V2 roster-only and review-required history without cha
  const dir=mkdtempSync(join(tmpdir(),'jmax-source-family-')),file=join(dir,'private-source.json');
  try{
   const f=v2();for(const s of f.source.scopes)unavailable(s,'timeOff');let bytes=Buffer.from(JSON.stringify(f));writeFileSync(file,bytes);let run=spawnSync(process.execPath,[cli,file],{encoding:'utf8',windowsHide:true}),r=JSON.parse(run.stdout);assert.equal(run.status,0);assert.equal(r.version,2);assert.equal(r.status,'reviewable');assert.ok(r.scopes.every(s=>s.families.timeOff.status==='unavailable'));readOnly(r);assert.deepEqual(readFileSync(file),bytes);assert.equal(run.stdout.includes('Fictional employee'),false);
-  const g=v2();g.mappings.pop();g.source.scopes[1].timeOff[0].status='withdrawn';bytes=Buffer.from(JSON.stringify(g));writeFileSync(file,bytes);run=spawnSync(process.execPath,[cli,file],{encoding:'utf8',windowsHide:true});r=JSON.parse(run.stdout);assert.equal(run.status,3);assert.equal(r.status,'review_required');readOnly(r);assert.deepEqual(readFileSync(file),bytes);
+  const g=v2();targetMember(g);g.mappings.pop();g.source.scopes[1].timeOff[0].status='withdrawn';bytes=Buffer.from(JSON.stringify(g));writeFileSync(file,bytes);run=spawnSync(process.execPath,[cli,file],{encoding:'utf8',windowsHide:true});r=JSON.parse(run.stdout);assert.equal(run.status,3);assert.equal(r.status,'review_required');readOnly(r);assert.deepEqual(readFileSync(file),bytes);
   g.source.scopes[1].coverage.timeOff={available:false};writeFileSync(file,JSON.stringify(g));run=spawnSync(process.execPath,[cli,file],{encoding:'utf8',windowsHide:true});assert.equal(run.status,1);assert.equal(JSON.parse(run.stdout).error,'unavailable_family_has_records');assert.equal(run.stdout.includes(file),false);
  }finally{unlinkSync(file);rmdirSync(dir);}
 });

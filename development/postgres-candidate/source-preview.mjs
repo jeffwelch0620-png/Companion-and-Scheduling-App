@@ -123,21 +123,24 @@ export function previewSourceMapping(input){
    const k=key(s.storeId,s.externalStoreId,kind,r.sourceId),codes=[],m=map.get(k);const add=(code,memberSourceId)=>{codes.push(code);issue(code,s.storeId,kind,r.sourceId,memberSourceId);};
    if(sourceCounts.get(k)>1)add('duplicate_source_record');
    if(v2&&kind==='timeOff'&&t?.timeOff===null)add('target_family_unavailable');
-   // Without an alias, only an empty supplied target leave family establishes no target here.
-   // Nonempty targets require identity reconciliation; dates/names never establish absence.
-   if(v2&&kind==='timeOff'&&!m&&t&&Array.isArray(t.timeOff)&&t.timeOff.length===0&&['declined','cancelled','withdrawn'].includes(r.status)){
-    if(!inWindow(r,timeOff,s.timezone))add('leave_outside_declared_window');
-    if(!codes.length){add('inactive_source_leave_untracked');rows.push({storeId:s.storeId,kind,sourceId:r.sourceId,targetId:null,status:'review_required',changedFields:[],issues:codes});return;}
-   }
    // Members are reviewed first; report their failed dependency even when the leave's own alias is absent.
    if(kind==='timeOff'){
+    let parentStale=false;
     if(!roster.available&&!mappedMembers.has(r.memberSourceId)){
      const parentKey=key(s.storeId,s.externalStoreId,'member',r.memberSourceId),parent=map.get(parentKey);
      if(parent){usedMappings.add(parentKey);const existing=t?.members.find(x=>x.id.toLowerCase()===parent.targetId.toLowerCase());
       if(existing&&parent.expectedTargetRevision===existing.revision&&parent.personId.toLowerCase()===existing.personId.toLowerCase())mappedMembers.set(r.memberSourceId,{id:existing.id.toLowerCase(),department:existing.department});
+      else if(existing)parentStale=true;
      }
     }
-    if(!mappedMembers.has(r.memberSourceId))add(roster.available&&sourceCounts.has(key(s.storeId,s.externalStoreId,'member',r.memberSourceId))?'leave_member_blocked':'leave_member_mapping_required',r.memberSourceId);
+    if(!mappedMembers.has(r.memberSourceId))add(parentStale?'leave_member_alias_stale':roster.available&&sourceCounts.has(key(s.storeId,s.externalStoreId,'member',r.memberSourceId))?'leave_member_blocked':'leave_member_mapping_required',r.memberSourceId);
+    // Establish scoped absence only through an exact reviewed membership binding.
+    // Other members' leave and this member's out-of-window leave do not imply a match.
+    if(v2&&!m&&t&&Array.isArray(t.timeOff)&&['declined','cancelled','withdrawn'].includes(r.status)){
+     if(!inWindow(r,timeOff,s.timezone))add('leave_outside_declared_window');
+     const member=mappedMembers.get(r.memberSourceId);
+     if(!codes.length&&member&&!t.timeOff.some(x=>x.memberId.toLowerCase()===member.id&&inWindow(x,timeOff,s.timezone))){add('inactive_source_leave_untracked');rows.push({storeId:s.storeId,kind,sourceId:r.sourceId,targetId:null,status:'review_required',changedFields:[],issues:codes});return;}
+    }
     if(['cancelled','withdrawn'].includes(r.status))add('leave_withdrawal_policy_required');
    }
    if(!m)add('identity_mapping_required');else{
@@ -163,7 +166,7 @@ export function previewSourceMapping(input){
      rows.push({storeId:s.storeId,kind,sourceId:r.sourceId,targetId:id,personId:kind==='member'?m.personId.toLowerCase():null,sourceRevision:r.sourceRevision,mappingRevision:m.mappingRevision,expectedTargetRevision:m.expectedTargetRevision,status:existing?(equal(before,after)?'unchanged':'changed'):'new',changedFields:before?Object.keys(after).filter(k=>!equal(before[k],after[k])):[],issues:[]});return;
     }
    }
-   rows.push({storeId:s.storeId,kind,sourceId:r.sourceId,targetId:m?.targetId.toLowerCase()??null,status:'blocked',changedFields:[],issues:codes,...(kind==='timeOff'&&codes.some(code=>['leave_member_blocked','leave_member_mapping_required'].includes(code))?{memberSourceId:r.memberSourceId}:{})});
+   rows.push({storeId:s.storeId,kind,sourceId:r.sourceId,targetId:m?.targetId.toLowerCase()??null,status:'blocked',changedFields:[],issues:codes,...(kind==='timeOff'&&codes.some(code=>['leave_member_blocked','leave_member_mapping_required','leave_member_alias_stale'].includes(code))?{memberSourceId:r.memberSourceId}:{})});
   }
   roster.rows.forEach(r=>review('member',r));timeOff.rows.forEach(r=>review('timeOff',r));
   if(t)for(const [kind,entries] of [['member',t.members],['timeOff',t.timeOff??[]]])for(const r of entries){
@@ -176,6 +179,7 @@ export function previewSourceMapping(input){
    scopes.push({storeId:s.storeId,externalStoreId:s.externalStoreId,timezone:s.timezone,watermark:s.watermark,inputRevision:t?.inputRevision??null,families,targetContext:t&&t.timezone===s.timezone?'supplied':'needs_review',issues:scopeIssues});
   }else scopes.push({storeId:s.storeId,externalStoreId:s.externalStoreId,timezone:s.timezone,watermark:s.watermark,inputRevision:t?.inputRevision??null,coverageClaim:scopeIssues.some(c=>['source_coverage_incomplete','source_count_mismatch'].includes(c))?'incomplete':'declared_complete',coverage:{rosterCount:s.members.length,timeOffCount:s.timeOff.length,from:c.timeOff.from,to:c.timeOff.to},targetContext:t&&t.timezone===s.timezone?'supplied':'needs_review',issues:scopeIssues});
  }
+ if(v2&&[...coverageByStore.values()].every(c=>!c.roster.available&&!c.timeOff.available))bad('source_families_unavailable');
  for(const [k,m] of map)if(!usedMappings.has(k)&&(!v2||coverageByStore.get(m.storeId)?.[m.kind==='member'?'roster':'timeOff']?.available!==false))issue('unused_mapping',m.storeId,m.kind,m.sourceId);
  const sort=(a,b)=>{const x=key(a.storeId,a.kind??'',a.sourceId??'',a.targetId??'',a.code??''),y=key(b.storeId,b.kind??'',b.sourceId??'',b.targetId??'',b.code??'');if(x!==y)return x<y?-1:1;const ax=JSON.stringify(canonical(a)),bx=JSON.stringify(canonical(b));return ax<bx?-1:ax>bx?1:0;};
  rows.sort(sort);issues.sort(sort);scopes.sort(sort);
