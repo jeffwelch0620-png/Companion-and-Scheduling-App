@@ -1,6 +1,6 @@
 # Reviewed schedule copy backend preparation
 
-Isolated draft from accepted PR46 main `e8d2c022ec2e025e0efb92ea69ed42517582b5e2`, whose [merged-main CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/38339285288) passed 792/792. The owner selected P01–P09 in the [copy/batch design](SCHEDULE_COPY_BATCH_DESIGN.md) and authorized the next isolated preparation slice. This checkpoint implements **copy only**; batch replacement writes and forms remain separate. It does not change the active D1 backend, Inventory or hosted services, and requires its own review and merge approval.
+Historical preparation from accepted PR46 main `e8d2c022ec2e025e0efb92ea69ed42517582b5e2`, whose [merged-main CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/38339285288) passed 792/792. The owner selected P01–P09 in the [copy/batch design](SCHEDULE_COPY_BATCH_DESIGN.md) and authorized the next isolated preparation slice. This checkpoint implements **copy only**; batch replacement writes and forms remain separate. It does not change the active D1 backend, Inventory or hosted services, and requires its own review and merge approval.
 
 ## Contract
 
@@ -54,3 +54,7 @@ Production source completeness and ingestion, shared identity/authz/current owne
 ## PR47 review follow-up
 
 Corrective `060_schedule_copy_review_alignment.sql` preserves shared 001–059 and explicitly replaces only `copy_plan`. Its manifest and fresh snapshot are updated together. Ready-only pair seeds, deterministic external-conflict outcomes, and non-blocking staffing warning/approval parity are covered by regression checks. Fresh fictional PostgreSQL 17 application through 060 and snapshot verification passed. Focused copy/manifest checks passed **24/24**; the final serial suite passed **815/815**, zero failures/skips, including **23 copy checks**. Strict backend/UI types, workflow coverage inventory and preview build passed. Reviewed 10 intended files, 92 relative documentation links, LF endings and all 59 unchanged shared migrations. Exact-head CI links are recorded on the draft PR after completion. PR47 remains draft and requires separate merge approval; hosted services, the active backend and Inventory remain separate.
+
+## Accepted baseline
+
+PR47 was subsequently owner-approved and squash-merged at `de2ab42` from reviewed head `31bd0a7`. [Merged-main CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/38475786220) passed 815/815, fresh migrations/snapshot, types and previews. Published 001–060 are immutable. Copy is accepted candidate preparation; earlier draft-only statements describe its review checkpoint, not current merge state. The separately authorized [batch backend draft](SCHEDULE_BATCH_BACKEND_CHECKPOINT.md) follows this baseline and requires its own approval. No active backend, hosted or Inventory adoption is implied.

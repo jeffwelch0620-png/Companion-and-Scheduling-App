@@ -35,6 +35,15 @@ test('request screen refuses unrelated commands and preserves revision envelopes
  const sender=new ScheduleScreenSender();await assert.rejects(sender.send(()=>assert.fail(),'s','shift.publish',{}),/not enabled/);await assert.rejects(sender.send(()=>assert.fail(),'s','request.create',{type:'unrelated'}),/not enabled/);
  await sender.send(async(_,command)=>{assert.equal(command.recordId,'a');assert.equal(command.expectedRevision,3);return ok({});},'s','availability.review',{approve:true},{id:'a',revision:3});
 });
+
+test('only a known rolled-back invariant clears a server-failure submission; uncertain errors retain the exact request',async()=>{
+ for(const [status,code] of [[500,'service_unavailable'],[503,'service_unavailable'],[503,'coordination_retry'],[503,'internal_invariant']]){
+  const sender=new ScheduleScreenSender();await assert.rejects(sender.send(async()=>({status,body:{error:{code}}}),'s','availability.save',{}),e=>e.status===status&&e.code===code);
+  const frozen=structuredClone(sender.pending.command);
+  await assert.rejects(sender.retry(async(_,c)=>{assert.deepEqual(c,frozen);return {status,body:{error:{code}}};}));assert.deepEqual(sender.pending.command,frozen);
+  await assert.rejects(sender.retry(async()=>({status:500,body:{error:{code:'internal_invariant'}}})),e=>e.message==='Reload current drafts and contact an administrator.'&&e.status===500&&e.code==='internal_invariant');assert.equal(sender.pending,null);
+ }
+});
 test('station context keeps exact setup references and safely adapts legacy stations with no guide/goal links',async()=>{
  const setup={jobs:['Cook'],allJobMembers:false,memberIds:['worker'],standardIds:['guide'],goals:[{title:'Practice'}]};
  const w=await loadScheduleScreen(async path=>path==='/schedule-viewer'?ok(viewer()):ok({workspaceRevision:1,items:path.startsWith('/schedule-stations')?[{id:'current',kind:'station',data:{setup}},{id:'legacy',kind:'station',data:{setup:{jobs:['Cook'],allJobMembers:true,memberIds:[]}}}]:[],nextCursor:null}));
