@@ -1,0 +1,102 @@
+{
+  "version": 2,
+  "organizationId": "fictional-source-org",
+  "source": {
+    "system": "reviewed-snapshot",
+    "tenant": "fictional-source-tenant",
+    "capturedAt": "2035-11-01T12:00:00Z",
+    "scopes": [
+      {
+        "storeId": "fictional-store-a",
+        "externalStoreId": "external-a",
+        "timezone": "America/New_York",
+        "watermark": "fictional-file-1",
+        "coverage": {
+          "roster": {
+            "available": true,
+            "complete": true,
+            "count": 1,
+            "inactiveIncluded": true,
+            "scheduleOnlyIncluded": true,
+            "endOfSource": true
+          },
+          "timeOff": {
+            "available": false
+          }
+        },
+        "members": [
+          {
+            "sourceId": "fixture-worker",
+            "sourceRevision": 2,
+            "name": "Fictional employee",
+            "department": "Kitchen",
+            "position": "Cook",
+            "active": true,
+            "scheduleOnly": false,
+            "scheduleJobs": [
+              "Cook",
+              "Prep"
+            ]
+          }
+        ],
+        "timeOff": null
+      }
+    ]
+  },
+  "mappings": [
+    {
+      "storeId": "fictional-store-a",
+      "externalStoreId": "external-a",
+      "kind": "member",
+      "sourceId": "fixture-worker",
+      "sourceRevision": 2,
+      "targetId": "10000000-0000-0000-0000-000000000010",
+      "personId": "10000000-0000-0000-0000-000000000001",
+      "mappingRevision": 1,
+      "expectedTargetRevision": 7
+    }
+  ],
+  "target": {
+    "organizationId": "fictional-source-org",
+    "capturedAt": "2035-11-01T12:05:00Z",
+    "people": [
+      {
+        "id": "10000000-0000-0000-0000-000000000001",
+        "name": "Fictional employee",
+        "active": true
+      }
+    ],
+    "stores": [
+      {
+        "id": "fictional-store-a",
+        "timezone": "America/New_York",
+        "departments": [
+          "Kitchen",
+          "Service"
+        ],
+        "jobs": [
+          "Cook",
+          "Prep"
+        ],
+        "inputRevision": 11,
+        "members": [
+          {
+            "id": "10000000-0000-0000-0000-000000000010",
+            "personId": "10000000-0000-0000-0000-000000000001",
+            "revision": 7,
+            "name": "Fictional employee",
+            "department": "Kitchen",
+            "position": "Cook",
+            "active": true,
+            "scheduleOnly": false,
+            "scheduleJobs": [
+              "Cook",
+              "Prep"
+            ]
+          }
+        ],
+        "timeOff": null
+      }
+    ]
+  }
+}
