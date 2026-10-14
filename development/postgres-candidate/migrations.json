@@ -244,6 +244,10 @@
     {
       "sha256": "74948783f17fc7f08af5ba17acc9196cd6c24a8eaf6dba75f4dc1741da7c0c43",
       "file": "061_schedule_batch_replacements.sql"
+    },
+    {
+      "sha256": "0d92d483f4c47bde4ff7ff346d826c3eca41f8ecefc148cf2743fee4cc3f8146",
+      "file": "062_batch_source_privacy.sql"
     }
   ]
 }

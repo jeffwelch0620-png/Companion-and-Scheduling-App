@@ -1,2 +1,2 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {verifyMigrationManifest} from './migration-manifest.mjs';
-test('published candidate migration order and content match the versioned manifest',async()=>{const files=await verifyMigrationManifest();assert.equal(files.length,61);assert.equal(files[0],'001_candidate.sql');assert.equal(files.at(-1),'061_schedule_batch_replacements.sql');});
+test('published candidate migration order and content match the versioned manifest',async()=>{const files=await verifyMigrationManifest();assert.equal(files.length,62);assert.equal(files[0],'001_candidate.sql');assert.equal(files.at(-1),'062_batch_source_privacy.sql');});

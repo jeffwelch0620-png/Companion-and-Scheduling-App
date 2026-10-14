@@ -510,6 +510,17 @@ BEGIN
   IF NOT FOUND OR NOT candidate_operations.goal_authorized(p_actor,rec.department,'schedule.manage') THEN
    rows:=rows||jsonb_build_array(row_value||jsonb_build_object('status','rejected','issues',jsonb_build_array(jsonb_build_object('code','batch_source_unavailable'))));CONTINUE;
   END IF;
+  IF rec.revision<>(entry->>'revision')::integer THEN issue:='revision_conflict';
+  ELSIF rec.published OR rec.cancelled OR rec.released_at IS NOT NULL THEN issue:='batch_source_ineligible';
+  ELSIF rec.starts_at<=at_time THEN issue:='batch_source_started';
+  ELSIF (rec.starts_at AT TIME ZONE scope.timezone)::date<(options->>'weekStart')::date OR (rec.starts_at AT TIME ZONE scope.timezone)::date>=(options->>'weekStart')::date+7 THEN issue:='batch_week_conflict';
+  ELSIF NOT EXISTS(SELECT 1 FROM candidate_operations.schedule_draft_events WHERE shift_id=rec.id) THEN issue:='draft_reference_only'; END IF;
+  -- A scheduling-manager selection is not authority to inspect published duties.
+  -- Classify noneditable sources before any linked-work or destination lookup.
+  IF issue<>'' THEN
+   rows:=rows||jsonb_build_array(row_value||jsonb_build_object('area',rec.department,'currentSourceRevision',rec.revision,'status','rejected','issues',jsonb_build_array(jsonb_build_object('code',issue,'round',0)),
+    'context',jsonb_build_object('source',candidate_operations.correction_source_key(to_jsonb(rec))||jsonb_build_object('releasedAt',rec.released_at,'stationId',rec.station_id,'stationName',rec.station_name,'stationRevision',rec.station_revision))));CONTINUE;
+  END IF;
   source:=candidate_operations.correction_source_key(to_jsonb(rec))||jsonb_build_object('id',rec.id,'releasedAt',rec.released_at,'stationId',rec.station_id,'stationName',rec.station_name,'stationRevision',rec.station_revision);
   SELECT jsonb_build_object('tasks',(SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'revision',revision) ORDER BY id),'[]') FROM candidate_operations.tasks WHERE shift_id=rec.id),
    'closes',(SELECT coalesce(jsonb_agg(jsonb_build_object('id',id,'revision',revision) ORDER BY id),'[]') FROM candidate_operations.closes WHERE shift_id=rec.id),
@@ -518,12 +529,7 @@ BEGIN
   context:=jsonb_build_object('source',source,'links',links);
   row_value:=row_value||jsonb_build_object('area',rec.department,'currentSourceRevision',rec.revision,'linkedKinds',linked_kinds,
    'before',jsonb_build_object('personId',rec.member_id,'position',rec.position,'start',rec.starts_at,'end',rec.ends_at,'startLocal',to_char(rec.starts_at AT TIME ZONE scope.timezone,'YYYY-MM-DD"T"HH24:MI:SS.US'),'endLocal',to_char(rec.ends_at AT TIME ZONE scope.timezone,'YYYY-MM-DD"T"HH24:MI:SS.US'),'stationId',rec.station_id,'stationName',rec.station_name,'stationRevision',rec.station_revision));
-  IF rec.revision<>(entry->>'revision')::integer THEN issue:='revision_conflict';
-  ELSIF rec.published OR rec.cancelled OR rec.released_at IS NOT NULL THEN issue:='batch_source_ineligible';
-  ELSIF rec.starts_at<=at_time THEN issue:='batch_source_started';
-  ELSIF (rec.starts_at AT TIME ZONE scope.timezone)::date<(options->>'weekStart')::date OR (rec.starts_at AT TIME ZONE scope.timezone)::date>=(options->>'weekStart')::date+7 THEN issue:='batch_week_conflict';
-  ELSIF NOT EXISTS(SELECT 1 FROM candidate_operations.schedule_draft_events WHERE shift_id=rec.id) THEN issue:='draft_reference_only';
-  ELSIF jsonb_array_length(linked_kinds)>0 THEN issue:='linked_shift_protected'; END IF;
+  IF jsonb_array_length(linked_kinds)>0 THEN issue:='linked_shift_protected'; END IF;
   BEGIN
    first_at:=candidate_operations.batch_local_instant(fields->>'startLocal',rec.starts_at,scope.timezone,fields->>'startOccurrence');
    last_at:=candidate_operations.batch_local_instant(fields->>'endLocal',rec.ends_at,scope.timezone,fields->>'endOccurrence');

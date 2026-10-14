@@ -74,6 +74,13 @@ test('an unauthorized local dependency reveals no source details or dependency i
  const s=selection([proposal(a,f.worker),proposal(b,f.worker)]),r=await review(f,s);assert.equal(row(r,a.recordId).issues[0].code,'shift_overlap');assert.equal(row(r,a.recordId).issues[0].sourceIds,undefined);assert.deepEqual(Object.keys(row(r,b.recordId)).sort(),['id','issues','kind','sourceRevision','status']);
 });
 
+test('phase-ineligible sources reveal no duties or assignment details to a scheduling manager without published-change authority',async()=>{
+ const f=await fixture(),a=await create(f),b=await create(f,f.other),privateTask=randomUUID();await admin.query('UPDATE candidate_operations.shift_references SET published=true WHERE id=$1',[a.recordId]);
+ await admin.query("INSERT INTO candidate_operations.tasks(id,restaurant_id,assignee_id,department,title,detail,due,phase,revision,shift_id,shift_revision) VALUES($1,$2,$3,'BOH','Private published duty','Private published details','2035-10-23T17:00Z','open',1,$4,1)",[privateTask,f.scope,f.worker,a.recordId]);
+ const s=selection([proposal(a,f.worker),proposal(b,f.other)]),r=await review(f,s),bad=row(r,a.recordId);assert.deepEqual(Object.keys(bad).sort(),['area','currentSourceRevision','id','issues','kind','sourceRevision','status']);assert.equal(bad.issues[0].code,'batch_source_ineligible');assert.equal(JSON.stringify(r).includes(privateTask),false);assert.equal(JSON.stringify(r).includes('Private published'),false);
+ const c=command(f,s,r),saved=await run(f,c);assert.equal(saved.savedCount,1);assert.deepEqual(row(saved,a.recordId),bad);assert.deepEqual(row(await run(f,c),a.recordId),bad);
+});
+
 test('a reviewed revision mismatch rejects only its row, while a later source change invalidates the whole old review',async()=>{
  const f=await fixture(),a=await create(f),b=await create(f,f.other),s=selection([proposal({...a,revision:2},f.worker),proposal(b,f.other)]),r=await review(f,s);assert.equal(row(r,a.recordId).issues[0].code,'revision_conflict');assert.equal((await run(f,command(f,s,r))).savedCount,1);
  const fresh=selection([proposal(a,f.worker)]),old=await review(f,fresh);await admin.query('UPDATE candidate_operations.shift_references SET revision=revision+1 WHERE id=$1',[a.recordId]);const before=await state(f);await assert.rejects(run(f,command(f,fresh,old)),e=>e.status===409&&e.code==='batch_review_changed');assert.deepEqual(await state(f),before);
