@@ -1,0 +1,31 @@
+{
+  "scope": {
+    "organizationId": "fictional-organization",
+    "system": "toast",
+    "tenant": "fictional-tenant",
+    "storeId": "fictional-store",
+    "externalStoreId": "fictional-external",
+    "timezone": "America/New_York",
+    "sourceFormat": "toast-roster-csv-v1",
+    "transformVersion": "toast-roster-provider-v1"
+  },
+  "capturedAt": "2035-11-04T12:00:00.123456Z",
+  "population": {
+    "kind": "initial_active_only",
+    "effectiveDate": "2035-11-04",
+    "archivedHistory": "excluded",
+    "filterEvidence": "Wholly fictional active-filter example",
+    "reviewer": "fictional-reviewer",
+    "revision": 1
+  },
+  "pairing": {
+    "mode": "unverified",
+    "reviewer": "fictional-reviewer",
+    "revision": 1
+  },
+  "location": {
+    "expectedLabel": "Fictional Restaurant",
+    "reviewer": "fictional-reviewer",
+    "revision": 1
+  }
+}
