@@ -40,3 +40,11 @@ Test quoted commas/escaped quotes, semicolon job lists, missing/duplicate legacy
 Test that name/contact/compensation data does not enter diagnostics and that excluded contacts/wages do not affect scheduling fingerprints. Supported semantic/job changes must affect fingerprints. Unknown status/department/primary-job/schedule-only fields must remain unresolved until supplied through a reviewed source or explicitly approved supplement. Active-only and missing leave coverage must never become complete absent data.
 
 The original sample was read without modification. Local evidence uses the owner-selected store and an exact byte hash but is ignored by Git; no real file, report, identifier, employment count or compensation is attached to the public PR. The [normalization design](SOURCE_NORMALIZATION_TARGET_READ_DESIGN.md) and [readiness checklist](MIGRATION_READINESS.md) retain the implementation/authorization gates. These regression cases are requirements, not tests already implemented.
+
+## Provider content and manager supplement
+
+For this exact Toast profile, source-content-v2 includes only the scoped employee GUID, trimmed source name and the set of paired job tokens/descriptions. Pair before sorting by token then description (ordinal); preserve token text exactly, including unresolved non-UUID values, and refuse duplicate pairs. Unresolved tokens remain unresolved even though their fingerprints are deterministic. A name or reported job change makes the mapping stale and requires re-review.
+
+Department, primary job, scheduling-job selection and schedule-only participation are manager supplement fields, with their own revision and reviewer bound into the review context. Changing a supplement stales that review without changing sourceVersion. Active-only is declared for the snapshot population, never fabricated as a per-record provider field. A future provider status/department profile requires a new transform version.
+
+The owner holds the manager workbook containing real names, GUIDs and jobs outside Git, including explicitly requested copies in the owner’s JMax Space. After the reviewed supplement is captured, local and JMax workbook copies are archived or deleted under owner control; S05 retention remains pending, and capture does not trigger automatic deletion. Never attach these files to the public PR.

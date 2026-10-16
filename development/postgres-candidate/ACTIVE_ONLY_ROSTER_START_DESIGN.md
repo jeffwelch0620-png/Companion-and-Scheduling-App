@@ -34,7 +34,7 @@ The source provides names, employee GUIDs and job lists. A private workbook can 
 
 The workbook must leave decisions blank, distinguish source from editable fields and flag unknown job-ID semantics. A workbook J-key is a local review reference, not a new provider/canonical identifier. “No scheduling jobs” can retain a primary employment position without proposing scheduling eligibility. Limited additional-job selections remain individually reviewed rather than silently approving every job. No account, capability or database update follows from a completed worksheet.
 
-The worksheet excludes contacts and compensation, remains outside Git, and is not attached to a public PR or shared Space without an explicit delivery request. Public documentation records schema/policy and aggregate validation only. Preserve the original source file. Create wholly fictional public test fixtures independently, not by modifying real employee rows.
+The worksheet excludes contacts and compensation, remains outside Git, and is not attached to a public PR or shared Space without an explicit delivery request. Public documentation records schema/policy and aggregate validation only. Preserve the original source file. The owner holds the real-name/GUID/job workbooks outside Git, including explicitly authorized JMax copies. After capturing the reviewed supplement, archiving or deleting those copies remains under owner control with S05 retention pending; no automatic deletion is selected. Create wholly fictional public test fixtures independently, not by modifying real employee rows.
 
 ## Required implementation cases
 
