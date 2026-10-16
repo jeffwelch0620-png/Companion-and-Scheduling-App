@@ -124,3 +124,59 @@ test('supplement edits change only supplement digests, never provider fingerprin
  const s=supplement(),b=binding(),p=[provider()],config=configuration(),before=structuredClone({s,b,p,config});report(s,p,config);assert.deepEqual({s,b,p,config},before);
  const scopeWithProfile={...scope(),timezone:'America/New_York',...toastRosterProfile},m={sourceId:id(1),firstName:'Fictional',lastName:'Example',jobs:provider().jobs},version=fingerprintToastMember(scopeWithProfile,m),old=canonical(s).digest;choice(s,'member',1).scheduleOnly=true;assert.notEqual(canonical(s).digest,old);assert.deepEqual(fingerprintToastMember(scopeWithProfile,m),version);assert.equal(report(s).rows[0].proposed.scheduleOnly,true);flags(report(s));
 });
+
+const tokenReview=(value=id(101),descriptions=['Fictional Cook'],semantics='provider_job_key')=>({kind:'tokenReview',token:value,semantics,observedDescriptions:descriptions,canonicalDescription:null,...review()});
+function nonUuidExample(){
+ const s=supplement(),p=provider(),value='fictional-provider-key';p.jobs[0].token=value;choice(s,'job',101).token=value;choice(s,'member',1).primaryJobToken=value;choice(s,'member',1).schedulingJobTokens=[value];return {s,p,value};
+}
+test('reviewed provider semantics resolve an exact non-UUID token without changing source evidence',()=>{
+ const {s,p,value}=nonUuidExample(),before=structuredClone(p);assert.ok(codes(report(s,[p])).includes('job_token_unresolved'));
+ s.choices.push(tokenReview(value));const r=report(s,[p]);assert.equal(r.status,'reviewable');assert.equal(r.rows[0].proposed.position,'Fictional Cook');assert.deepEqual(p,before);flags(r);
+});
+test('retired and non-job tokens refuse primary and scheduling selection for every token shape',()=>{
+ for(const semantics of ['retired_job','not_a_job'])for(const uuid of [true,false]){
+  const {s,p,value}=nonUuidExample(),key=uuid?id(101):value;if(uuid){p.jobs[0].token=key;s.choices.find(c=>c.kind==='job'&&c.token===value).token=key;choice(s,'member',1).primaryJobToken=key;choice(s,'member',1).schedulingJobTokens=[key];}
+  s.choices.push(tokenReview(key,['Fictional Cook'],semantics));const r=report(s,[p]);for(const code of ['primary_job_token_excluded','scheduling_job_token_excluded','job_token_mapping_excluded'])assert.ok(codes(r).includes(code));assert.equal(r.status,'blocked');assert.ok(!r.rows[0].proposed);
+ }
+});
+test('reviewed excluded unselected tokens remain in provider fingerprints without blocking a valid job',()=>{
+ const {s,p,value}=nonUuidExample();s.choices=s.choices.filter(c=>c.kind!=='job'||c.token!==value);choice(s,'member',1).primaryJobToken=id(102);choice(s,'member',1).schedulingJobTokens=[id(102)];s.choices.push(tokenReview(value,['Fictional Cook'],'retired_job'));
+ const original=structuredClone(p),scopeWithProfile={...scope(),timezone:'America/New_York',...toastRosterProfile},m={sourceId:p.sourceId,firstName:'Fictional',lastName:'Example',jobs:p.jobs},hash=fingerprintToastMember(scopeWithProfile,m);
+ assert.equal(report(s,[p]).status,'reviewable');assert.deepEqual(p,original);assert.deepEqual(fingerprintToastMember(scopeWithProfile,m),hash);assert.notDeepEqual(fingerprintToastMember(scopeWithProfile,{...m,jobs:p.jobs.slice(1)}),hash);
+});
+test('token review duplicate identities refuse identical or conflicting decisions',()=>{
+ const s=supplement();s.choices.push(tokenReview(),tokenReview());assert.throws(()=>canonical(s),/duplicate_supplement_choice/);s.choices.at(-1).semantics='retired_job';assert.throws(()=>canonical(s),/duplicate_supplement_choice/);
+});
+test('token review and observed-description sets canonicalize independent of input ordering',()=>{
+ const a=supplement();a.choices.push({...tokenReview(id(101),['Fictional Other','Fictional Cook']),canonicalDescription:'Fictional Canonical'},tokenReview(id(102),['Fictional Prep']));const b=structuredClone(a);b.choices.reverse();b.choices.find(c=>c.kind==='tokenReview'&&c.token===id(101)).observedDescriptions.reverse();assert.deepEqual(canonical(a),canonical(b));
+});
+test('token review semantics, description acknowledgement and review metadata bind only the supplement digest',()=>{
+ const a=supplement();a.choices.push(tokenReview());const before=canonical(a).digest,m={sourceId:id(1),firstName:'Fictional',lastName:'Example',jobs:provider().jobs},sourceScope={...scope(),timezone:'America/New_York',...toastRosterProfile},sourceVersion=fingerprintToastMember(sourceScope,m);
+ for(const edit of [c=>c.semantics='retired_job',c=>c.observedDescriptions=['Fictional Changed'],c=>c.canonicalDescription='Fictional Display',c=>c.revision++,c=>c.reviewer='fictional-other',c=>c.reviewedAt='2035-11-04T12:00:00.123457Z']){const b=structuredClone(a);edit(b.choices.at(-1));assert.notEqual(canonical(b).digest,before);assert.deepEqual(fingerprintToastMember(sourceScope,m),sourceVersion);}
+});
+test('description conflicts require explicit canonical display acknowledgement of the full observed set',()=>{
+ const a=provider(),b=provider(2);b.jobs[0].description='Fictional Conflict';const s=supplement();s.choices.push(member(2),tokenReview(id(101),['Fictional Cook','Fictional Conflict']));
+ assert.ok(report(s,[a,b]).rows.every(r=>r.issues.some(i=>i.code==='job_token_description_conflict')));
+ s.choices.at(-1).canonicalDescription='Fictional Reviewed Display';assert.equal(report(s,[a,b]).status,'reviewable');assert.equal(a.jobs[0].description,'Fictional Cook');assert.equal(b.jobs[0].description,'Fictional Conflict');
+});
+test('new or changed observed descriptions stale prior review including UUID-shaped and excluded tokens',()=>{
+ for(const semantics of ['provider_job_key','retired_job','not_a_job']){
+  const s=supplement();s.choices.push(tokenReview(id(101),['Fictional Cook'],semantics));const p=provider();p.jobs[0].description='Fictional Changed';assert.ok(codes(report(s,[p])).includes('job_token_review_stale'));
+ }
+ const {s,p,value}=nonUuidExample();s.choices.push(tokenReview(value));p.jobs[0].description='Fictional Changed';const r=report(s,[p]);assert.ok(codes(r).includes('job_token_unresolved'));assert.ok(codes(r).includes('job_token_review_stale'));
+});
+test('full-roster conflict indexing flags selected members even when the peer has no member choice',()=>{
+ const s=supplement(),a=provider(),b=provider(2);b.jobs[0].description='Fictional Conflict';s.choices.push({...tokenReview(),canonicalDescription:'Fictional Display'});const r=report(s,[a,b]);assert.ok(r.rows[0].issues.some(i=>i.code==='job_token_review_stale'));assert.ok(r.rows[0].issues.some(i=>i.code==='job_token_description_conflict'));assert.ok(r.rows[1].issues.some(i=>i.code==='member_supplement_required'));
+});
+test('token review identities preserve exact tokens and cannot resolve another spelling',()=>{
+ const {s,p,value}=nonUuidExample();s.choices.push(tokenReview(value.toUpperCase()));const r=report(s,[p]);assert.ok(codes(r).includes('job_token_unresolved'));assert.ok(r.issues.some(i=>i.kind==='tokenReview'&&i.code==='unused_supplement_choice'));
+});
+test('token review shape, metadata and observed descriptions fail closed',()=>{
+ for(const edit of [c=>c.semantics='guess',c=>c.observedDescriptions=[],c=>c.observedDescriptions=['Fictional Cook','Fictional Cook'],c=>c.observedDescriptions=[' Fictional Cook'],c=>c.canonicalDescription='',c=>delete c.canonicalDescription,c=>c.revision=0,c=>c.reviewer='',c=>c.reviewedAt='2035-11-04',c=>c.grants=['owner']]){const s=supplement(),c=tokenReview();edit(c);s.choices.push(c);assert.throws(()=>canonical(s),TypeError);}
+});
+test('token reviews are scoped by both provider namespace and reviewed population',()=>{
+ const s=supplement();s.choices.push(tokenReview());for(const edit of [b=>b.scope.tenant='fictional-other',b=>b.scope.storeId='fictional-other',b=>b.population.revision++,b=>b.population.effectiveDate='2035-11-05']){const b=binding();edit(b);assert.throws(()=>canonicalizeManagerSupplement(s,b),/supplement_(scope|population)_mismatch/);}
+});
+test('no-job member choices receive their specific diagnostic without generic unused duplication',()=>{
+ const s=supplement();s.choices.push(member(2));const r=report(s,[provider(),{sourceId:id(2),jobs:[]}]);assert.deepEqual(r.issues,[{code:'member_choice_for_no_job_employee',kind:'member',key:id(2)}]);assert.equal(r.rows[1].status,'review_required');assert.deepEqual(r.rows[1].issues,[{code:'source_jobs_missing'}]);assert.ok(!r.rows[1].proposed);
+});

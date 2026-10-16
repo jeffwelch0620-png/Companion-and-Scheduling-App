@@ -27,7 +27,13 @@ function selectedTokens(values){
  if(new Set(values).size!==values.length)fail('duplicate_scheduling_job_selection');
  return [...values].sort(ordinal);
 }
-const choiceIdentity=c=>JSON.stringify([c.kind,c.kind==='job'?c.token:c.sourceId]);
+const choiceKey=c=>c.kind==='member'?c.sourceId:c.token;
+const choiceIdentity=c=>JSON.stringify([c.kind,choiceKey(c)]);
+function observedDescriptions(values){
+ if(!Array.isArray(values)||!values.length||values.length>managerSupplementLimits.members*managerSupplementLimits.jobs||values.some(v=>!trimmedText(v)))fail('invalid_token_review_descriptions');
+ if(new Set(values).size!==values.length)fail('duplicate_token_review_description');
+ return [...values].sort(ordinal);
+}
 export function parseManagerSupplementFile(body){
  // Reuse the accepted bounded JSON parser, including duplicate and escaped-duplicate key refusal.
  try{return parseSourcePreviewFile(body);}catch{fail('invalid_supplement_json');}
@@ -48,6 +54,10 @@ export function canonicalizeManagerSupplement(input,binding){
    exactShape(c,[...reviewKeys,'token','department','position','allowScheduling'],'invalid_supplement_choice');
    if(!token(c.token)||!trimmedText(c.department)||!trimmedText(c.position)||typeof c.allowScheduling!=='boolean')fail('invalid_supplement_job');
    result={kind:'job',token:c.token,department:c.department,position:c.position,allowScheduling:c.allowScheduling,...metadata(c)};
+  }else if(c?.kind==='tokenReview'){
+   exactShape(c,[...reviewKeys,'token','semantics','observedDescriptions','canonicalDescription'],'invalid_supplement_choice');
+   if(!token(c.token)||!['provider_job_key','retired_job','not_a_job'].includes(c.semantics)||(c.canonicalDescription!==null&&!trimmedText(c.canonicalDescription)))fail('invalid_token_review');
+   result={kind:'tokenReview',token:c.token,semantics:c.semantics,observedDescriptions:observedDescriptions(c.observedDescriptions),canonicalDescription:c.canonicalDescription,...metadata(c)};
   }else if(c?.kind==='member'){
    exactShape(c,[...reviewKeys,'sourceId','primaryJobToken','schedulingJobTokens','scheduleOnly'],'invalid_supplement_choice');
    if(!sourceUuid(c.sourceId)||!token(c.primaryJobToken)||typeof c.scheduleOnly!=='boolean')fail('invalid_supplement_member');
@@ -55,7 +65,7 @@ export function canonicalizeManagerSupplement(input,binding){
   }else fail('invalid_supplement_choice');
   const key=choiceIdentity(result);if(seen.has(key))fail('duplicate_supplement_choice');seen.add(key);return result;
  });
- choices.sort((a,b)=>ordinal(a.kind,b.kind)||ordinal(a.kind==='job'?a.token:a.sourceId,b.kind==='job'?b.token:b.sourceId));
+ choices.sort((a,b)=>ordinal(a.kind,b.kind)||ordinal(choiceKey(a),choiceKey(b)));
  // Namespace is fixed by the envelope. Canonical timestamps use exact UTC microseconds, not display strings.
  const canonical={format:input.format,scope,population:boundPopulation,...metadata(input),choices};
  return {canonical,digest:contentDigest(canonical),...flags()};
@@ -80,18 +90,33 @@ export function reviewManagerSupplementSelections(input,binding,providerMembers,
  });
  const jobs=new Map(c.choices.filter(x=>x.kind==='job').map(x=>[x.token,x]));
  const choices=new Map(c.choices.filter(x=>x.kind==='member').map(x=>[x.sourceId,x]));
- const used=new Set([...jobs.values()].filter(j=>allTokens.has(j.token)).map(choiceIdentity)),rows=[];
+ const reviews=new Map(c.choices.filter(x=>x.kind==='tokenReview').map(x=>[x.token,x]));
+ // The caller must supply the full validated store roster, never just selected employees.
+ const reviewState=new Map([...allTokens].map(value=>{
+  const review=reviews.get(value),observed=[...descriptions.get(value)].sort(ordinal);
+  const stale=!!review&&canonicalJson(review.observedDescriptions)!==canonicalJson(observed);
+  const excluded=!!review&&review.semantics!=='provider_job_key';
+  return [value,{review,stale,excluded}];
+ }));
+ const used=new Set(c.choices.filter(j=>j.kind!=='member'&&allTokens.has(j.token)).map(choiceIdentity)),rows=[];
  for(const member of members){
   const issues=[],add=(code,value)=>{const finding={code,...(value===undefined?{}:{token:value})};if(!issues.some(x=>JSON.stringify(x)===JSON.stringify(finding)))issues.push(finding);};
   const assigned=new Set(member.jobs.map(j=>j.token)),choice=choices.get(member.sourceId);
-  if(!assigned.size)add('source_jobs_missing');
+  if(!assigned.size){add('source_jobs_missing');if(choice)used.add(choiceIdentity(choice));}
   else{
-   for(const j of member.jobs){if(!sourceUuid(j.token))add('job_token_unresolved',j.token);if(descriptions.get(j.token).size>1)add('job_token_description_conflict',j.token);}
+   for(const j of member.jobs){
+    const {review,stale,excluded}=reviewState.get(j.token);
+    if(stale)add('job_token_review_stale',j.token);
+    if(!sourceUuid(j.token)&&(!review||stale))add('job_token_unresolved',j.token);
+    if(descriptions.get(j.token).size>1&&(!review||stale||review.canonicalDescription===null))add('job_token_description_conflict',j.token);
+    if(excluded&&jobs.has(j.token))add('job_token_mapping_excluded',j.token);
+   }
    if(!choice)add('member_supplement_required');
    else{
     used.add(choiceIdentity(choice));const primary=jobs.get(choice.primaryJobToken);
+    if(reviewState.get(choice.primaryJobToken)?.excluded)add('primary_job_token_excluded',choice.primaryJobToken);
     if(!assigned.has(choice.primaryJobToken))add('primary_job_not_reported',choice.primaryJobToken);
-    if(!primary)add('primary_job_mapping_required',choice.primaryJobToken);
+    if(!primary&&!reviewState.get(choice.primaryJobToken)?.excluded)add('primary_job_mapping_required',choice.primaryJobToken);
     const checkConfiguration=job=>{
      used.add(choiceIdentity(job));if(!departments.has(job.department)||!positions.has(job.position))add('target_job_configuration_required',job.token);
     };
@@ -99,6 +124,7 @@ export function reviewManagerSupplementSelections(input,binding,providerMembers,
     const selected=[];
     for(const selectedToken of choice.schedulingJobTokens){
      if(!assigned.has(selectedToken))add('scheduling_job_not_reported',selectedToken);
+     if(reviewState.get(selectedToken)?.excluded){add('scheduling_job_token_excluded',selectedToken);continue;}
      const job=jobs.get(selectedToken);if(!job){add('job_mapping_required',selectedToken);continue;}
      checkConfiguration(job);if(!job.allowScheduling)add('scheduling_job_not_allowed',selectedToken);
      if(primary&&job.department!==primary.department)add('cross_department_scheduling_review',selectedToken);
@@ -110,7 +136,9 @@ export function reviewManagerSupplementSelections(input,binding,providerMembers,
   }
   if(issues.length){issues.sort((a,b)=>ordinal(a.code,b.code)||ordinal(a.token??'',b.token??''));rows.push({sourceId:member.sourceId,status:issues.every(i=>i.code==='source_jobs_missing')?'review_required':'blocked',issues});}
  }
- const issues=c.choices.filter(x=>!used.has(choiceIdentity(x))).map(x=>({code:'unused_supplement_choice',kind:x.kind,key:x.kind==='job'?x.token:x.sourceId}));
+ const issues=c.choices.filter(x=>!used.has(choiceIdentity(x))).map(x=>({code:'unused_supplement_choice',kind:x.kind,key:choiceKey(x)}));
+ for(const member of members)if(!member.jobs.length&&choices.has(member.sourceId))issues.push({code:'member_choice_for_no_job_employee',kind:'member',key:member.sourceId});
+ issues.sort((a,b)=>ordinal(a.code,b.code)||ordinal(a.kind,b.kind)||ordinal(a.key,b.key));
  rows.sort((a,b)=>ordinal(a.sourceId,b.sourceId));
  return {stage:'manager-supplement-selection-review',scope:c.scope,population:c.population,supplementDigest:normalized.digest,status:rows.some(x=>x.status==='blocked')?'blocked':issues.length||rows.some(x=>x.status==='review_required')?'review_required':'reviewable',rows,issues,...flags(),requires:['verified-source-provenance','current-authorized-target-read','identity-and-alias-review','V3-preview-bridge']};
 }
