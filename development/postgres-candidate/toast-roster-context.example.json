@@ -7,7 +7,7 @@
     "externalStoreId": "fictional-external",
     "timezone": "America/New_York",
     "sourceFormat": "toast-roster-csv-v1",
-    "transformVersion": "toast-roster-provider-v1"
+    "transformVersion": "toast-roster-provider-v2"
   },
   "capturedAt": "2035-11-04T12:00:00.123456Z",
   "population": {

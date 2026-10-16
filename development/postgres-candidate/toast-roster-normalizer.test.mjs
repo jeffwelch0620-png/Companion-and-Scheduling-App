@@ -6,6 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {toastRosterProfile,canonicalJson,contentDigest,utcMicroseconds,fingerprintToastMember,sourceReviewContextDigest} from './source-fingerprint.mjs';
 import {normalizeToastRoster,toastRosterHeaders,toastRosterLimits} from './toast-roster-normalizer.mjs';
 import {previewSourceMapping} from './source-preview.mjs';
@@ -16,7 +17,7 @@ const row=(n=1)=>['Fictional Restaurant',id(n),'Example','Fictional',`fictional$
 const field=x=>'"'+String(x).replaceAll('"','""')+'"';
 const csv=(rows=[row()],headers=toastRosterHeaders,eol='\n')=>Buffer.from([headers,...rows].map(r=>r.map(field).join(',')).join(eol)+eol);
 const prep=(rows,ctx=context())=>normalizeToastRoster(csv(rows),ctx);
-const member=()=>({sourceId:id(1),name:'Fictional Example',jobs:[{token:id(101),description:'Fictional Cook'},{token:id(102),description:'Fictional Host'}]});
+const member=()=>({sourceId:id(1),firstName:'Fictional',lastName:'Example',jobs:[{token:id(101),description:'Fictional Cook'},{token:id(102),description:'Fictional Host'}]});
 const frozen=r=>{for(const k of ['canApply','completenessCertified','accessProvisioned'])assert.equal(r[k],false);};
 
 test('exact Toast profile prepares source-only records and never invents manager fields or complete leave',()=>{
@@ -38,7 +39,7 @@ test('name changes stale mappings while trimmed name/description whitespace is s
  const a=row(),b=row();b[2]='  Example  ';b[3]=' Fictional ';b[8]=' Fictional Cook ; Fictional Host ';assert.deepEqual(prep([a]).source,prep([b]).source);b[3]='Fictional Changed';assert.notDeepEqual(prep([a]).source.records[0].sourceVersion,prep([b]).source.records[0].sourceVersion);
 });
 test('internal spelling, whitespace, punctuation and Unicode are preserved',()=>{
- const a=row();a[2]='Comma, "Quote"';a[3]='Fictional  É';assert.equal(prep([a]).source.records[0].name,'Fictional  É Comma, "Quote"');const b=[...a];b[3]='Fictional  E\u0301';assert.notDeepEqual(prep([a]).source.records[0].sourceVersion,prep([b]).source.records[0].sourceVersion);
+ const a=row();a[2]='Comma, "Quote"';a[3]='Fictional  É';assert.equal(prep([a]).source.records[0].displayName,'Fictional  É Comma, "Quote"');const b=[...a];b[3]='Fictional  E\u0301';assert.notDeepEqual(prep([a]).source.records[0].sourceVersion,prep([b]).source.records[0].sourceVersion);
 });
 test('excluded contact, compensation and optional legacy ID changes do not affect sourceVersion',()=>{
  const a=row(),b=row();b[4]='different@example.invalid';b[5]='555-0199';b[6]='repeated-legacy';b[9]='777.77';assert.deepEqual(prep([a]).source,prep([b]).source);assert.notEqual(prep([a]).provenance.rawFileSha256,prep([b]).provenance.rawFileSha256);
@@ -51,6 +52,26 @@ test('non-UUID tokens retain exact text and deterministic versions while unresol
 });
 test('duplicate job pairs refuse the whole preparation, never silently deduplicate',()=>{
  const a=row();a[7]=id(101)+';'+id(101);a[8]='Fictional Cook; Fictional Cook ';assert.throws(()=>prep([row(2),a]),/duplicate_source_job_pair/);
+});
+test('exactly empty job cells preserve the employee with an empty fingerprinted job set',()=>{
+ const noJobs=row(2);noJobs[7]='';noJobs[8]='';const r=prep([row(1),noJobs,row(3)]);
+ assert.equal(r.source.records.length,3);assert.equal(r.source.families.roster.count,3);const missing=r.source.records.find(m=>m.sourceId===id(2));
+ assert.deepEqual(missing.jobs,[]);assert.equal(missing.status,'review_required');assert.ok(missing.issues.includes('source_jobs_missing'));
+ assert.ok(r.source.records.filter(m=>m.sourceId!==id(2)).every(m=>!m.issues.includes('source_jobs_missing')));
+ assert.deepEqual(missing.sourceVersion,fingerprintToastMember(scope(),{sourceId:id(2),firstName:'Fictional',lastName:'Example',jobs:[]}));
+ assert.notDeepEqual(missing.sourceVersion,prep([row(2)]).source.records[0].sourceVersion);frozen(r);
+});
+test('empty tokens inside nonempty lists, whitespace-only cells and one-sided emptiness still refuse',()=>{
+ for(const [tokens,descriptions] of [['a;;b','A;;B'],['a;','A;'],[';a',';A'],[' ',' '],['','A'],['a',''],['a; ;b','A; ;B']]){
+  const bad=row(2);bad[7]=tokens;bad[8]=descriptions;assert.throws(()=>prep([row(1),bad]),TypeError);
+ }
+});
+test('separate name components distinguish identical display joins and require transform v2',()=>{
+ const a=row(),b=row();a[3]='Ana Maria';a[2]='Lopez';b[3]='Ana';b[2]='Maria Lopez';
+ const ma=prep([a]).source.records[0],mb=prep([b]).source.records[0];assert.equal(ma.displayName,mb.displayName);assert.notDeepEqual(ma.sourceVersion,mb.sourceVersion);
+ assert.equal(ma.firstName,'Ana Maria');assert.equal(ma.lastName,'Lopez');assert.equal(prep().source.transformVersion,'toast-roster-provider-v2');assert.equal(ma.sourceVersion.encoding,'source-content-v2');
+ const previous=context();previous.scope.transformVersion='toast-roster-provider-v1';assert.throws(()=>prep([a],previous),/unsupported_source_profile/);
+ const presentation={...member(),displayName:'Fictional Example'};assert.throws(()=>fingerprintToastMember(scope(),presentation),/invalid_source_shape/);
 });
 test('conflicting descriptions for a token flag every affected record',()=>{
  const a=row(1),b=row(2);b[8]='Fictional Baker;Fictional Host';const r=prep([a,b]);assert.ok(r.source.records.every(m=>m.issues.includes('job_token_description_conflict')));frozen(r);
@@ -71,7 +92,10 @@ test('scope is part of sourceVersion and unknown source profiles cannot be accep
  for(const key of ['sourceFormat','transformVersion','system']){const c=context();c.scope[key]='unknown';assert.throws(()=>prep(undefined,c),/unsupported_source_profile/);}
 });
 test('UTF8 BOM and CRLF are explicit supported variants; source versions remain stable',()=>{
- const a=normalizeToastRoster(csv(),context()),b=normalizeToastRoster(Buffer.concat([Buffer.from([239,187,191]),csv([row()],toastRosterHeaders,'\r\n')]),context());assert.deepEqual(a.source,b.source);assert.notEqual(a.provenance.rawFileSha256,b.provenance.rawFileSha256);
+ const original=csv(),withBom=Buffer.concat([Buffer.from([239,187,191]),original]);
+ const a=normalizeToastRoster(original,context()),b=normalizeToastRoster(withBom,context()),crlf=normalizeToastRoster(csv([row()],toastRosterHeaders,'\r\n'),context());
+ assert.deepEqual(a.source,b.source);assert.deepEqual(a.source,crlf.source);assert.notEqual(a.provenance.rawFileSha256,b.provenance.rawFileSha256);
+ assert.equal(b.provenance.rawFileSha256,createHash('sha256').update(withBom).digest('hex'));assert.equal(a.provenance.rawFileSha256,createHash('sha256').update(original).digest('hex'));
 });
 test('invalid encoding, malformed quoting, unknown/missing/reordered headers fail closed',()=>{
  assert.throws(()=>normalizeToastRoster(Buffer.from([255]),context()),/invalid_roster_encoding/);

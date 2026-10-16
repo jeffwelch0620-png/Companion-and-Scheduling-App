@@ -1,6 +1,6 @@
 // Pure preparation helpers. A digest proves content equality, never authority or completeness.
 import {createHash} from 'node:crypto';
-export const toastRosterProfile=Object.freeze({sourceFormat:'toast-roster-csv-v1',transformVersion:'toast-roster-provider-v1'});
+export const toastRosterProfile=Object.freeze({sourceFormat:'toast-roster-csv-v1',transformVersion:'toast-roster-provider-v2'});
 export const sourceEncoding='source-content-v2';
 const fail=code=>{throw new TypeError(code);};
 export function exactShape(value,keys,code='invalid_source_shape'){
@@ -47,7 +47,7 @@ export function checkedToastScope(scope){
  return {...scope};
 }
 export function canonicalJobPairs(jobs){
- if(!Array.isArray(jobs)||!jobs.length||jobs.length>100)fail('invalid_source_jobs');
+ if(!Array.isArray(jobs)||jobs.length>100)fail('invalid_source_jobs');
  const seen=new Set(),pairs=jobs.map(j=>{
   exactShape(j,['token','description']);
   if(typeof j.token!=='string'||!j.token.trim()||j.token.length>200||/[\x00-\x1f\x7f]/.test(j.token)||!trimmedText(j.description))fail('invalid_source_jobs');
@@ -56,9 +56,9 @@ export function canonicalJobPairs(jobs){
  return pairs.sort((a,b)=>a.token<b.token?-1:a.token>b.token?1:a.description<b.description?-1:a.description>b.description?1:0);
 }
 export function fingerprintToastMember(scope,member){
- const checked=checkedToastScope(scope);exactShape(member,['sourceId','name','jobs']);
- if(!sourceUuid(member.sourceId)||!trimmedText(member.name))fail('invalid_source_member');
- const payload={encoding:sourceEncoding,...checked,kind:'member',sourceId:member.sourceId,name:member.name,jobs:canonicalJobPairs(member.jobs)};
+ const checked=checkedToastScope(scope);exactShape(member,['sourceId','firstName','lastName','jobs']);
+ if(!sourceUuid(member.sourceId)||!trimmedText(member.firstName)||!trimmedText(member.lastName))fail('invalid_source_member');
+ const payload={encoding:sourceEncoding,...checked,kind:'member',sourceId:member.sourceId,firstName:member.firstName,lastName:member.lastName,jobs:canonicalJobPairs(member.jobs)};
  return {kind:'content_fingerprint',encoding:sourceEncoding,algorithm:'sha256',value:contentDigest(payload)};
 }
 export function sourceReviewContextDigest(context){

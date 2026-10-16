@@ -47,15 +47,17 @@ export function normalizeToastRoster(bytes,context){
   const rowLocation=raw.Location.trim();if(!trimmedText(rowLocation)||rowLocation!==context.location.expectedLabel||location!==undefined&&location!==rowLocation)fail('mixed_or_missing_roster_location');location=rowLocation;
   const first=raw['First Name'].trim(),last=raw['Last Name'].trim();if(!trimmedText(first)||!trimmedText(last))fail('invalid_source_member');
   // Keep token text exactly; only descriptions and name components are trimmed.
-  const tokens=raw['Job GUIDs'].split(';'),descriptions=raw['Job Descriptions'].split(';');
+  const emptyJobs=raw['Job GUIDs']===''&&raw['Job Descriptions']==='';
+  const tokens=emptyJobs?[]:raw['Job GUIDs'].split(';'),descriptions=emptyJobs?[]:raw['Job Descriptions'].split(';');
   if(tokens.length!==descriptions.length)fail('roster_job_pair_mismatch');
   const jobs=canonicalJobPairs(tokens.map((token,i)=>({token,description:descriptions[i].trim()})));
-  const member={sourceId,name:first+' '+last,jobs},issues=[];
-  if(context.pairing.mode==='unverified')issues.push('job_pairing_review_required');
+  const member={sourceId,firstName:first,lastName:last,jobs},issues=[];
+  if(emptyJobs)issues.push('source_jobs_missing');
+  if(jobs.length&&context.pairing.mode==='unverified')issues.push('job_pairing_review_required');
   if(jobs.some(j=>!sourceUuid(j.token)))issues.push('job_token_unresolved');
   if(new Set(jobs.map(j=>j.token)).size!==jobs.length)issues.push('job_token_description_conflict');
   issues.push('manager_supplement_required','identity_mapping_required');
-  records.push({...member,sourceVersion:fingerprintToastMember(context.scope,member),status:'review_required',issues});
+  records.push({...member,displayName:first+' '+last,sourceVersion:fingerprintToastMember(context.scope,member),status:'review_required',issues});
  }
  const descriptionsByToken=new Map();for(const r of records)for(const j of r.jobs){if(!descriptionsByToken.has(j.token))descriptionsByToken.set(j.token,new Set());descriptionsByToken.get(j.token).add(j.description);}
  for(const r of records)if(r.jobs.some(j=>descriptionsByToken.get(j.token).size>1)&&!r.issues.includes('job_token_description_conflict'))r.issues.push('job_token_description_conflict');
