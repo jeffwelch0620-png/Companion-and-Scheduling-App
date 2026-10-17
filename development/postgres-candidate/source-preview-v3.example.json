@@ -1,0 +1,253 @@
+{
+  "version": 3,
+  "preparation": {
+    "format": "toast-roster-preparation-v1",
+    "status": "review_required",
+    "source": {
+      "organizationId": "fictional-organization",
+      "system": "toast",
+      "tenant": "fictional-tenant",
+      "storeId": "fictional-store",
+      "externalStoreId": "fictional-external",
+      "timezone": "America/New_York",
+      "sourceFormat": "toast-roster-csv-v1",
+      "transformVersion": "toast-roster-provider-v2",
+      "records": [
+        {
+          "sourceId": "4abcde00-0000-0000-0000-000000000001",
+          "firstName": "Avery",
+          "lastName": "Example",
+          "jobs": [
+            {
+              "token": "4abcde00-0000-0000-0000-000000000101",
+              "description": "Fictional Cook"
+            }
+          ],
+          "displayName": "Avery Example",
+          "sourceVersion": {
+            "kind": "content_fingerprint",
+            "encoding": "source-content-v2",
+            "algorithm": "sha256",
+            "value": "d682839a19786bb54af80dd9cd225ee2ecf4348aaadd6371eb339cac8c231076"
+          },
+          "status": "review_required",
+          "issues": [
+            "manager_supplement_required",
+            "identity_mapping_required"
+          ]
+        },
+        {
+          "sourceId": "4abcde00-0000-0000-0000-000000000002",
+          "firstName": "Rowan",
+          "lastName": "Example",
+          "jobs": [
+            {
+              "token": "4abcde00-0000-0000-0000-000000000101",
+              "description": "Fictional Cook"
+            }
+          ],
+          "displayName": "Rowan Example",
+          "sourceVersion": {
+            "kind": "content_fingerprint",
+            "encoding": "source-content-v2",
+            "algorithm": "sha256",
+            "value": "9968ea96bdd9f4bcffc50b59e89a5254b74e59595878b02bda59e030d87609e4"
+          },
+          "status": "review_required",
+          "issues": [
+            "manager_supplement_required",
+            "identity_mapping_required"
+          ]
+        }
+      ],
+      "families": {
+        "roster": {
+          "available": true,
+          "population": "initial_active_only",
+          "archivedHistory": "excluded",
+          "coverageClaim": "unverified",
+          "count": 2
+        },
+        "timeOff": {
+          "available": false
+        }
+      }
+    },
+    "provenance": {
+      "rawFileSha256": "423449fa4249a78720f56f51b96a11bf3d92afcfbdb7f824ea768d495c2b4a09",
+      "normalizedSourceDigest": "c4074ba51f83b619a02bfec8e9caf44a8041ce4a2643d9cbf32445359570afe6",
+      "capturedAtMicroseconds": "2077790400123456",
+      "population": {
+        "kind": "initial_active_only",
+        "effectiveDate": "2035-11-04",
+        "archivedHistory": "excluded",
+        "filterEvidence": "Fictional active roster review",
+        "reviewer": "fictional-reviewer",
+        "revision": 1
+      },
+      "pairing": {
+        "mode": "reviewed_positional_pairs",
+        "reviewer": "fictional-reviewer",
+        "revision": 1
+      },
+      "location": {
+        "expectedLabel": "Fictional Location",
+        "reviewer": "fictional-reviewer",
+        "revision": 1
+      }
+    },
+    "provenanceDigest": "cb7381e4975198e3961c6ddadeab896c3c36da15d51af6c6025b2b932b502441",
+    "canApply": false,
+    "completenessCertified": false,
+    "accessProvisioned": false
+  },
+  "supplement": {
+    "format": "manager-supplement-v1",
+    "scope": {
+      "organizationId": "fictional-organization",
+      "system": "toast",
+      "tenant": "fictional-tenant",
+      "storeId": "fictional-store",
+      "externalStoreId": "fictional-external"
+    },
+    "population": {
+      "revision": 1,
+      "effectiveDate": "2035-11-04"
+    },
+    "revision": 1,
+    "reviewer": "fictional-reviewer",
+    "reviewedAt": "2035-11-04T12:00:00.123456Z",
+    "choices": [
+      {
+        "kind": "job",
+        "token": "4abcde00-0000-0000-0000-000000000101",
+        "department": "Kitchen",
+        "position": "Fictional Cook",
+        "allowScheduling": true,
+        "revision": 1,
+        "reviewer": "fictional-reviewer",
+        "reviewedAt": "2035-11-04T12:00:00.123456Z"
+      },
+      {
+        "kind": "member",
+        "sourceId": "4abcde00-0000-0000-0000-000000000001",
+        "primaryJobToken": "4abcde00-0000-0000-0000-000000000101",
+        "schedulingJobTokens": [
+          "4abcde00-0000-0000-0000-000000000101"
+        ],
+        "scheduleOnly": false,
+        "revision": 1,
+        "reviewer": "fictional-reviewer",
+        "reviewedAt": "2035-11-04T12:00:00.123456Z"
+      },
+      {
+        "kind": "member",
+        "sourceId": "4abcde00-0000-0000-0000-000000000002",
+        "primaryJobToken": "4abcde00-0000-0000-0000-000000000101",
+        "schedulingJobTokens": [
+          "4abcde00-0000-0000-0000-000000000101"
+        ],
+        "scheduleOnly": false,
+        "revision": 1,
+        "reviewer": "fictional-reviewer",
+        "reviewedAt": "2035-11-04T12:00:00.123456Z"
+      }
+    ]
+  },
+  "mappings": [
+    {
+      "scope": {
+        "organizationId": "fictional-organization",
+        "system": "toast",
+        "tenant": "fictional-tenant",
+        "storeId": "fictional-store",
+        "externalStoreId": "fictional-external",
+        "timezone": "America/New_York",
+        "sourceFormat": "toast-roster-csv-v1",
+        "transformVersion": "toast-roster-provider-v2"
+      },
+      "kind": "member",
+      "sourceId": "4abcde00-0000-0000-0000-000000000001",
+      "sourceVersion": {
+        "kind": "content_fingerprint",
+        "encoding": "source-content-v2",
+        "algorithm": "sha256",
+        "value": "d682839a19786bb54af80dd9cd225ee2ecf4348aaadd6371eb339cac8c231076"
+      },
+      "targetId": "4abcde00-0000-0000-0000-000000000201",
+      "personId": "4abcde00-0000-0000-0000-000000000301",
+      "mappingRevision": 1,
+      "expectedTargetRevision": 2
+    },
+    {
+      "scope": {
+        "organizationId": "fictional-organization",
+        "system": "toast",
+        "tenant": "fictional-tenant",
+        "storeId": "fictional-store",
+        "externalStoreId": "fictional-external",
+        "timezone": "America/New_York",
+        "sourceFormat": "toast-roster-csv-v1",
+        "transformVersion": "toast-roster-provider-v2"
+      },
+      "kind": "member",
+      "sourceId": "4abcde00-0000-0000-0000-000000000002",
+      "sourceVersion": {
+        "kind": "content_fingerprint",
+        "encoding": "source-content-v2",
+        "algorithm": "sha256",
+        "value": "9968ea96bdd9f4bcffc50b59e89a5254b74e59595878b02bda59e030d87609e4"
+      },
+      "targetId": "4abcde00-0000-0000-0000-000000000202",
+      "personId": "4abcde00-0000-0000-0000-000000000302",
+      "mappingRevision": 1,
+      "expectedTargetRevision": null
+    }
+  ],
+  "target": {
+    "organizationId": "fictional-organization",
+    "capturedAt": "2035-11-04T13:00:00Z",
+    "people": [
+      {
+        "id": "4abcde00-0000-0000-0000-000000000301",
+        "name": "Avery Example",
+        "active": true
+      },
+      {
+        "id": "4abcde00-0000-0000-0000-000000000302",
+        "name": "Rowan Example",
+        "active": true
+      }
+    ],
+    "stores": [
+      {
+        "id": "fictional-store",
+        "timezone": "America/New_York",
+        "departments": [
+          "Kitchen"
+        ],
+        "jobs": [
+          "Fictional Cook"
+        ],
+        "inputRevision": 7,
+        "members": [
+          {
+            "id": "4abcde00-0000-0000-0000-000000000201",
+            "personId": "4abcde00-0000-0000-0000-000000000301",
+            "revision": 2,
+            "name": "Avery Example",
+            "department": "Kitchen",
+            "position": "Fictional Cook",
+            "active": true,
+            "scheduleOnly": false,
+            "scheduleJobs": [
+              "Fictional Cook"
+            ]
+          }
+        ],
+        "timeOff": null
+      }
+    ]
+  },
+  "accessFence": "fictional-access-fence"
+}
