@@ -53,6 +53,36 @@ const coverageComplete=(coverage,family)=>coverage.complete&&coverage.endOfSourc
 const countsFor=(rows,v2)=>Object.fromEntries(['new','unchanged','changed','omitted','blocked',...(v2?['review_required']:[])].map(status=>[status,rows.filter(r=>r.status===status).length]));
 const statusFor=issues=>issues.some(i=>i.severity==='blocking')?'blocked':issues.length?'review_required':'reviewable';
 
+// Shared target/identity checks for versioned read-only previews; no source-version coercion.
+export function validateSourceTarget(target,organizationId,v2=true){
+ shape(target,['organizationId','capturedAt','people','stores']);
+ if(target.organizationId!==organizationId||instant(target.capturedAt)===null)bad('invalid_snapshot_scope');
+ list(target.stores,sourcePreviewLimits.stores);list(target.people,sourcePreviewLimits.people);
+ const people=new Map();for(const p of target.people){shape(p,['id','name','active']);if(!uuid(p.id)||!text(p.name)||typeof p.active!=='boolean'||people.has(p.id.toLowerCase()))bad('invalid_person_snapshot');people.set(p.id.toLowerCase(),p);}
+ const stores=new Map(),targetIds=new Set();
+ for(const t of target.stores){
+  shape(t,['id','timezone','departments','jobs','inputRevision','members','timeOff']);if(!text(t.id)||!zone(t.timezone)||!counter(t.inputRevision)||stores.has(t.id))bad('invalid_target_store');names(t.departments);names(t.jobs);if(!t.departments.length)bad('invalid_target_store');
+  list(t.members,sourcePreviewLimits.rowsPerFamily);if(!v2||t.timeOff!==null)list(t.timeOff,sourcePreviewLimits.rowsPerFamily);const memberPeople=new Set();
+  for(const m of t.members){memberShape(m,false);const id=m.id.toLowerCase(),person=m.personId.toLowerCase();if(targetIds.has(key('member',id))||memberPeople.has(person)||!people.has(person)||!t.departments.includes(m.department)||!t.jobs.includes(m.position)||m.scheduleJobs.some(j=>!t.jobs.includes(j)))bad('invalid_target_member');targetIds.add(key('member',id));memberPeople.add(person);}
+  for(const r of t.timeOff??[]){leaveShape(r,false);const id=r.id.toLowerCase();if(targetIds.has(key('timeOff',id))||(!t.departments.includes(r.department)||!t.members.some(m=>m.id.toLowerCase()===r.memberId.toLowerCase())))bad('invalid_target_leave');targetIds.add(key('timeOff',id));}
+  stores.set(t.id,t);
+ }
+
+ return {people,stores,targetIds};
+}
+export function memberIdentityIssues(r,m,existing,t,people,sourcePersonCount,checkConfiguration=true){
+ const codes=[],person=m.personId.toLowerCase(),id=m.targetId.toLowerCase();
+ if(!people.has(person))codes.push('person_review_required');else if(r.active&&!people.get(person).active)codes.push('person_inactive');
+ if(sourcePersonCount>1||t?.members.some(x=>x.personId.toLowerCase()===person&&x.id.toLowerCase()!==id))codes.push('duplicate_person_membership');
+ if(existing&&existing.personId.toLowerCase()!==person)codes.push('person_binding_conflict');
+ if(t&&checkConfiguration&&(!t.departments.includes(r.department)||!t.jobs.includes(r.position)||r.scheduleJobs.some(j=>!t.jobs.includes(j))))codes.push('job_or_department_mapping_required');
+ return codes;
+}
+export function compareSourceMember(r,existing){
+ const after=memberValue(r),before=existing?memberValue(existing):null;
+ return {status:existing?(equal(before,after)?'unchanged':'changed'):'new',changedFields:before?Object.keys(after).filter(k=>!equal(before[k],after[k])):[]};
+}
+
 export function parseSourcePreviewFile(body){
  if(typeof body!=='string'||Buffer.byteLength(body)>sourcePreviewLimits.bytes)bad('snapshot_byte_limit');
  let parsed;try{parsed=JSON.parse(body);}catch{bad('invalid_snapshot_json');}
@@ -77,15 +107,7 @@ export function previewSourceMapping(input){
  if(!source.scopes.length)bad('empty_snapshot_scope');
  const issues=[],rows=[],scopes=[],seenTargets=new Set(),seenStores=new Set(),seenExternalStores=new Set(),usedMappings=new Set(),coverageByStore=new Map();
  const issue=(code,storeId,kind,sourceId,memberSourceId,family)=>issues.push({code,severity:reviewRequired.has(code)?'review_required':'blocking',storeId,kind,sourceId,...(memberSourceId===undefined?{}:{memberSourceId}),...(v2&&(family||kind==='member'||kind==='timeOff')?{family:family??(kind==='member'?'roster':'timeOff')}:{})});
- const people=new Map();for(const p of target.people){shape(p,['id','name','active']);if(!uuid(p.id)||!text(p.name)||typeof p.active!=='boolean'||people.has(p.id.toLowerCase()))bad('invalid_person_snapshot');people.set(p.id.toLowerCase(),p);}
- const stores=new Map(),targetIds=new Set();
- for(const t of target.stores){
-  shape(t,['id','timezone','departments','jobs','inputRevision','members','timeOff']);if(!text(t.id)||!zone(t.timezone)||!counter(t.inputRevision)||stores.has(t.id))bad('invalid_target_store');names(t.departments);names(t.jobs);if(!t.departments.length)bad('invalid_target_store');
-  list(t.members,sourcePreviewLimits.rowsPerFamily);if(!v2||t.timeOff!==null)list(t.timeOff,sourcePreviewLimits.rowsPerFamily);const memberPeople=new Set();
-  for(const m of t.members){memberShape(m,false);const id=m.id.toLowerCase(),person=m.personId.toLowerCase();if(targetIds.has(key('member',id))||memberPeople.has(person)||!people.has(person)||!t.departments.includes(m.department)||!t.jobs.includes(m.position)||m.scheduleJobs.some(j=>!t.jobs.includes(j)))bad('invalid_target_member');targetIds.add(key('member',id));memberPeople.add(person);}
-  for(const r of t.timeOff??[]){leaveShape(r,false);const id=r.id.toLowerCase();if(targetIds.has(key('timeOff',id))||(!t.departments.includes(r.department)||!t.members.some(m=>m.id.toLowerCase()===r.memberId.toLowerCase())))bad('invalid_target_leave');targetIds.add(key('timeOff',id));}
-  stores.set(t.id,t);
- }
+ const {people,stores,targetIds}=validateSourceTarget(target,input.organizationId,v2);
  const map=new Map();
  for(const m of mappings){
   const family=m?.kind==='member';shape(m,family?['storeId','externalStoreId','kind','sourceId','sourceRevision','targetId','personId','mappingRevision','expectedTargetRevision']:['storeId','externalStoreId','kind','sourceId','sourceRevision','targetId','mappingRevision','expectedTargetRevision']);
@@ -150,10 +172,7 @@ export function previewSourceMapping(input){
     if(m.expectedTargetRevision!== (existing?.revision??null))add('target_revision_conflict');
     if(!existing&&targetIds.has(key(kind,id)))add('target_scope_collision');
     if(kind==='member'){
-     const person=m.personId.toLowerCase();if(!people.has(person))add('person_review_required');else if(r.active&&!people.get(person).active)add('person_inactive');
-     if(sourcePeople.get(person)>1||t?.members.some(x=>x.personId.toLowerCase()===person&&x.id.toLowerCase()!==id))add('duplicate_person_membership');
-     if(existing&&existing.personId.toLowerCase()!==person)add('person_binding_conflict');
-     if(t&&(!t.departments.includes(r.department)||!t.jobs.includes(r.position)||r.scheduleJobs.some(j=>!t.jobs.includes(j))))add('job_or_department_mapping_required');
+     for(const code of memberIdentityIssues(r,m,existing,t,people,sourcePeople.get(m.personId.toLowerCase())))add(code);
      if(!codes.length)mappedMembers.set(r.sourceId,{id,department:r.department});
     }else{
      const member=mappedMembers.get(r.memberSourceId);

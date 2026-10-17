@@ -1,0 +1,41 @@
+# V3 preparation recomputation and typed roster comparison
+
+Starts from owner-approved PR59 main e3154a51c678140cfc8ab89f557746ebf6780e63, reviewed head 975a44d64bbd6f1fb6ea2353ef5cc94627ed7078. [PR59 exact-head CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/38984206058) passed 1005/1005. [Merged-main CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/38985547207) also passed 1005/1005 after the merge. The owner authorized this isolated next slice on codex/companion-source-v3-comparison; it remains a draft requiring separate review and merge approval. No SQL, migration, manifest or snapshot changes; published 001–063 remain unchanged. Any separately needed SQL uses the next free corrective number, currently 064.
+
+## Preparation evidence
+
+The normalizer and new toast-roster-preparation.mjs share prepareToastRoster and checkedToastRosterContext. CSV parsing still checks exact headers, original bytes, bounded fields and the reviewed location; the extracted assembler retains provider-only fingerprints and existing output semantics. validateToastRosterPreparation accepts only the supported toast-roster-preparation-v1 artifact and toast-roster-provider-v2 transform, validates its exact nested shapes and reconstructs the expected artifact from provider fields and supplied provenance.
+
+Recompute every sourceVersion, display name, row status/finding, canonical job pair/record order, cross-roster description conflict, active-only family count/claim, normalizedSourceDigest, captured UTC microseconds, provenanceDigest and false application/certification/access flags. Refuse any mismatch, duplicate identity/pair, unknown field, stale format/transform, altered count/coverage or unsupported source-version mode. Root canonical JSON limits reject oversized, sparse, cyclic and non-JSON programmatic input rather than truncating.
+
+The supplied rawFileSha256 is validated and bound, not re-established from missing original bytes. A self-consistent edited artifact with fully recomputed evidence is still supplied evidence, not authentication, certified coverage or proof of original-file custody. Its provenance and entire content remain bound into review context.
+
+## Programmatic V3 envelope
+
+source-preview-v3.mjs exports previewSourceMappingV3. Its exact input is {version:3, preparation, supplement, mappings, target, accessFence}. This is a separate pure function with no file/network/database or permission lookup. Existing previewSourceMapping and the existing CLI continue to accept only V1/V2; bounded V3 file loading/output follows later. There is no source selection parameter.
+
+The first supported source is ONE Toast store's full initial-active-only preparation artifact. Validate/recompute it before passing all source members to manager supplement review. Index peer token descriptions even when a coworker has no member choice. Only after those full-roster checks may a later UI filter display rows. Supplements retain PR59 namespace/population bindings, token semantics, description acknowledgements, primary department/job and scheduling rules. Provider record findings are re-evaluated through the supplement/alias review; a resolved token does not need the old unresolved preparation finding copied blindly into the new report. Unverified positional pairing remains blocking.
+
+Each reviewed mapping has exactly {scope, kind, sourceId, sourceVersion, targetId, personId, mappingRevision, expectedTargetRevision}. Kind is member. Scope contains exactly organizationId, system, tenant, storeId, externalStoreId, timezone, sourceFormat and transformVersion, matching the preparation scope/profile. Employee sourceId retains exact provider GUID spelling. Target/person IDs are explicit UUIDs; revision expectations stay separate. Duplicate source or target binding keys refuse the envelope.
+
+sourceVersion must be the exact supported {kind:content_fingerprint, encoding:source-content-v2, algorithm:sha256, value:lowercase-hex-digest}. This first Toast bridge refuses provider-integer/legacy modes rather than fabricating counters, numerically comparing hashes or silently upgrading aliases. A future provider-revision profile needs an explicit supported transform/contract. Changed provider names or job pairs stale a reviewed content alias.
+
+## Shared target and identity safeguards
+
+The supplied target keeps the existing V2 target shape: {organizationId, capturedAt, people, stores}, with each store's id, timezone, departments, jobs, inputRevision, members and timeOff (array or null). validateSourceTarget and memberIdentityIssues are shared with V1/V2; member values/equality use the same canonical comparison helpers. Preserve configured department/job checks, explicit active people, duplicate-person memberships, person binding conflicts, target revision checks and target IDs that already belong to another store. No name matching, account creation, membership approval or access grants occur.
+
+A missing alias/person, stale source alias, target/person drift or unresolved selection blocks that row while retaining valid coworkers. Missing stores/timezone conflicts block the scope. Omitted ACTIVE target memberships and unused mappings remain explicit review obligations; archived target memberships are outside the active-only omission population and remain preserved in supplied target context; no record is deactivated. Source timeOff stays unavailable and creates no target-leave omission comparisons. Active=true is a proposed value derived from the owner-selected active-only population, not a provider-supplied per-record field or permission to overwrite under pending S02.
+
+The source active population is always reported with coverageClaim=unverified and active_population_review_required. Even all-new/unchanged rows do not certify completeness; archived history and leave remain excluded/unavailable. All reports keep canApply=false, completenessCertified=false and accessProvisioned=false. Reports contain private operator identifiers; never commit/attach real reports or run real files with invented review/scope bindings.
+
+## Complete review context
+
+reviewContextDigest binds V3 version, complete supported scope/profile, recomputed provenanceDigest, canonical supplementDigest, canonical typed mappings, the supplied target snapshot (including input and record/person revisions) and accessFence. Choice/mapping set reordering is stable; target enumeration remains bound conservatively as supplied. Source, supplement, mapping/person/target/population or access-fence changes stale the context. This digest is recomputed content, not a signed token, stored approval or current authority check. The older sourceReviewContextDigest stays unchanged for existing callers.
+
+accessFence is supplied offline evidence. A later authorized target reader must still commit its repeatable-read read-only snapshot and perform the separate current access/session check (or before/after viewer fence); reject revocation between read and response. This slice does not implement that reader.
+
+## Validation and remaining sequence
+
+Thirty-one wholly fictional tests cover derived-field/digest tampering, unknown/duplicate/oversized input, UTC microseconds including pre-epoch instants, unsupported versions, new/unchanged/changed comparisons, source/target/person drift, cross-store collisions, omissions/unavailable leave, canonical review context, full-roster conflicts, resolved/excluded tokens and unverified pairing. Accepted PR59 V1/V2 public example report bytes are frozen by golden hashes. The local combined serial source/normalizer/supplement/manifest suite passed 153/153. Strict candidate types, original-form previews and fresh-database CI are also required; exact-head evidence is recorded in the draft PR.
+
+Next: bounded V3 CLI with duplicate-key refusal, minimized fixed errors, review/block status exits and private output handling. Real mapping/effective-date/scope evidence, current authorized target reads/shared authz, certification/application, pending S02/S05, notifications, copied-component retirement and tested Inventory integration remain separate. No active Companion, hosted service or Inventory change is included.

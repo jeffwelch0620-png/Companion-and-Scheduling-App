@@ -1,7 +1,8 @@
 // Exact-profile, bounded, read-only preparation. Deliberately separate from preview envelopes V1/V2.
 import {createHash} from 'node:crypto';
-import {exactShape,trimmedText,sourceUuid,validDay,utcMicroseconds,checkedToastScope,canonicalJobPairs,fingerprintToastMember,contentDigest} from './source-fingerprint.mjs';
-export const toastRosterLimits=Object.freeze({bytes:2*1024*1024,employees:2000,jobsPerEmployee:100,fieldCharacters:2000});
+import {toastRosterLimits,checkedToastRosterContext,prepareToastRoster} from './toast-roster-preparation.mjs';
+export {toastRosterLimits} from './toast-roster-preparation.mjs';
+import {trimmedText,sourceUuid,canonicalJobPairs} from './source-fingerprint.mjs';
 export const toastRosterHeaders=Object.freeze(['Location','GUID','Last Name','First Name','Email','Phone Number','Employee ID','Job GUIDs','Job Descriptions','Wages']);
 const fail=code=>{throw new TypeError(code);};
 function csvRows(text){
@@ -22,18 +23,8 @@ function csvRows(text){
  }
  if(state==='quoted')fail('invalid_roster_csv');if(started||row.length||field)record();return rows;
 }
-function checkedContext(context){
- exactShape(context,['scope','capturedAt','population','pairing','location']);checkedToastScope(context.scope);utcMicroseconds(context.capturedAt);
- exactShape(context.location,['expectedLabel','reviewer','revision']);
- if(!trimmedText(context.location.expectedLabel)||!trimmedText(context.location.reviewer)||!Number.isSafeInteger(context.location.revision)||context.location.revision<1)fail('invalid_roster_location_binding');
- exactShape(context.population,['kind','effectiveDate','archivedHistory','filterEvidence','reviewer','revision']);
- const p=context.population;
- if(p.kind!=='initial_active_only'||p.archivedHistory!=='excluded'||!validDay(p.effectiveDate)||!trimmedText(p.filterEvidence)||!trimmedText(p.reviewer)||!Number.isSafeInteger(p.revision)||p.revision<1)fail('invalid_roster_population');
- exactShape(context.pairing,['mode','reviewer','revision']);const pairing=context.pairing;
- if(!['unverified','reviewed_positional_pairs'].includes(pairing.mode)||!trimmedText(pairing.reviewer)||!Number.isSafeInteger(pairing.revision)||pairing.revision<1)fail('invalid_roster_pairing');
-}
 export function normalizeToastRoster(bytes,context){
- checkedContext(context);
+ checkedToastRosterContext(context);
  if(!(bytes instanceof Uint8Array)||bytes.byteLength>toastRosterLimits.bytes)fail('roster_byte_limit');
  let text;try{text=new TextDecoder('utf-8',{fatal:true}).decode(bytes);}catch{fail('invalid_roster_encoding');}
  const rows=csvRows(text),header=rows.shift();
@@ -51,18 +42,7 @@ export function normalizeToastRoster(bytes,context){
   const tokens=emptyJobs?[]:raw['Job GUIDs'].split(';'),descriptions=emptyJobs?[]:raw['Job Descriptions'].split(';');
   if(tokens.length!==descriptions.length)fail('roster_job_pair_mismatch');
   const jobs=canonicalJobPairs(tokens.map((token,i)=>({token,description:descriptions[i].trim()})));
-  const member={sourceId,firstName:first,lastName:last,jobs},issues=[];
-  if(emptyJobs)issues.push('source_jobs_missing');
-  if(jobs.length&&context.pairing.mode==='unverified')issues.push('job_pairing_review_required');
-  if(jobs.some(j=>!sourceUuid(j.token)))issues.push('job_token_unresolved');
-  if(new Set(jobs.map(j=>j.token)).size!==jobs.length)issues.push('job_token_description_conflict');
-  issues.push('manager_supplement_required','identity_mapping_required');
-  records.push({...member,displayName:first+' '+last,sourceVersion:fingerprintToastMember(context.scope,member),status:'review_required',issues});
+  records.push({sourceId,firstName:first,lastName:last,jobs});
  }
- const descriptionsByToken=new Map();for(const r of records)for(const j of r.jobs){if(!descriptionsByToken.has(j.token))descriptionsByToken.set(j.token,new Set());descriptionsByToken.get(j.token).add(j.description);}
- for(const r of records)if(r.jobs.some(j=>descriptionsByToken.get(j.token).size>1)&&!r.issues.includes('job_token_description_conflict'))r.issues.push('job_token_description_conflict');
- records.sort((a,b)=>a.sourceId<b.sourceId?-1:a.sourceId>b.sourceId?1:0);
- const source={...context.scope,records,families:{roster:{available:true,population:'initial_active_only',archivedHistory:'excluded',coverageClaim:'unverified',count:records.length},timeOff:{available:false}}};
- const provenance={rawFileSha256:createHash('sha256').update(bytes).digest('hex'),normalizedSourceDigest:contentDigest(source),capturedAtMicroseconds:utcMicroseconds(context.capturedAt),population:{...context.population},pairing:{...context.pairing},location:{...context.location}};
- return {format:'toast-roster-preparation-v1',status:'review_required',source,provenance,provenanceDigest:contentDigest(provenance),canApply:false,completenessCertified:false,accessProvisioned:false};
+ return prepareToastRoster(records,context,createHash('sha256').update(bytes).digest('hex'));
 }
