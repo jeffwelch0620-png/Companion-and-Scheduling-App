@@ -7,8 +7,10 @@ import {previewSourceMappingV3} from './source-preview-v3.mjs';
 export const sourceV3CliLimits=Object.freeze({inputBytes:sourcePreviewLimits.bytes,outputBytes:8*1024*1024});
 const fail=code=>{throw new TypeError(code);};
 export async function readV3Snapshot(path,openInput=open){
- // Refuse URL/UNC/device namespaces before opening; Windows named pipes can block at open.
+ // Apply Windows device-name refusal on every platform, before any filesystem opener.
+ const reserved=/^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³]|conin\$|conout\$)$/i;
  if(typeof path!=='string'||!path||/^[\\/]{2}/.test(path)||/^[a-z][a-z0-9+.-]*:/i.test(path)&&!(/^[a-z]:[\\/]/i.test(path)))fail('source_v3_arguments_invalid');
+ if(path.split(/[\\/]/).some(segment=>reserved.test(segment.replace(/[. ]+$/g,'').split('.')[0].replace(/[. ]+$/g,''))))fail('source_v3_arguments_invalid');
  let handle;
  try{
   // O_NONBLOCK avoids waiting on a FIFO before fstat can refuse it (zero on unsupported platforms).
@@ -36,7 +38,83 @@ export function v3CliResult(bytes,privateReport=false){
  const json=JSON.stringify(output,null,2)+'\n';if(Buffer.byteLength(json)>sourceV3CliLimits.outputBytes)fail('source_v3_report_limit');
  return {json,exitCode:report.status==='blocked'?2:report.status==='review_required'?3:0};
 }
-const known=new Set(['source_v3_snapshot_path_required','source_v3_arguments_invalid','source_v3_input_unavailable','snapshot_byte_limit','invalid_snapshot_encoding','invalid_snapshot_json','duplicate_snapshot_key','invalid_v3_snapshot','unsupported_v3_snapshot','invalid_v3_access_fence','roster_preparation_mismatch','unsupported_roster_preparation','unsupported_source_profile','supplement_population_mismatch','supplement_scope_mismatch','v3_mapping_scope_mismatch','duplicate_v3_mapping','invalid_v3_mapping','invalid_v3_source_version','unsupported_v3_source_version','canonical_source_limit','snapshot_limit_or_shape','source_v3_report_limit']);
+// Exact, data-free TypeError codes only; regression coverage scans the V3 validation chain.
+const known=new Set([
+ 'canonical_source_limit',
+ 'duplicate_scheduling_job_selection',
+ 'duplicate_snapshot_key',
+ 'duplicate_source_job_pair',
+ 'duplicate_supplement_choice',
+ 'duplicate_token_review_description',
+ 'duplicate_v3_mapping',
+ 'empty_supplement_provider_projection',
+ 'invalid_canonical_source',
+ 'invalid_leave_snapshot',
+ 'invalid_member_snapshot',
+ 'invalid_person_snapshot',
+ 'invalid_roster_capture_instant',
+ 'invalid_roster_location_binding',
+ 'invalid_roster_member',
+ 'invalid_roster_pairing',
+ 'invalid_roster_population',
+ 'invalid_roster_preparation',
+ 'invalid_roster_preparation_record',
+ 'invalid_roster_provenance',
+ 'invalid_roster_raw_hash',
+ 'invalid_scheduling_job_selection',
+ 'invalid_snapshot_encoding',
+ 'invalid_snapshot_json',
+ 'invalid_snapshot_keys',
+ 'invalid_snapshot_scope',
+ 'invalid_snapshot_shape',
+ 'invalid_source_instant',
+ 'invalid_source_jobs',
+ 'invalid_source_member',
+ 'invalid_source_review_context',
+ 'invalid_source_shape',
+ 'invalid_source_timezone',
+ 'invalid_supplement_binding',
+ 'invalid_supplement_choice',
+ 'invalid_supplement_job',
+ 'invalid_supplement_json',
+ 'invalid_supplement_member',
+ 'invalid_supplement_population',
+ 'invalid_supplement_provider_member',
+ 'invalid_supplement_provider_projection',
+ 'invalid_supplement_review',
+ 'invalid_supplement_scope',
+ 'invalid_supplement_shape',
+ 'invalid_supplement_target_configuration',
+ 'invalid_target_leave',
+ 'invalid_target_member',
+ 'invalid_target_store',
+ 'invalid_token_review',
+ 'invalid_token_review_descriptions',
+ 'invalid_v3_access_fence',
+ 'invalid_v3_mapping',
+ 'invalid_v3_snapshot',
+ 'invalid_v3_source_version',
+ 'roster_preparation_mismatch',
+ 'roster_row_limit',
+ 'snapshot_byte_limit',
+ 'snapshot_limit_or_shape',
+ 'source_v3_arguments_invalid',
+ 'source_v3_input_unavailable',
+ 'source_v3_report_limit',
+ 'source_v3_snapshot_path_required',
+ 'supplement_byte_limit',
+ 'supplement_choice_limit',
+ 'supplement_member_limit',
+ 'supplement_population_mismatch',
+ 'supplement_scope_mismatch',
+ 'unsupported_roster_preparation',
+ 'unsupported_source_profile',
+ 'unsupported_supplement_format',
+ 'unsupported_v3_snapshot',
+ 'unsupported_v3_source_version',
+ 'v3_mapping_limit',
+ 'v3_mapping_scope_mismatch'
+]);
 export function v3CliFailure(error){
- return {status:'blocked',error:known.has(error?.message)?error.message:'invalid_v3_input',canApply:false,completenessCertified:false,accessProvisioned:false};
+ return {status:'blocked',error:error instanceof TypeError&&known.has(error.message)?error.message:'invalid_v3_input',canApply:false,completenessCertified:false,accessProvisioned:false};
 }

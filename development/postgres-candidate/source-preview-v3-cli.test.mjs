@@ -1,5 +1,6 @@
 // Wholly fictional inputs. Real source/target/operator reports never belong in Git.
 import test from 'node:test';
+import {createRequire} from 'node:module';
 import assert from 'node:assert/strict';
 import {mkdtempSync,readFileSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -103,5 +104,51 @@ test('non-regular pipe inputs cannot block the bounded reader before file valida
 test('URL, UNC and Windows device paths refuse before any filesystem opener is called',async()=>{
  for(const path of ["https://fictional-secret.example.invalid/input.json","file:///fictional-secret.json","//fictional-server/private.json","\\\\fictional-server\\private.json","\\\\.\\pipe\\fictional-private-input"]){
   let opened=false;await assert.rejects(readV3Snapshot(path,async()=>{opened=true;throw Error('unexpected_open');}),/source_v3_arguments_invalid/);assert.equal(opened,false);const r=execute([path]);assert.equal(r.status,1);assert.equal(r.report.error,'source_v3_arguments_invalid');assert.ok(!r.stdout.includes('fictional'));assert.equal(r.stderr,'');
+ }
+});
+
+test('fixed V3 validation-chain codes are explicitly covered; other error types collapse',()=>{
+ const ts=createRequire(import.meta.url)('typescript'),codes=new Set();
+ // Intentionally empty: every scanned fixed literal is safe to expose as a TypeError.
+ const deliberatelyCollapsed=new Map();
+ const helpers=new Set(['validateSourceTarget','memberShape','leaveShape','names','list','shape','parseSourcePreviewFile']);
+ for(const file of ['toast-roster-preparation.mjs','manager-supplement.mjs','source-fingerprint.mjs','source-preview-v3.mjs','source-preview.mjs']){
+  const tree=ts.createSourceFile(file,readFileSync(new URL(file,import.meta.url),'utf8'),ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
+  const walk=node=>{
+   if(ts.isCallExpression(node)&&ts.isIdentifier(node.expression)){
+    if(['fail','bad'].includes(node.expression.text)&&node.arguments[0]&&ts.isStringLiteral(node.arguments[0]))codes.add(node.arguments[0].text);
+    if(node.expression.text==='exactShape'&&node.arguments[2]&&ts.isStringLiteral(node.arguments[2]))codes.add(node.arguments[2].text);
+   }
+   if(ts.isFunctionDeclaration(node)&&node.name?.text==='exactShape')for(const parameter of node.parameters)if(parameter.initializer&&ts.isStringLiteral(parameter.initializer))codes.add(parameter.initializer.text);
+   ts.forEachChild(node,walk);
+  };
+  if(file==='source-preview.mjs'){for(const statement of tree.statements)if(ts.isFunctionDeclaration(statement)&&helpers.has(statement.name?.text))walk(statement);}else walk(tree);
+ }
+ assert.ok(codes.size>60);
+ for(const code of codes){
+  assert.equal(v3CliFailure(new TypeError(code)).error,deliberatelyCollapsed.has(code)?'invalid_v3_input':code,code);
+  assert.equal(v3CliFailure(new Error(code)).error,'invalid_v3_input',code);
+  assert.equal(v3CliFailure({message:code}).error,'invalid_v3_input',code);
+ }
+ for(const [code,reason]of deliberatelyCollapsed){assert.ok(codes.has(code));assert.ok(reason.length>0);}
+ assert.equal(v3CliFailure(new TypeError('fictional-secret-unknown-code')).error,'invalid_v3_input');
+});
+
+test('reserved Windows basenames in any segment are refused before opening on all platforms',async()=>{
+ const slash=String.fromCharCode(92);
+ for(const path of ['NUL','nul.json','dir'+slash+'COM1','CONOUT$','nested/aux.txt','nested/PRN...   ','C:'+slash+'safe'+slash+'LPT².log','dir/COM³.data','dir/conin$.txt','dir/nul .json','dir/NUL/ordinary.json','dir'+slash+'lpt0'+slash+'ordinary.json']){
+  let opened=false;
+  await assert.rejects(readV3Snapshot(path,async()=>{opened=true;throw Error('unexpected_open');}),error=>error instanceof TypeError&&error.message==='source_v3_arguments_invalid',path);
+  assert.equal(opened,false,path);
+  const result=execute([path]);assert.equal(result.status,1);assert.equal(result.report.error,'source_v3_arguments_invalid');assert.equal(result.stderr,'');
+ }
+});
+
+test('ordinary path names and drive paths still reach the read-only opener',async()=>{
+ const slash=String.fromCharCode(92);
+ for(const path of ['connection.json','com10.json','nulled.json','auxiliary.json','dir'+slash+'company.json','C:'+slash+'safe'+slash+'input.json']){
+  let opened=false,closed=false;
+  const bytes=await readV3Snapshot(path,async actual=>{assert.equal(actual,path);opened=true;return {stat:async()=>({isFile:()=>true,size:0}),read:async()=>({bytesRead:0}),close:async()=>{closed=true;}};});
+  assert.equal(opened,true,path);assert.equal(closed,true,path);assert.equal(bytes.length,0);
  }
 });
