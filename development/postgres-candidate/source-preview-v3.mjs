@@ -18,18 +18,18 @@ export function previewSourceMappingV3(input){
  if(input.version!==3)fail('unsupported_v3_snapshot');if(!trimmedText(input.accessFence))fail('invalid_v3_access_fence');
  const preparation=validateToastRosterPreparation(input.preparation),source=preparation.source;
  const scope=Object.fromEntries(['organizationId','system','tenant','storeId','externalStoreId','timezone','sourceFormat','transformVersion'].map(k=>[k,source[k]]));
- const {people,stores,targetIds}=validateSourceTarget(input.target,scope.organizationId,true),store=stores.get(scope.storeId);
+ const {people,stores,hasTarget}=validateSourceTarget(input.target,scope.organizationId,true),store=stores.get(scope.storeId);
  // Always use the entire verified artifact; there is deliberately no source-selection parameter.
  const binding={scope:Object.fromEntries(['organizationId','system','tenant','storeId','externalStoreId'].map(k=>[k,scope[k]])),population:{revision:preparation.provenance.population.revision,effectiveDate:preparation.provenance.population.effectiveDate}};
  const selection=reviewManagerSupplementSelections(input.supplement,binding,source.records.map(r=>({sourceId:r.sourceId,jobs:r.jobs})),store?{departments:store.departments,jobs:store.jobs}:{departments:[],jobs:[]});
  if(!Array.isArray(input.mappings)||input.mappings.length>8000)fail('v3_mapping_limit');
- const aliases=new Map(),targetKeys=new Set();
+ const aliases=new Map(),sourceKeys=new Set(),targetKeys=new Set();
  for(const m of input.mappings){
   exactShape(m,['scope','kind','sourceId','sourceVersion','targetId','personId','mappingRevision','expectedTargetRevision'],'invalid_v3_mapping');
   checkedToastScope(m.scope);if(canonicalJson(m.scope)!==canonicalJson(scope))fail('v3_mapping_scope_mismatch');
   if(m.kind!=='member'||!sourceUuid(m.sourceId)||!sourceUuid(m.targetId)||!sourceUuid(m.personId)||!revision(m.mappingRevision)||m.expectedTargetRevision!==null&&!revision(m.expectedTargetRevision))fail('invalid_v3_mapping');
-  version(m.sourceVersion);if(aliases.has(m.sourceId)||targetKeys.has(m.targetId.toLowerCase()))fail('duplicate_v3_mapping');
-  aliases.set(m.sourceId,m);targetKeys.add(m.targetId.toLowerCase());
+  version(m.sourceVersion);if(sourceKeys.has(m.sourceId.toLowerCase())||targetKeys.has(m.targetId.toLowerCase()))fail('duplicate_v3_mapping');
+  aliases.set(m.sourceId,m);sourceKeys.add(m.sourceId.toLowerCase());targetKeys.add(m.targetId.toLowerCase());
  }
  const issues=[],rows=[],represented=new Set(),used=new Set(),countsByPerson=new Map(),selectionById=new Map(selection.rows.map(r=>[r.sourceId,r]));
  const add=(code,sourceId=null,severity='blocking',details={})=>issues.push({code,severity,storeId:scope.storeId,kind:sourceId===null?'scope':'member',sourceId,...details});
@@ -48,7 +48,8 @@ export function previewSourceMappingV3(input){
    used.add(r.sourceId);const id=m.targetId.toLowerCase();represented.add(id);existing=store?.members.find(x=>x.id.toLowerCase()===id);
    if(canonicalJson(version(m.sourceVersion))!==canonicalJson(r.sourceVersion))rowAdd('source_mapping_stale');
    if(m.expectedTargetRevision!==(existing?.revision??null))rowAdd('target_revision_conflict');
-   if(!existing&&targetIds.has(JSON.stringify(['member',id])))rowAdd('target_scope_collision');
+   if(!existing&&hasTarget('member',id))rowAdd('target_scope_collision');
+   if(existing?.active===false)rowAdd('target_membership_reactivation_review');
    const proposed={name:r.displayName,active:true,...selected.proposed};
    // Run identity checks even for unresolved jobs; configured-job checks need a valid proposal.
    for(const code of memberIdentityIssues(proposed,m,existing,store,people,countsByPerson.get(m.personId.toLowerCase()),!!selected.proposed))rowAdd(code);

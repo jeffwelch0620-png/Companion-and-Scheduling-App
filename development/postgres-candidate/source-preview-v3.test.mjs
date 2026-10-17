@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import {normalizeToastRoster,toastRosterHeaders} from './toast-roster-normalizer.mjs';
 import {validateToastRosterPreparation,prepareToastRoster} from './toast-roster-preparation.mjs';
 import {previewSourceMappingV3} from './source-preview-v3.mjs';
-import {previewSourceMapping} from './source-preview.mjs';
+import {previewSourceMapping,validateSourceTarget} from './source-preview.mjs';
 import {toastRosterProfile,contentDigest} from './source-fingerprint.mjs';
 const id=n=>'30000000-0000-0000-0000-'+String(n).padStart(12,'0');
 const scope=()=>({organizationId:'fictional-org',system:'toast',tenant:'fictional-tenant',storeId:'fictional-store',externalStoreId:'fictional-external',timezone:'America/New_York',...toastRosterProfile});
@@ -126,4 +126,19 @@ test('V3 retains each token-specific finding when multiple jobs share the same e
 
 test('active-only omission review excludes archived target memberships while preserving their context',()=>{
  const input=fixture();input.target.people.push({...person(2),active:false});input.target.stores[0].members=[{...targetMember(2),active:false}];const before=structuredClone(input.target),r=previewSourceMappingV3(input);assert.equal(r.counts.omitted,0);assert.ok(!codes(r).includes('target_record_omitted_review'));assert.deepEqual(input.target,before);
+});
+
+// Lettered GUIDs are fictional and deliberately distinguish source spelling from UUID identity.
+const letteredId='3abcde00-abcd-abcd-abcd-000000000001';
+test('archived mapped memberships block for reactivation review even with an exact target revision',()=>{
+ const input=fixture();input.target.stores[0].members=[{...targetMember(),active:false}];input.mappings[0].expectedTargetRevision=2;const before=structuredClone(input),r=previewSourceMappingV3(input),member=r.rows.find(r=>r.sourceId===id(1));assert.equal(member.status,'blocked');assert.deepEqual(member.changedFields,[]);assert.ok(member.issues.includes('target_membership_reactivation_review'));assert.ok(r.issues.some(i=>i.sourceId===id(1)&&i.code==='target_membership_reactivation_review'&&i.severity==='blocking'));assert.ok(!codes(r).includes('target_revision_conflict'));assert.deepEqual(input,before);flags(r);
+});
+test('case variants of one source UUID refuse regardless of order or distinct target/person bindings',()=>{
+ for(const reverse of [false,true]){const input=fixture(),first={...input.mappings[0],sourceId:letteredId},second={...input.mappings[0],sourceId:letteredId.toUpperCase(),targetId:id(202),personId:id(302)};assert.notEqual(first.sourceId,second.sourceId);input.mappings=reverse?[second,first]:[first,second];assert.throws(()=>previewSourceMappingV3(input),/duplicate_v3_mapping/);}
+});
+test('single alias lookup retains exact provider spelling without rewriting fingerprints',()=>{
+ const input=fixture(),r=row();r[1]=letteredId;input.preparation=preparation([r]);input.supplement.choices.find(c=>c.kind==='member').sourceId=letteredId;input.mappings[0].sourceId=letteredId;input.mappings[0].sourceVersion=input.preparation.source.records[0].sourceVersion;const version=structuredClone(input.mappings[0].sourceVersion);assert.equal(previewSourceMappingV3(input).rows[0].status,'new');input.mappings[0].sourceId=letteredId.toUpperCase();const before=structuredClone(input),out=previewSourceMappingV3(input);assert.ok(out.rows[0].issues.includes('identity_mapping_required'));assert.ok(codes(out).includes('unused_mapping'));assert.deepEqual(input,before);assert.deepEqual(input.preparation.source.records[0].sourceVersion,version);
+});
+test('shared target lookup normalizes UUID case and keeps member/leave keys distinct',()=>{
+ const input=fixture();input.target.stores[0].members=[{...targetMember(),id:letteredId}];const {hasTarget}=validateSourceTarget(input.target,input.target.organizationId);assert.equal(hasTarget('member',letteredId),true);assert.equal(hasTarget('member',letteredId.toUpperCase()),true);assert.equal(hasTarget('timeOff',letteredId),false);assert.equal(hasTarget('member',id(999)),false);
 });

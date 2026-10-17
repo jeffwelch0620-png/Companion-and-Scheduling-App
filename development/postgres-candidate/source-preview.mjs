@@ -68,7 +68,7 @@ export function validateSourceTarget(target,organizationId,v2=true){
   stores.set(t.id,t);
  }
 
- return {people,stores,targetIds};
+ return {people,stores,targetIds,hasTarget:(kind,id)=>targetIds.has(key(kind,id.toLowerCase()))};
 }
 export function memberIdentityIssues(r,m,existing,t,people,sourcePersonCount,checkConfiguration=true){
  const codes=[],person=m.personId.toLowerCase(),id=m.targetId.toLowerCase();
