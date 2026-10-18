@@ -31,7 +31,16 @@ function scope(s){
 }
 const scopeKey=s=>JSON.stringify([s.capability,s.storeId.toLowerCase(),s.department]);
 const componentScope=g=>({capability:g.capability,storeId:g.storeId,department:g.department});
-function scopes(v){list(v);const seen=new Set();for(const s of v){scope(s);const key=scopeKey(s);if(seen.has(key))fail();seen.add(key);}}
+// Pending obligations belong to a canonical person, independent of the current seat.
+const pendingKey=s=>JSON.stringify([s.personId.toLowerCase(),scopeKey(s)]);
+const grantPendingKey=g=>pendingKey({personId:g.targetPersonId,...componentScope(g)});
+function scopes(v){
+ list(v);const seen=new Set();for(const s of v){
+  shape(s,['personId','capability','storeId','department']);
+  if(!sourceUuid(s.personId))fail();scope(componentScope(s));
+  const key=pendingKey(s);if(seen.has(key))fail();seen.add(key);
+ }
+}
 function registry(v){
  list(v);const seen=new Set();
  for(const r of v){shape(r,['name','ordinary']);
@@ -69,7 +78,7 @@ function ownerIssue(a,organizationId){
  if(!a.verified||!a.eligible||!same(a.organizationId,organizationId))return 'owner_identity_ineligible';
  return !a.owner?'current_owner_required':null;
 }
-const selfAdmin=(g,p)=>g.basis==='enabled_admin'&&same(g.actorPersonId,p.adminPersonId)&&same(g.targetPersonId,p.adminPersonId);
+const selfAdmin=g=>g.basis==='enabled_admin'&&same(g.actorPersonId,g.targetPersonId);
 function membershipIssue(m,g){
  const r=rehearseMembershipGrantEpoch(m,{organizationId:g.organizationId,storeId:g.storeId,
  personId:g.targetPersonId,membershipId:g.membershipId,active:g.active,capturedEpoch:g.capturedMembershipEpoch});
@@ -86,27 +95,29 @@ export function rehearseAdminSuspensionTransition(c){
  scopes(c.beforeScopes);scopes(c.afterScopes);list(c.components);
  const seen=new Set();for(const g of c.components){grant(g);if(seen.has(g.id.toLowerCase()))fail();seen.add(g.id.toLowerCase());}
  const before=c.before,after=c.after;
- if(!same(before.organizationId,after.organizationId)||!same(before.adminPersonId,after.adminPersonId))return result(false,'admin_policy_scope_changed');
+ if(!same(before.organizationId,after.organizationId))return result(false,'admin_policy_scope_changed');
  if(!c.lifecycleVerified)return result(false,'lifecycle_unverified');
  if(!c.scopeExpansionVerified)return result(false,'scope_expansion_unverified');
  if(!c.componentsComplete)return result(false,'grant_history_unverified');
  const owner=ownerIssue(c.owner,before.organizationId);if(owner)return result(false,owner);
  if(c.expectedPolicyRevision!==before.revision)return result(false,'policy_changed');
- const changed=before.enabled!==after.enabled,disabled=before.enabled&&!after.enabled;
- const epoch=before.epoch+(disabled?1:0),nextRevision=before.revision+(changed?1:0);
+ const reassigned=!same(before.adminPersonId,after.adminPersonId);
+ const changed=reassigned||before.enabled!==after.enabled;
+ const disabled=before.enabled&&(!after.enabled||reassigned);
+ const epoch=before.epoch+(disabled||reassigned?1:0),nextRevision=before.revision+(changed?1:0);
  if(!Number.isSafeInteger(epoch)||!Number.isSafeInteger(nextRevision))return result(false,'admin_counter_exhausted');
  if(after.epoch!==epoch||after.revision!==nextRevision)return result(false,'admin_epoch_transition_invalid');
  if(changed&&!c.auditRecorded)return result(false,'audit_required');
  if([...c.beforeScopes,...c.afterScopes].some(s=>scopeIssue(s,c.registeredCapabilities)))return result(false,'registered_ordinary_capability_required');
- const required=new Set(c.beforeScopes.map(scopeKey));
+ const required=new Set(c.beforeScopes.map(pendingKey));
  for(const g of c.components){
   if(!same(g.organizationId,before.organizationId))return result(false,'grant_scope_changed');
   if(!g.basisVerified)return result(false,'grant_basis_unverified');
   if(scopeIssue(componentScope(g),c.registeredCapabilities))return result(false,'registered_ordinary_capability_required');
-  if(g.basis==='enabled_admin'&&same(g.actorPersonId,before.adminPersonId)&&g.adminEpoch>before.epoch)return result(false,'grant_basis_epoch_invalid');
-  if(disabled&&g.active&&selfAdmin(g,before))required.add(scopeKey(g));
+  if(selfAdmin(g)&&same(g.actorPersonId,before.adminPersonId)&&g.adminEpoch>before.epoch)return result(false,'grant_basis_epoch_invalid');
+  if(disabled&&g.active&&selfAdmin(g)&&same(g.actorPersonId,before.adminPersonId))required.add(grantPendingKey(g));
  }
- const actual=new Set(c.afterScopes.map(scopeKey));
+ const actual=new Set(c.afterScopes.map(pendingKey));
  if(required.size!==actual.size||[...required].some(k=>!actual.has(k)))return result(false,'admin_suspension_extent_mismatch');
  return result(true,'admin_suspension_transition_satisfied');
 }
@@ -117,11 +128,10 @@ export function rehearseOperationalGrantUse(c,g){
  if(scopeIssue(componentScope(g),c.registeredCapabilities))return result(false,'registered_ordinary_capability_required');
  if(!g.basisVerified)return result(false,'grant_basis_unverified');
  const member=membershipIssue(c.membership,g);if(member)return result(false,member);
- if(g.basis==='enabled_admin'&&!same(g.actorPersonId,c.policy.adminPersonId))return result(false,'admin_policy_scope_changed');
- if(g.basis==='enabled_admin'&&g.adminEpoch>c.policy.epoch)return result(false,'grant_basis_epoch_invalid');
- if(selfAdmin(g,c.policy)){
-  if(!c.policy.enabled)return result(false,'admin_self_grant_suspended');
-  if(c.outstandingScopes.some(s=>scopeKey(s)===scopeKey(g)))return result(false,'owner_reconfirmation_required');
+ if(selfAdmin(g)){
+  if(!same(g.actorPersonId,c.policy.adminPersonId)||!c.policy.enabled)return result(false,'admin_self_grant_suspended');
+  if(g.adminEpoch>c.policy.epoch)return result(false,'grant_basis_epoch_invalid');
+  if(c.outstandingScopes.some(s=>pendingKey(s)===grantPendingKey(g)))return result(false,'owner_reconfirmation_required');
   if(g.adminEpoch!==c.policy.epoch)return result(false,'admin_epoch_stale');
  }
  return result(true,'operational_grant_lifetime_satisfied');
@@ -133,14 +143,14 @@ export function rehearseOwnerSelfGrantReconfirmation(c,r){
  !revision(r.expectedPolicyRevision)||!bools([r.reasonRecorded,r.auditRecorded]))fail();
  scope(r.scope);actor(r.owner);
  const issue=commonIssue(c);if(issue)return result(false,issue);
- if(!same(r.organizationId,c.policy.organizationId)||!same(r.personId,c.policy.adminPersonId))return result(false,'reconfirmation_scope_changed');
+ if(!same(r.organizationId,c.policy.organizationId)||!same(r.personId,c.membership.personId))return result(false,'reconfirmation_scope_changed');
  const owner=ownerIssue(r.owner,c.policy.organizationId);if(owner)return result(false,owner);
  if(r.expectedPolicyRevision!==c.policy.revision)return result(false,'policy_changed');
  if(scopeIssue(r.scope,c.registeredCapabilities))return result(false,'registered_ordinary_capability_required');
  const member=membershipIssue(c.membership,{organizationId:r.organizationId,storeId:r.scope.storeId,
  targetPersonId:r.personId,membershipId:r.membershipId,active:true,capturedMembershipEpoch:r.membershipEpoch});
  if(member)return result(false,member);
- if(!c.outstandingScopes.some(s=>scopeKey(s)===scopeKey(r.scope)))return result(false,'suspension_scope_not_pending');
+ if(!c.outstandingScopes.some(s=>pendingKey(s)===pendingKey({personId:r.personId,...r.scope})))return result(false,'suspension_scope_not_pending');
  if(!r.reasonRecorded)return result(false,'reason_required');
  if(!r.auditRecorded)return result(false,'audit_required');
  // Success neither clears a scope nor edits old provenance; the shared writer must commit

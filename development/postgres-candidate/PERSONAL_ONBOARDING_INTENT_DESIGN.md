@@ -133,3 +133,7 @@ M05 remains open and M06 partial. This contract and its merge do not complete pe
 ## Accepted onboarding rehearsal and next A04.4 slice
 
 PR67's fictional onboarding rehearsal was accepted at `68f53c0` after both exact-head checks passed 1250/1250. The separate [admin self-grant suspension rehearsal](ADMIN_SELF_GRANT_POLICY_REHEARSAL_CHECKPOINT.md) now tests selected owner-baseline/suspension/reconfirmation/provenance examples and requires its own draft review and merge approval. Supplied scope expansion, registry, owner, history and lifecycle flags establish no real authorization. Shared grant writes, transaction/concurrency proof, provider services, A05/A06 settings and Inventory tested receiving baseline/catalog remain open.
+
+## Selected admin-seat reassignment clarification
+
+For PR68, Jeff selected direct atomic reassignment from A to B. Treat it as disable-for-A plus enable-for-B: current owner, expected policy revision and audit required, epoch advanced, and A’s active self-granted extents suspended. Pending reconfirmations are keyed by canonical person and exact permission scope, so B does not inherit A’s obligation and an owner may still reconfirm A after the seat moves. Enabled-admin-basis grants to other people retain their independent membership/epoch rules; only self-grants depend on current admin state. These are selected contracts and fictional rehearsal predicates, not installed shared access administration.

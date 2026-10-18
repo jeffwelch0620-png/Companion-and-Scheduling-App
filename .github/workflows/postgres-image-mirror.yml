@@ -1,10 +1,6 @@
 name: PostgreSQL pinned image mirror
 on:
   workflow_dispatch:
-  # One-time approved bootstrap; removed after publication, before PR68 review.
-  push:
-    branches: [codex/companion-admin-self-grant-rehearsal]
-    paths: [.github/workflows/postgres-image-mirror.yml]
 permissions:
   contents: read
 jobs:
