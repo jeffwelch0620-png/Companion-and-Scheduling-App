@@ -1,0 +1,38 @@
+name: PostgreSQL pinned image mirror
+on:
+  workflow_dispatch:
+  # One-time approved bootstrap; removed after publication, before PR68 review.
+  push:
+    branches: [codex/companion-admin-self-grant-rehearsal]
+    paths: [.github/workflows/postgres-image-mirror.yml]
+permissions:
+  contents: read
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    env:
+      DIGEST: sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+      DESTINATION: ghcr.io/jeffwelch0620-png/postgres
+      REGISTRY_AUTH_FILE: ${{ runner.temp }}/postgres-mirror-auth.json
+    steps:
+      - name: Install registry copy tool
+        run: sudo apt-get update && sudo apt-get install -y skopeo
+      - name: Copy all architectures without changing digests
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          trap 'rm -f "$REGISTRY_AUTH_FILE"' EXIT
+          printf '%s' "$GHCR_TOKEN" | skopeo login --username "$GITHUB_ACTOR" --password-stdin ghcr.io
+          skopeo inspect --raw "docker://docker.io/library/postgres@$DIGEST" > "$RUNNER_TEMP/source-manifest.json"
+          echo "${DIGEST#sha256:}  $RUNNER_TEMP/source-manifest.json" | sha256sum --check
+          skopeo copy --all --preserve-digests --retry-times 0 \
+            "docker://docker.io/library/postgres@$DIGEST" \
+            "docker://$DESTINATION:sha256-${DIGEST#sha256:}"
+          skopeo inspect --raw "docker://$DESTINATION@$DIGEST" > "$RUNNER_TEMP/mirror-manifest.json"
+          echo "${DIGEST#sha256:}  $RUNNER_TEMP/mirror-manifest.json" | sha256sum --check
+          cmp "$RUNNER_TEMP/source-manifest.json" "$RUNNER_TEMP/mirror-manifest.json"
