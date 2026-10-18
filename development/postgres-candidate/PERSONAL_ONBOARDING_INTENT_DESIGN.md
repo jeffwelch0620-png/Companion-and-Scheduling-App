@@ -130,6 +130,6 @@ These are implementation requirements, not tests passed by this docs-only PR.
 
 M05 remains open and M06 partial. This contract and its merge do not complete personal sign-in, provider integration or Inventory adoption, or select pending A05/A06 values and operator exceptions.
 
-## Next isolated rehearsal
+## Accepted onboarding rehearsal and next A04.4 slice
 
-The separate [fictional onboarding rehearsal](ONBOARDING_INTENT_REHEARSAL_CHECKPOINT.md) exercises narrow proof-binding, independent evidence and uncertain-provider-state examples without making provider calls or writes. It requires its own draft review and merge approval. Supplied flags are not authentication/authorization evidence; it proves no concurrency, uniqueness or complete link authorization. Admin self-grant provenance, suspension and owner reconfirmation remain a separate rehearsal/implementation slice, and A05/A06 plus Inventory tested baseline/catalog remain pending.
+PR67's fictional onboarding rehearsal was accepted at `68f53c0` after both exact-head checks passed 1250/1250. The separate [admin self-grant suspension rehearsal](ADMIN_SELF_GRANT_POLICY_REHEARSAL_CHECKPOINT.md) now tests selected owner-baseline/suspension/reconfirmation/provenance examples and requires its own draft review and merge approval. Supplied scope expansion, registry, owner, history and lifecycle flags establish no real authorization. Shared grant writes, transaction/concurrency proof, provider services, A05/A06 settings and Inventory tested receiving baseline/catalog remain open.
