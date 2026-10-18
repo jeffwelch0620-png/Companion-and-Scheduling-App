@@ -1,6 +1,6 @@
 # Personal onboarding intent and account-link contract
 
-Prepared from owner-approved PR65 main `9770b01c7f1a7b560dfc5143d7419e794eda413d`, reviewed head `006d3e550f27fa4571cd0f04b28e98d791d6bcd5`. [Exact-head PR CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39099308931) and [branch CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39099304976/attempts/2) passed 1162/1162. [PR65 merged-main CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39100225938) passed 1162/1162 on its first attempt, including fresh migrations/snapshot, strict types and previews. This docs-only draft on `codex/companion-onboarding-intent-design` requires its own review and merge approval; it creates no accounts, setup approvals, links, grants, routes or SQL.
+Prepared from owner-approved PR65 main `9770b01c7f1a7b560dfc5143d7419e794eda413d`, reviewed head `006d3e550f27fa4571cd0f04b28e98d791d6bcd5`. [Exact-head PR CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39099308931) and [branch CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39099304976/attempts/2) passed 1162/1162. [PR65 merged-main CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39100225938) passed 1162/1162 on its first attempt, including fresh migrations/snapshot, strict types and previews. This docs-only contract was separately owner-approved and squash-merged in PR66 at `699c47aae31b5611a83b2a1a9c1a1858e26bdc7a` from reviewed head `c1f1c6c4093ab96d9b3e2dc4c1e2aafd9181562b`; [PR66 merged-main CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39102172753) passed 1162/1162 on its first attempt. It creates no accounts, setup approvals, links, grants, routes or SQL.
 
 ## Selected A04 authority and remaining holds
 
@@ -128,3 +128,7 @@ These are implementation requirements, not tests passed by this docs-only PR.
 4. Test actual transactions/uniqueness/revocation/receipt privacy and provider-timeout reconciliation before exposing setup/link or grant endpoints. Keep actual shared target reads, source certification/application, live notifications and hosted deployment separately reviewed.
 
 M05 remains open and M06 partial. This contract and its merge do not complete personal sign-in, provider integration or Inventory adoption, or select pending A05/A06 values and operator exceptions.
+
+## Next isolated rehearsal
+
+The separate [fictional onboarding rehearsal](ONBOARDING_INTENT_REHEARSAL_CHECKPOINT.md) exercises narrow proof-binding, independent evidence and uncertain-provider-state examples without making provider calls or writes. It requires its own draft review and merge approval. Supplied flags are not authentication/authorization evidence; it proves no concurrency, uniqueness or complete link authorization. Admin self-grant provenance, suspension and owner reconfirmation remain a separate rehearsal/implementation slice, and A05/A06 plus Inventory tested baseline/catalog remain pending.
