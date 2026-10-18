@@ -1,6 +1,6 @@
 # Personal sign-in and protected access lifecycle — design review
 
-Prepared from owner-approved PR63 main `a0132bd620edc11dd76f6251dfdbb44ed1910506`, reviewed head `676d5e0f86638346f3ae0ceee90cce760d46d711`. [Exact-head PR CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39092374431/attempts/2) and [branch CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39092371111/attempts/4) passed 1111/1111 after image-download retries. [PR63 merged-main CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39093102514/attempts/2) passed 1111/1111 after one image-download retry. This docs-only slice on `codex/companion-personal-access-lifecycle-design` requires separate review and merge approval. It adds no SQL, endpoint, account, grant, provider call, source application or deployment.
+Prepared from owner-approved PR63 main `a0132bd620edc11dd76f6251dfdbb44ed1910506`, reviewed head `676d5e0f86638346f3ae0ceee90cce760d46d711`. [Exact-head PR CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39092374431/attempts/2) and [branch CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39092371111/attempts/4) passed 1111/1111 after image-download retries. [PR63 merged-main CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39093102514/attempts/2) passed 1111/1111 after one image-download retry. This docs-only design was separately owner-approved and squash-merged in PR64 at `6881a94c95c84e8cc888515dc000f0ae8e9f655f` from reviewed head `23387df53be35fcac4e6c2ce77de16f3cda5e18e`; [PR64 exact-head CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39096951913/attempts/2) passed 1111/1111. Pending policies below remain unselected. It adds no SQL, endpoint, account, grant, provider call, source application or deployment.
 
 ## Purpose and inspected evidence
 
@@ -140,3 +140,7 @@ These are future tests, not results claimed by this docs-only PR.
 5. Review actual account setup, recovery, revocation, cross-interface sessions and notice delivery before a pilot. Hosted application, migration application, active Companion cutover and Inventory integration require their own approval.
 
 M05 remains open and M06 partial. The accepted preview/rehearsal chain has not completed production identity, onboarding, recovery, source completeness or deployment.
+
+## Next isolated policy rehearsal
+
+The [fictional owner-change and membership-grant rehearsal](ACCESS_LIFECYCLE_POLICY_REHEARSAL_CHECKPOINT.md) exercises selected final-check and employment-epoch predicates before shared implementation. It is a separate draft; it provides no authentication, owner mutation, grant write or transactional/concurrency proof. Remaining A04–A06 choices and Inventory tested baseline/catalog are still required before dependent implementation.
