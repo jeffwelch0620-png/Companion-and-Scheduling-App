@@ -1,6 +1,6 @@
 # Companion PostgreSQL migration readiness
 
-Accepted Companion preparation baseline: PR61 main `02037e7`, from amended V3 CLI head `faa6282`, with 1064/1064 [exact-head CI tests](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39079734467), fresh migration/snapshot verification, strict types and preview build. The accepted bounded V3 file preview follows the preparation chain through PR60. Published migrations end at 063. Subsequent work requires its own draft review and separate merge approval. Earlier sections below are historical checkpoint evidence. The complete Companion app is **not ready for PostgreSQL backend cutover**. Inventory integration remains held until its exact tested baseline is confirmed; hosted application and deployment remain separate.
+Accepted Companion preparation baseline: PR62 main `eabfadc`, from amended access-design head `83ea0b6`, with 1064/1064 [exact-head CI tests](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39089739747), fresh migration/snapshot verification, strict types and preview build. The bounded V3 file preview through PR61 and reviewer-access design through PR62 are accepted preparation. Published migrations end at 063. Subsequent work requires its own draft review and separate merge approval. Earlier sections below are historical checkpoint evidence. The complete Companion app is **not ready for PostgreSQL backend cutover**. Inventory integration remains held until its exact tested baseline is confirmed; hosted application and deployment remain separate.
 
 The source inventory contains **39 WorkRecord kinds, 35 declared SQLite tables and 28 API route files**. These are scope counts, not a completion percentage. Several services and workflows live outside WorkRecord; one kind can have many commands. Candidate workflow tests do not prove migration of the original D1 service or all screen reads.
 
@@ -37,7 +37,7 @@ The candidate outbox is evidence that a message was queued transactionally; it i
 
 | ID | Milestone | Status and acceptance evidence |
 | --- | --- | --- |
-| M01 | Reproducible isolated candidate and Git safeguards | Accepted preparation baseline: PR61 main `02037e7`, 1064/1064 amended exact-head CI checks; further changes use focused draft PRs |
+| M01 | Reproducible isolated candidate and Git safeguards | Accepted preparation baseline: PR62 main `eabfadc`, 1064/1064 amended exact-head CI checks; further changes use focused draft PRs |
 | M02 | Core employee task/closing/handoff/checkout behavior | Candidate complete for documented slice; production adoption still pending |
 | M03 | Explicit employee/schedule/standard mappings | Candidate complete for narrow new-reference input; no automatic identity or capability inference |
 | M04 | Atomic new-reference import and linked closing rehearsal | Candidate complete with fictional inputs; existing-reference updates and real export fixtures pending |
@@ -290,6 +290,6 @@ PR59 was owner-approved and squash-merged at e3154a51c678140cfc8ab89f557746ebf67
 
 PR60 was owner-approved and squash-merged at 33fc059f822e50319eef29483e8752be7e4ba748 from reviewed head 067a2022e8dc1f4a295401382fe515fb2f4ef8f9; [exact-head CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/38995739373) passed 1040/1040. [Merged-main CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/38996743438) also passed 1040/1040. Its preparation recomputation, typed V3 comparison, blocked archived-membership reactivation and case-insensitive duplicate refusal are accepted isolated preparation. The next [bounded V3 CLI checkpoint](SOURCE_V3_CLI_CHECKPOINT.md) adds explicit local-file input, minimized default summaries, an opt-in private report and strict refusal/exit behavior on codex/companion-source-v3-cli. This remains a draft requiring separate merge approval. V1/V2 CLI behavior, published 001–063, manifest and snapshot are unchanged. Real mapping capture, authorized target/session reads, source certification/application, hosted services, active Companion and Inventory adoption remain separate.
 
-## Accepted PR61 and next access design
+## Accepted PR62 and next policy rehearsal
 
-PR61 was accepted at `02037e7`; [merged-main CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39081149015) passed 1064/1064. The [reviewer-access design](SOURCE_REVIEWER_ACCESS_DESIGN.md) remains a separate docs-only draft; its policy table records the owner’s selections. M05 remains open and M06 partial; shared identity, I06 baseline/migration ownership, real mappings and application remain prerequisites.
+PR62 was accepted at `eabfadc`; [amended exact-head CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39089739747) passed 1064/1064. The [pure reviewer-policy rehearsal](SOURCE_REVIEWER_POLICY_REHEARSAL_CHECKPOINT.md) is a separate draft and grants no authority. Inventory owns the future shared ledger and Jeff approves changes; its tested baseline/catalog remains pending. M05 remains open and M06 partial.
