@@ -1,6 +1,6 @@
 # Companion PostgreSQL migration readiness
 
-Accepted Companion preparation baseline: PR64 main `6881a94`, from amended design head `23387df`, with 1111/1111 [exact-head CI tests](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39096951913/attempts/2), fresh migration/snapshot verification, strict types and preview build. The bounded V3 file preview through PR61 and reviewer-access design through PR62 are accepted preparation. Published migrations end at 063. Subsequent work requires its own draft review and separate merge approval. Earlier sections below are historical checkpoint evidence. The complete Companion app is **not ready for PostgreSQL backend cutover**. Inventory integration remains held until its exact tested baseline is confirmed; hosted application and deployment remain separate.
+Accepted Companion preparation baseline: PR65 main `9770b01`, from amended rehearsal head `006d3e5`, with 1162/1162 [exact-head CI tests](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39099308931), fresh migration/snapshot verification, strict types and preview build. The bounded V3 file preview through PR61 and reviewer-access design through PR62 are accepted preparation. Published migrations end at 063. Subsequent work requires its own draft review and separate merge approval. Earlier sections below are historical checkpoint evidence. The complete Companion app is **not ready for PostgreSQL backend cutover**. Inventory integration remains held until its exact tested baseline is confirmed; hosted application and deployment remain separate.
 
 The source inventory contains **39 WorkRecord kinds, 35 declared SQLite tables and 28 API route files**. These are scope counts, not a completion percentage. Several services and workflows live outside WorkRecord; one kind can have many commands. Candidate workflow tests do not prove migration of the original D1 service or all screen reads.
 
@@ -37,7 +37,7 @@ The candidate outbox is evidence that a message was queued transactionally; it i
 
 | ID | Milestone | Status and acceptance evidence |
 | --- | --- | --- |
-| M01 | Reproducible isolated candidate and Git safeguards | Accepted preparation baseline: PR64 main `6881a94`, 1111/1111 amended exact-head CI checks; further changes use focused draft PRs |
+| M01 | Reproducible isolated candidate and Git safeguards | Accepted preparation baseline: PR65 main `9770b01`, 1162/1162 amended exact-head CI checks; further changes use focused draft PRs |
 | M02 | Core employee task/closing/handoff/checkout behavior | Candidate complete for documented slice; production adoption still pending |
 | M03 | Explicit employee/schedule/standard mappings | Candidate complete for narrow new-reference input; no automatic identity or capability inference |
 | M04 | Atomic new-reference import and linked closing rehearsal | Candidate complete with fictional inputs; existing-reference updates and real export fixtures pending |
@@ -297,3 +297,7 @@ PR63 was accepted at `a0132bd`; [amended exact-head CI](https://github.com/jeffw
 ## Accepted PR64 and next lifecycle rehearsal
 
 PR64 was accepted at `6881a94` from `23387df` with 1111/1111 exact-head CI tests. [PR64 merged-main CI, attempt 3](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39097991137/attempts/3) passed 1111/1111 after two image-download retries before tests; no checks were bypassed. The [owner-change and membership-grant rehearsal](ACCESS_LIFECYCLE_POLICY_REHEARSAL_CHECKPOINT.md) is a separate draft testing selected predicates on fictional snapshots. PR65 review adds the owner-selected refusal of pre-staged employment-dependent grants and an explicit schedule-only eligibility-loss transition; rehire/return requires fresh grant review. It implements no access service, atomic write or provider verification and settles no remaining A04–A06 choice. Inventory tested baseline/catalog remains pending. M05 remains open and M06 partial.
+
+## Accepted PR65 and next onboarding contract
+
+PR65 was accepted at `9770b01` from `006d3e5` with 1162/1162 exact-head CI tests. [PR65 merged-main CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39100225938) passed 1162/1162 on its first attempt, including fresh migrations/snapshot, strict types and previews. The [onboarding intent design](PERSONAL_ONBOARDING_INTENT_DESIGN.md) is a separate docs-only draft recording later owner-selected A04 choices and proposed provider-uncertainty/link-review boundaries. It grants no access and completes no provider integration. A05/A06, remaining identity lifecycle delegation and Inventory tested baseline/catalog stay pending. M05 remains open and M06 partial.
