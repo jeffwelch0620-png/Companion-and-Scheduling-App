@@ -26,6 +26,7 @@
     "bootstrap": "node bootstrap.mjs",
     "build:preview": "node build-forms-preview.mjs",
     "preview:serve": "node browser-harness-server.mjs",
-    "source:preview": "node source-preview-cli.mjs"
+    "source:preview": "node source-preview-cli.mjs",
+    "source:preview:v3": "node source-preview-v3-cli.mjs"
   }
 }
