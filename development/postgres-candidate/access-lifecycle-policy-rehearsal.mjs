@@ -57,14 +57,15 @@ export function rehearseOwnerChange(c){
  // True means this fictional final-check predicate passed, not that anything was approved/applied.
  return result(true,'owner_change_predicate_satisfied');
 }
-const memberKeys=['organizationId','storeId','personId','membershipId','approved','epoch'];
-function membership(m){shape(m,memberKeys);if(!ids([m.organizationId,m.storeId,m.personId,m.membershipId])||typeof m.approved!=='boolean'||!counter(m.epoch))fail();}
+const memberKeys=['organizationId','storeId','personId','membershipId','approved','scheduleOnly','epoch'];
+const employmentEligible=m=>m.approved&&!m.scheduleOnly;
+function membership(m){shape(m,memberKeys);if(!ids([m.organizationId,m.storeId,m.personId,m.membershipId])||!bools([m.approved,m.scheduleOnly])||!counter(m.epoch))fail();}
 function sameMembership(a,b){return memberKeys.slice(0,4).every(k=>same(a[k],b[k]));}
 export function rehearseMembershipEpochTransition(before,after){
  membership(before);membership(after);
  if(!sameMembership(before,after))return result(false,'membership_scope_changed');
  // Consecutive single-event fixtures only; this does not prove lifecycle continuity from two reads.
- const required=before.epoch+(before.approved&&!after.approved?1:0);
+ const required=before.epoch+(employmentEligible(before)&&!employmentEligible(after)?1:0);
  if(!Number.isSafeInteger(required))return result(false,'membership_epoch_exhausted');
  if(after.epoch!==required)return result(false,'membership_epoch_transition_invalid');
  return result(true,'membership_epoch_transition_satisfied');
@@ -73,9 +74,15 @@ export function rehearseMembershipGrantEpoch(m,g){
  membership(m);shape(g,['organizationId','storeId','personId','membershipId','active','capturedEpoch']);
  if(!ids([g.organizationId,g.storeId,g.personId,g.membershipId])||typeof g.active!=='boolean'||!counter(g.capturedEpoch))fail();
  if(!sameMembership(m,g))return result(false,'grant_scope_mismatch');
- if(!m.approved)return result(false,'employment_ineligible');
+ if(!employmentEligible(m))return result(false,'employment_ineligible');
  if(!g.active)return result(false,'grant_inactive');
  if(g.capturedEpoch!==m.epoch)return result(false,'grant_review_required');
  // Epoch eligibility alone is never capability/session/person/department authorization.
  return result(true,'membership_grant_epoch_satisfied');
+}
+// Evaluate at the creation/commit snapshot; no grant can be pre-staged while ineligible.
+// This models the membership prerequisite only, not A01 authority, audit or a grant write.
+export function rehearseMembershipGrantCreation(m,g){
+ const eligibility=rehearseMembershipGrantEpoch(m,g);
+ return eligibility.eligible?result(true,'membership_grant_creation_satisfied'):eligibility;
 }
