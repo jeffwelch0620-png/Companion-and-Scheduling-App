@@ -112,3 +112,8 @@ These are required future tests, not results claimed by this document.
 6. Port selected contracts only after the user confirms Inventory's exact tested baseline and shared schema/migration owner. Hosted application, deployment, live connector credentials and automation remain separate actions.
 
 M05 remains open; M06 remains partial. Shared identity/access lifecycle, real source completeness, notification delivery, copied-component retirement and the remaining operational services have not been completed by this design.
+
+
+## Next reviewer-access design after PR61
+
+The bounded V3 CLI is accepted at PR61 main `02037e7`. The next [reviewer-access design](SOURCE_REVIEWER_ACCESS_DESIGN.md) makes designation administration, minimal projections and the separate current access/session fence reviewable before a shared endpoint. The owner selected explicitly designated reviewers without store employment and designation until revocation or eligibility loss; the design grants no access. Shared identity/migration ownership and the tested Inventory baseline remain prerequisites; this adds no target-reader implementation or source certification.
