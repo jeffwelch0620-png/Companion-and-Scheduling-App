@@ -107,7 +107,7 @@ Access changes advance access/person/membership/grant revisions according to the
 
 ## Review gates and implementation slices
 
-1. Confirm pending decisions, the shared schema/migration owner and the Inventory source/catalog baseline. Inventory inspection in this package does not authorize changes there.
+1. Ledger owner selected: Inventory repository, with Jeff approving shared-schema changes; Inventory tested baseline/catalog pending. Confirm the remaining identity decisions and obtain that handoff before adoption. Inventory inspection in this package does not authorize changes there.
 2. Build an isolated shared identity/authorization foundation with fictional people and explicit function definitions. Use the next free candidate corrective number at implementation time if changing this package; do not repurpose 001-063 or copy/renumber Inventory's accepted migration ledger.
 3. Implement verified onboarding, grant console and scoped session/recovery contracts, including failure reconciliation. Owner bootstrap is a separately reviewed operator action using verified account IDs, not first-login ownership or hard-coded names.
 4. Port candidate identity reads, grants, actor/audit attribution, ownership notice reads and coordination incrementally, with parity tests before deleting fixture bridges. Port the [ingestion contract](SOURCE_INGESTION_DESIGN.md) separately; ingestion never grants sign-in or authority.

@@ -4,7 +4,7 @@ import {rehearseSourceReviewer,rehearseSourceReviewerFinalAccess,rehearseSourceR
 const id=n=>'4abcde00-0000-0000-0000-'+String(n).padStart(12,'0');
 const clone=x=>structuredClone(x);
 function fixture(){
- return {version:1,organization:{id:id(1),active:true,eligibilityRevision:1,policyRevision:1},store:{id:id(2),organizationId:id(1),active:true,eligibilityRevision:1},person:{id:id(3),active:true,eligibilityRevision:1},accountLink:{id:id(4),personId:id(3),active:true,revision:1,eligibilityRevision:1,lifecycleVerified:true},session:{id:id(5),personId:id(3),verified:true,active:true,revision:1},authority:{personId:id(3),organizationId:id(1),owner:false,enabledAdmin:false,revision:1},designations:[{id:id(6),organizationId:id(1),storeId:id(2),personId:id(3),family:'roster',level:'review',active:true,revision:1,eligibilityRevision:{person:1,accountLink:1,organization:1,store:1}}],activeMembershipCount:0,workspaceRevision:10};
+ return {version:1,organization:{id:id(1),active:true,eligibilityRevision:1,policyRevision:1,lifecycleVerified:true},store:{id:id(2),organizationId:id(1),active:true,eligibilityRevision:1,lifecycleVerified:true},person:{id:id(3),active:true,eligibilityRevision:1,lifecycleVerified:true},accountLink:{id:id(4),personId:id(3),active:true,revision:1,eligibilityRevision:1,lifecycleVerified:true},session:{id:id(5),personId:id(3),verified:true,active:true,revision:1},authority:{personId:id(3),organizationId:id(1),owner:false,enabledAdmin:false,revision:1},designations:[{id:id(6),organizationId:id(1),storeId:id(2),personId:id(3),family:'roster',level:'review',active:true,revision:1,eligibilityRevision:{person:1,accountLink:1,organization:1,store:1}}],activeMembershipCount:0,workspaceRevision:10};
 }
 const request=(overrides={})=>({action:'read',organizationId:id(1),storeId:id(2),family:'roster',designationId:null,authorPersonIds:[],...overrides});
 const decide=(s,r=request())=>rehearseSourceReviewer(s,r);
@@ -92,13 +92,13 @@ test('an unrelated family designation revision does not invalidate the selected 
  const before=fixture();before.designations.push({...clone(before.designations[0]),id:id(7),family:'timeOff'});const after=clone(before);after.designations[1].revision++;assert.equal(rehearseSourceReviewerFinalAccess(before,after,request()).eligible,true);
 });
 test('self-revocation eligibility requires personal identity but not source certification or current captured epochs',()=>{
- const s=fixture();s.designations[0].eligibilityRevision.person=0;s.store.active=false;const out=decide(s,request({action:'self_revoke',designationId:id(6)}));assert.equal(out.eligible,true);assert.equal(out.via,'self_revocation');flags(out);
+ const s=fixture();s.designations[0].eligibilityRevision.person=0;s.store.active=false;const out=decide(s,request({action:'self_revoke',designationId:id(6)}));assert.equal(out.eligible,true);assert.equal(out.via,'self_revocation');assert.equal(out.noop,false);flags(out);
 });
 test('self-revocation cannot target another person even when the actor is an owner',()=>{
  const s=fixture();s.authority.owner=true;s.designations[0].personId=id(20);assert.equal(decide(s,request({action:'self_revoke',designationId:id(6)})).code,'self_revocation_denied');
 });
 test('already revoked designation is a relinquishment no-op proposal without restoring anything',()=>{
- const s=fixture();s.designations[0].active=false;const out=decide(s,request({action:'self_revoke',designationId:id(6)}));assert.equal(out.code,'already_revoked');assert.equal(s.designations[0].active,false);
+ const s=fixture();s.designations[0].active=false;const out=decide(s,request({action:'self_revoke',designationId:id(6)}));assert.equal(out.code,'already_revoked');assert.equal(out.noop,true);assert.equal(s.designations[0].active,false);
 });
 test('canonical UUID comparisons remain case-insensitive for scope and actor links',()=>{
  const s=fixture();s.session.personId=s.person.id.toUpperCase();s.designations[0].organizationId=s.organization.id.toUpperCase();assert.equal(decide(s,request({storeId:s.store.id.toUpperCase()})).eligible,true);
@@ -128,4 +128,48 @@ test('sparse arrays and extra array properties cannot bypass strict snapshot val
  invalid(fixture(),request({authorPersonIds:Array(1)}));
  const extra=fixture();extra.designations.note='fictional-secret';invalid(extra);
  const authors=[id(3)];authors.note='fictional-secret';invalid(fixture(),request({authorPersonIds:authors}));
+});
+
+test('a revoked designation and membership ending in the same transition creates no advisory',()=>{
+ const before=fixture();before.activeMembershipCount=1;const after=clone(before);after.activeMembershipCount=0;after.designations[0].active=false;after.designations[0].revision++;
+ assert.deepEqual(rehearseSourceReviewerAdvisories(before,after).advisoryKinds,[]);
+});
+test('person inactivation after the final active designation is revoked creates no advisory',()=>{
+ const before=fixture(),after=clone(before);after.person.active=false;after.person.eligibilityRevision++;after.designations[0].active=false;after.designations[0].revision++;
+ assert.deepEqual(rehearseSourceReviewerAdvisories(before,after).advisoryKinds,[]);
+});
+for(const component of ['person','accountLink','organization','store'])test('unverified '+component+' lifecycle refuses reads and certification, including organization-policy viewers',()=>{
+ for(const role of ['designee','owner','admin'])for(const action of ['read','certify']){
+  const s=fixture();s.designations[0].level='review_and_certify';s.authority.owner=role==='owner';s.authority.enabledAdmin=role==='admin';s[component].lifecycleVerified=false;
+  const out=decide(s,request({action}));assert.equal(out.eligible,false);assert.equal(out.code,'lifecycle_unverified');assert.equal(out.noop,false);flags(out);
+ }
+});
+test('self-revocation remains eligible in an inactive organization with verified personal identity',()=>{
+ const s=fixture();s.organization.active=false;const r=request({action:'self_revoke',designationId:id(6)});assert.equal(decide(s,r).eligible,true);assert.equal(decide(s).code,'scope_ineligible');
+ s.accountLink.active=false;assert.equal(decide(s,r).code,'identity_ineligible');
+});
+test('self-revocation ignores organization and store lifecycle evidence but requires personal lifecycle evidence',()=>{
+ const s=fixture();s.organization.active=false;s.store.active=false;s.organization.lifecycleVerified=false;s.store.lifecycleVerified=false;const r=request({action:'self_revoke',designationId:id(6)});
+ assert.equal(decide(s,r).eligible,true);
+ for(const key of ['person','accountLink']){const bad=clone(s);bad[key].lifecycleVerified=false;assert.equal(decide(bad,r).code,'lifecycle_unverified');}
+});
+test('self-revocation final fence tolerates organization/store eligibility lapses while retaining scope checks',()=>{
+ const before=fixture(),after=clone(before),r=request({action:'self_revoke',designationId:id(6)});
+ after.organization.active=false;after.organization.eligibilityRevision++;after.organization.lifecycleVerified=false;after.store.active=false;after.store.eligibilityRevision++;after.store.lifecycleVerified=false;
+ assert.equal(rehearseSourceReviewerFinalAccess(before,after,r).eligible,true);
+ after.store.organizationId=id(30);assert.equal(rehearseSourceReviewerFinalAccess(before,after,r).code,'scope_denied');
+});
+test('inactive organization does not allow self-revoking another person or mismatched scope',()=>{
+ const s=fixture();s.organization.active=false;s.designations[0].personId=id(30);const r=request({action:'self_revoke',designationId:id(6)});assert.equal(decide(s,r).code,'self_revocation_denied');
+ s.designations[0].personId=s.person.id;r.organizationId=id(30);assert.equal(decide(s,r).code,'scope_denied');
+});
+test('missing or non-boolean lifecycle evidence is refused rather than assumed verified',()=>{
+ for(const key of ['person','accountLink','organization','store']){const missing=fixture();delete missing[key].lifecycleVerified;invalid(missing);const malformed=fixture();malformed[key].lifecycleVerified='true';invalid(malformed);}
+});
+test('newly unverified lifecycle evidence between snapshots refuses the final read',()=>{
+ for(const key of ['person','accountLink','organization','store']){const before=fixture(),after=clone(before);after[key].lifecycleVerified=false;assert.equal(rehearseSourceReviewerFinalAccess(before,after,request()).code,'lifecycle_unverified');}
+});
+test('self-revocation final fence still detects personal session and owned record changes',()=>{
+ const r=request({action:'self_revoke',designationId:id(6)});
+ for(const change of [s=>s.session.revision++,s=>s.accountLink.revision++,s=>s.designations[0].revision++]){const before=fixture(),after=clone(before);change(after);assert.equal(rehearseSourceReviewerFinalAccess(before,after,r).code,'access_fence_changed');}
 });
