@@ -96,6 +96,7 @@ export function rehearseOnboardingLinkEvidence(c,p,r){
  const a=r.reviewer;
  if(!a.verified||!a.eligible||!same(a.organizationId,c.organizationId))return result(false,'reviewer_ineligible');
  if(!a.owner&&!a.enabledAdmin)return result(false,'link_owner_admin_required');
+ if(same(a.personId,c.personId))return result(false,'self_link_review_refused');
  if(same(a.personId,c.issuerPersonId))return result(false,'distinct_link_reviewer_required');
  if(!p.usablePersonalContact)return result(false,'personal_signin_pending');
  const old=r.contactAtIssuance,current=r.currentContact,t=r.attestation,f=r.contactConfirmation;
@@ -110,6 +111,7 @@ export function rehearseOnboardingLinkEvidence(c,p,r){
  !same(t.personId,c.personId)||t.bindingRevision!==c.bindingRevision||
  !identityMatches(t.identity,c.binding)||!same(t.attesterPersonId,a.personId)||
  t.at<c.issuedAt||t.at>c.now))return result(false,'attestation_context_changed');
+ // Intentional fail-closed exact contact comparison: no case folding or phone reformatting.
  const matched=!!(old&&p.contact?.verified&&p.contact.kind===old.kind&&p.contact.value===old.value);
  if(matched&&same(old.recordedByPersonId,c.issuerPersonId)&&!f&&!t)return result(false,'independent_contact_confirmation_required');
  if(!matched&&!t)return result(false,'link_evidence_required');
@@ -122,19 +124,20 @@ export function rehearseOnboardingTransition(c,e){
  !sourceUuid(e.intentId)||!revision(e.intentRevision)||(e.operationId!==null&&!sourceUuid(e.operationId))||
  typeof e.verifiedOriginalOperation!=='boolean')fail();
  if(!same(e.intentId,c.intentId)||e.intentRevision!==c.revision)return result(false,'transition_context_changed');
- let approval=c.approval,providerState=c.providerState,reconciliation=c.reconciliation;
+ let approval=c.approval,providerState=c.providerState,reconciliation=c.reconciliation,operationId=c.operationId;
  if(e.kind.startsWith('approval_')){
   if(e.operationId!==null||e.verifiedOriginalOperation)fail();
   if(approval==='consumed')return result(false,'setup_already_consumed');
   if(e.kind==='approval_expired'&&approval==='revoked')return result(false,'setup_already_revoked');
   approval=e.kind==='approval_expired'?'expired':'revoked';
-  if(['pending','unknown'].includes(providerState))reconciliation='required';
+  // Confirmed provider success without a committed link still needs reconciliation.
+  if(['pending','unknown','confirmed'].includes(providerState))reconciliation='required';
  }else{
   if(!e.operationId||!e.verifiedOriginalOperation)return result(false,'original_operation_evidence_required');
   if(e.kind==='provider_started'){
    if(approval!=='approved'||!c.issuerEligible)return result(false,'setup_not_eligible');
    if(providerState!=='not_started')return result(false,'provider_operation_already_started');
-   providerState='pending';
+   providerState='pending';operationId=e.operationId;
   }else{
    if(!c.operationId||!same(e.operationId,c.operationId))return result(false,'provider_operation_mismatch');
    if(!['pending','unknown'].includes(providerState))return result(false,'provider_state_not_pending');
@@ -143,5 +146,5 @@ export function rehearseOnboardingTransition(c,e){
   }
  }
  // Only a proposed axis result: no approval/link/grant write or reconciliation resolution.
- return result(true,'onboarding_axes_rehearsed',{next:Object.freeze({approval,providerState,reconciliation})});
+ return result(true,'onboarding_axes_rehearsed',{next:Object.freeze({approval,providerState,reconciliation,operationId})});
 }

@@ -71,6 +71,15 @@ test('enabled admin can independently review evidence',()=>{
 test('setup issuer using the same canonical person remains refused, including case variants',()=>{
  const {c,p,r}=locked();r.reviewer.personId=c.issuerPersonId.toUpperCase();expect(evidence(c,p,r),'distinct_link_reviewer_required');
 });
+for(const admin of [false,true])test('the intended person cannot approve their own link as '+(admin?'admin with UUID case variant':'owner'),()=>{
+ const {c,p,r}=locked();r.reviewer.personId=admin?c.personId.toUpperCase():c.personId;
+ r.reviewer.owner=!admin;r.reviewer.enabledAdmin=admin;
+ expect(evidence(c,p,r),'self_link_review_refused');
+});
+test('self-link refusal also applies when the intended person issued their own setup',()=>{
+ const {c,p,r}=locked();c.issuerPersonId=c.personId;r.reviewer.personId=c.personId;
+ expect(evidence(c,p,r),'self_link_review_refused');
+});
 for(const key of ['verified','eligible'])test('reviewer '+key+' is required',()=>{
  const {c,p,r}=locked();r.reviewer[key]=false;expect(evidence(c,p,r),'reviewer_ineligible');
 });
@@ -121,6 +130,17 @@ test('contact must belong to the exact reviewed person and an authorized record'
 test('contact equality uses supplied canonical exact values, never fuzzy matching',()=>{
  const {c,p,r}=locked();p.contact.value='PERSON@example.invalid';expect(evidence(c,p,r),'link_evidence_required');
 });
+test('email domain case mismatch intentionally fails closed without normalization',()=>{
+ const {c,p,r}=locked();p.contact.value='person@EXAMPLE.invalid';expect(evidence(c,p,r),'link_evidence_required');
+});
+test('an exactly matching E.164 fixture satisfies the phone contact predicate',()=>{
+ const {c,p,r}=locked();for(const contact of [p.contact,r.contactAtIssuance,r.currentContact]){contact.kind='phone';contact.value='+12025550123';}
+ expect(evidence(c,p,r),'link_evidence_contact',true);
+});
+test('equivalent-looking phone formatting is not silently normalized',()=>{
+ const {c,p,r}=locked();for(const contact of [p.contact,r.contactAtIssuance,r.currentContact]){contact.kind='phone';contact.value='+12025550123';}
+ p.contact.value='+1 (202) 555-0123';expect(evidence(c,p,r),'link_evidence_required');
+});
 test('unverified provider contact cannot satisfy the contact route',()=>{
  const {c,p,r}=locked();p.contact.verified=false;expect(evidence(c,p,r),'link_evidence_required');
 });
@@ -146,7 +166,16 @@ function operating(state='pending'){
 function event(c,kind){return {kind,intentId:c.intentId,intentRevision:c.revision,operationId:kind.startsWith('approval_')?null:c.operationId??id(10),verifiedOriginalOperation:!kind.startsWith('approval_')};}
 test('operation start returns pending axes only after recorded original operation evidence',()=>{
  const {c}=fixture();const out=transition(c,event(c,'provider_started'));expect(out,'onboarding_axes_rehearsed',true);
- assert.deepEqual(out.next,{approval:'approved',providerState:'pending',reconciliation:'none'});
+ assert.deepEqual(out.next,{approval:'approved',providerState:'pending',reconciliation:'none',operationId:id(10)});
+});
+test('proposed start state passes context validation and preserves correlation through timeout and confirmation',()=>{
+ const {c}=fixture(),start=transition(c,event(c,'provider_started'));
+ const pending={...c,...start.next};
+ const timeout=transition(pending,event(pending,'provider_unknown'));expect(timeout,'onboarding_axes_rehearsed',true);
+ const unknown={...pending,...timeout.next};
+ const confirmed=transition(unknown,event(unknown,'provider_confirmed'));expect(confirmed,'onboarding_axes_rehearsed',true);
+ assert.equal(confirmed.next.operationId,start.next.operationId);
+ assert.equal(confirmed.next.reconciliation,'required');assert.equal(c.operationId,null);
 });
 test('an unverified operation reference cannot start a provider operation',()=>{
  const {c}=fixture(),e=event(c,'provider_started');e.verifiedOriginalOperation=false;expect(transition(c,e),'original_operation_evidence_required');
@@ -155,15 +184,15 @@ for(const approval of ['expired','revoked','consumed'])test('provider start cann
  const {c}=fixture();c.approval=approval;expect(transition(c,event(c,'provider_started')),'setup_not_eligible');
 });
 test('timeout requires reconciliation, never proof that no account exists',()=>{
- const {c}=operating();const out=transition(c,event(c,'provider_unknown'));assert.deepEqual(out.next,{approval:'approved',providerState:'unknown',reconciliation:'required'});
+ const {c}=operating();const out=transition(c,event(c,'provider_unknown'));assert.deepEqual(out.next,{approval:'approved',providerState:'unknown',reconciliation:'required',operationId:c.operationId});
 });
-for(const state of ['pending','unknown'])for(const kind of ['approval_expired','approval_revoked'])test(state+' survives '+kind,()=>{
+for(const state of ['pending','unknown','confirmed'])for(const kind of ['approval_expired','approval_revoked'])test(state+' survives '+kind,()=>{
  const {c}=operating(state);const out=transition(c,event(c,kind));expect(out,'onboarding_axes_rehearsed',true);
- assert.equal(out.next.providerState,state);assert.equal(out.next.reconciliation,'required');
+ assert.equal(out.next.providerState,state);assert.equal(out.next.reconciliation,'required');assert.equal(out.next.operationId,c.operationId);
 });
 test('confirmation of an unknown original operation does not automatically resolve or link',()=>{
  const {c}=operating('unknown');c.approval='revoked';const out=transition(c,event(c,'provider_confirmed'));
- assert.deepEqual(out.next,{approval:'revoked',providerState:'confirmed',reconciliation:'required'});assert.equal(out.accessProvisioned,false);
+ assert.deepEqual(out.next,{approval:'revoked',providerState:'confirmed',reconciliation:'required',operationId:c.operationId});assert.equal(out.accessProvisioned,false);
 });
 test('wrong original operation cannot settle a timeout',()=>{
  const {c}=operating('unknown'),e=event(c,'provider_confirmed');e.operationId=id(99);expect(transition(c,e),'provider_operation_mismatch');
@@ -180,15 +209,15 @@ test('stale intent revision refuses the proposed transition',()=>{
 test('expiry cannot restore a revoked setup state',()=>{
  const {c}=operating('unknown');c.approval='revoked';expect(transition(c,event(c,'approval_expired')),'setup_already_revoked');
 });
-test('expiry cannot erase an already consumed approval',()=>{
- const {c}=operating('confirmed');c.approval='consumed';expect(transition(c,event(c,'approval_expired')),'setup_already_consumed');
+for(const kind of ['approval_expired','approval_revoked'])test(kind+' cannot erase an already consumed approval',()=>{
+ const {c}=operating('confirmed');c.approval='consumed';expect(transition(c,event(c,kind)),'setup_already_consumed');
 });
 test('a sequential later proof sees the first proof lock; this is no concurrency test',()=>{
  const {c,p}=fixture();expect(bind(c,p),'provider_binding_required',true);
  c.binding=structuredClone(p.identity);c.bindingRevision=1;p.identity.subject='Subject-B';
  expect(bind(c,p),'provider_identity_conflict');
 });
-test('frozen inputs remain unchanged and all outputs contain only fixed non-authoritative data',()=>{
+test('frozen inputs remain unchanged; only the fictional operation reference joins fixed non-authoritative state outputs',()=>{
  const f=frozen(locked()),before=JSON.stringify(f);
  for(const out of [bind(f.c,f.p),evidence(f.c,f.p,f.r),transition(f.c,event(f.c,'provider_started'))]){
   assert.ok(Object.isFrozen(out));if(out.next)assert.ok(Object.isFrozen(out.next));
