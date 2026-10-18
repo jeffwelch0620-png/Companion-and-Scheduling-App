@@ -1,6 +1,6 @@
 # Source-reviewer access and authorized target reads — design review
 
-Prepared from accepted PR61 main `02037e732fbf97864f8c45ff6af29fd2f8b5fc8b`, reviewed head `faa6282f191c488c2f5e735ccbe33ae7961d145e`. [Exact-head PR61 CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39079734467) and [merged-main CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39081149015) passed 1064/1064. This is the next design slice after the [bounded V3 CLI](SOURCE_V3_CLI_CHECKPOINT.md), on `codex/companion-source-reviewer-access-design`. It adds no SQL, route, grant, account, database read or certification. It requires separate review and merge approval.
+Prepared from accepted PR61 main `02037e732fbf97864f8c45ff6af29fd2f8b5fc8b`, reviewed head `faa6282f191c488c2f5e735ccbe33ae7961d145e`. [Exact-head PR61 CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39079734467) and [merged-main CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39081149015) passed 1064/1064. Accepted by owner-approved PR62 at `eabfadc0ae10abe4b0011ba01b9a06b15a442ae2`, reviewed head `83ea0b6e1be73a83406dd3fdf336c79db9f3d1ff`, with [exact-head CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39089739747) passing 1064/1064. It adds no SQL, route, grant, account, database read or certification. The next [pure policy rehearsal](SOURCE_REVIEWER_POLICY_REHEARSAL_CHECKPOINT.md) implements only a fictional subset; remaining scenarios below are future requirements.
 
 ## Purpose and prerequisites
 
@@ -126,7 +126,7 @@ These are implementation requirements, not completed tests:
 
 ## Implementation sequence and stop conditions
 
-1. Review this package with owner-selected R04/R05/R07/R08 recorded above. Confirm I06's shared migration owner and exact tested Inventory source/catalog before adopting shared DDL. Resolve required personal-session/link and protected administration contracts; do not bootstrap the first owner from a source file.
+1. Review this package with owner-selected R04/R05/R07/R08 recorded above. I06 ledger ownership is selected: Inventory repository, with Jeff approving shared changes. Obtain the still-pending exact tested Inventory source/catalog before adopting shared DDL. Resolve required personal-session/link and protected administration contracts; do not bootstrap the first owner from a source file.
 2. Prepare an isolated shared identity/access foundation and audited reviewer-designation functions with wholly fictional fixtures. Use the next free corrective migration only when separately implementing SQL (currently 064); leave published 001–063, manifest and snapshot unchanged in this PR.
 3. Test positive/negative authority, person-level no-self-designation, revisions, coordinated eligibility revocation, retry/replay and restricted runtime grants. Retain explicit function definitions and the shared coordination contract.
 4. Build a bounded target-reader adapter against that foundation; test separate final access checks, minimal projections, whole-scope refusals and coherent refresh before exposing any route. Never adapt candidate_identity fixture subjects into production authorization.
