@@ -1,6 +1,6 @@
 # PostgreSQL candidate image mirror
 
-Jeff approved this mirror and the PR/main trigger policy during PR68 review. It changes CI infrastructure only, not a database or application deployment. Keep PR68 draft until separately approved. Required check: `candidate-validation`, supplied by the pull_request event before merge and the main push event after merge. Full validation runs on both; feature pushes do not duplicate it. No conditional validation skips, retry wrappers or continue-on-error are used.
+Jeff approved this mirror and the PR/main trigger policy during PR68 review. It changes CI infrastructure only, not a database or application deployment. PR68 was separately approved and merged; subsequent PRs require their own review and approval. Required check: `candidate-validation`, supplied by the pull_request event before merge and the main push event after merge. Full validation runs on both; feature pushes do not duplicate it. No conditional validation skips, retry wrappers or continue-on-error are used.
 
 ## Exact image and custody
 
@@ -30,4 +30,4 @@ The candidate validate job has `contents: read` and `packages: read`. Service cr
 
 ## PR68 evidence
 
-[Mirror publication](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39177563116) passed on bootstrap commit `6e726a6ba22c99d02e00bef475713b1b0685e02d`; the copy included all architectures and raw source/destination manifest SHA-256 and byte comparisons passed. The temporary push trigger was then removed. Exact-head PR proof is recorded in the PR description after completion. Merged-main proof is pending separate merge approval. Published migrations 001–063, migrations.json and schema-snapshot.sql are unchanged; migration 064 is not needed.
+[Mirror publication](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39177563116) passed on bootstrap commit `6e726a6ba22c99d02e00bef475713b1b0685e02d`; the copy included all architectures and raw source/destination manifest SHA-256 and byte comparisons passed. The temporary push trigger was then removed. [Exact-head PR proof](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39177968710) passed 1351/1351 at `aa1b439`; after separate owner approval, [merged-main push proof](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39178690959) passed 1351/1351 at `09fa3d9a7d911789a1168d1c0db5424f45749b30`. Both completed on attempt 1 with the exact GHCR digest, no ECR reference, zero skipped tests, migrations/snapshot/types/previews passing. Published migrations 001–063, migrations.json and schema-snapshot.sql are unchanged; migration 064 is not needed.
