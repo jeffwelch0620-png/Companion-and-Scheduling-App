@@ -1,6 +1,6 @@
 # Personal access security and recovery — owner decision package
 
-Docs-only draft from accepted PR68 main `09fa3d9a7d911789a1168d1c0db5424f45749b30`, reviewed head `aa1b4399a451e68e50787e7a8c87f05962a9521d`. [Exact-head PR CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39177968710) and [merged-main push CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39178690959) each passed 1351/1351 on attempt 1, with fresh migrations/snapshot, strict types and previews. Both pulled the pinned GHCR image, with no ECR reference, retries or skipped tests.
+Docs-only design prepared from accepted PR68 main `09fa3d9a7d911789a1168d1c0db5424f45749b30`, reviewed head `aa1b4399a451e68e50787e7a8c87f05962a9521d`. [Exact-head PR CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39177968710) and [merged-main push CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39178690959) each passed 1351/1351 on attempt 1, with fresh migrations/snapshot, strict types and previews. Both pulled the pinned GHCR image, with no ECR reference, retries or skipped tests.
 
 ## Outcome and authority boundary
 
@@ -192,3 +192,9 @@ Inspection for this review found the test as the only code importer and no workf
 3. Add focused fictional policy cases for selected decisions where useful. Keep them isolated comparison fixtures, with no claim of real authentication, delivery, operator verification or transactional concurrency.
 4. Implement explicit shared definitions and trusted provider adapters in the single approved ledger only after review/authorization. Test races, expiry/revocation, response loss, secret/receipt privacy, lifecycle continuity and restore behavior using fictional local services first.
 5. Perform separately approved hosted/provider/device acceptance and recovery rehearsal before rollout. A Git merge of design or candidate code is not deployment, a verified restore or completed M05/M11/M12.
+
+## Accepted PR69 and next selected M3 rehearsal
+
+PR69 was owner-approved and squash-merged at `68cfe23f899298a5dc517d9ae70dd60c1a80563f` from reviewed head `0eca2849411a93e00708c88a4fc4db6e4243e1e8`. [Exact-head PR CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39182070867) and [merged-main push CI](https://github.com/jeffwelch0620-png/Companion-and-Scheduling-App/actions/runs/39190915128) each passed 1351/1351 on attempt 1, with fresh migrations/snapshot, strict types and previews, pinned GHCR, no ECR reference and zero skipped tests. Acceptance records only the explicitly selected SEC10 M3 option A co-approval subrule; remaining SEC decisions and other SEC10 settings remain pending. No suspension command or shared access service was adopted. Published 001–063, manifest and snapshot are unchanged.
+
+The next [selected M3 fictional rehearsal](SUSPENSION_COAPPROVAL_REHEARSAL_CHECKPOINT.md) on `codex/companion-suspension-coapproval-rehearsal` checks supplied owner/approval/revision snapshots only and needs its own draft review and separate merge approval. It grants no access, performs no write and proves no real concurrency or governance authority. It selects no remaining SEC decision. Inventory tested receiving baseline/catalog/handoff and dependent provider/policy work remain pending; M05 stays open and M06 partial.
