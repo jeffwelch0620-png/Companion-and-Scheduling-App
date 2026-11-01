@@ -1,0 +1,11 @@
+/* --jm-* values for team/jmax-shell.css (combined work-center shell). Loaded with that file;
+   team/inviting-theme.css overrides them with the blue palette wherever both are loaded. */
+.shared-ui.jmax-combined{
+  --jm-ink:#292d28;
+  --jm-bg:#f6f5ef;
+  --jm-accent:#365d46;
+  --jm-accent-soft:#e8eee4;
+}
+.jmax-combined[data-location-theme=rudds]{--jm-accent:#985027;--jm-accent-soft:#f8ebdf}
+.jmax-combined[data-location-theme=papa]{--jm-accent:#356344;--jm-accent-soft:#f0eadf}
+.jmax-combined[data-location-theme=comm]{--jm-accent:#834565;--jm-accent-soft:#f3e8ee}

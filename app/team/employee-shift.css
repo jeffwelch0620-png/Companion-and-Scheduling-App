@@ -1,5 +1,6 @@
+@import "../theme/scopes/employee-shift.css";
 /* One person, one place. The week stays with the employee, not the roster. */
-.shared-dialog.employee-shift-dialog{--employee-ink:#163b43;box-sizing:border-box;width:min(620px,100vw);max-width:100vw;height:100dvh;max-height:100dvh;margin:0 0 0 auto;border:0;border-radius:24px 0 0 24px;padding:0 26px 28px;background:#f6f8f7;overscroll-behavior:contain;animation:employee-sheet-enter .22s cubic-bezier(.2,.8,.2,1)}
+.shared-dialog.employee-shift-dialog{--employee-ink:var(--jm-ink-strong);box-sizing:border-box;width:min(620px,100vw);max-width:100vw;height:100dvh;max-height:100dvh;margin:0 0 0 auto;border:0;border-radius:24px 0 0 24px;padding:0 26px 28px;background:#f6f8f7;overscroll-behavior:contain;animation:employee-sheet-enter .22s cubic-bezier(.2,.8,.2,1)}
 .shared-dialog.employee-shift-dialog::backdrop{background:#142e3b65;backdrop-filter:blur(3px)}
 .shared-dialog.employee-shift-dialog>.shared-dialog-heading{position:sticky;top:0;z-index:6;display:flex;align-items:center;margin:0 -26px 0;padding:22px 26px 18px;background:#f6f8f7f5;border-bottom:1px solid #dfe7e4;box-shadow:none;backdrop-filter:blur(14px)}
 .employee-sheet-identity{display:flex;align-items:center;gap:12px;min-width:0}

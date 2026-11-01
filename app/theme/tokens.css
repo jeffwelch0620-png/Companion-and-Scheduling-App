@@ -1,0 +1,14 @@
+/* JMAX design tokens (JMAX UI Library build spec, phase 1).
+   Every --jm-* value is the colour Companion shows TODAY, so nothing on screen changes.
+   The older variables (--orange, --ink, --paper, --jmax-accent, --jmax-soft, --rh-*, --employee-ink)
+   are now aliases of these tokens. The base values live here; each older look keeps its own values in
+   theme/scopes/<file>.css, imported by the stylesheet that owns that look, so a scope's tokens load
+   exactly when its old colours did (CSS is split per route). Phase 4 replaces these values with the
+   Option B ones from @jmax/ui; screens should use --jm-* (Tailwind jm-*) from now on. */
+
+/* Original orange look (globals.css :root). */
+:root{
+  --jm-accent:#f45a17;
+  --jm-ink:#17120e;
+  --jm-bg:#fffaf3;
+}

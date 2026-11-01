@@ -1,12 +1,25 @@
 @import "tailwindcss";
+@import "./theme/tokens.css";
 @source not "../development";
 
+/* JMAX tokens for Tailwind: bg-jm-accent, text-jm-ink, border-jm-line, ... Inline so each scope keeps its own value. */
+@theme inline{
+  --color-jm-bg:var(--jm-bg);
+  --color-jm-ink:var(--jm-ink);
+  --color-jm-ink-strong:var(--jm-ink-strong);
+  --color-jm-ink-2:var(--jm-ink-2);
+  --color-jm-line:var(--jm-line);
+  --color-jm-accent:var(--jm-accent);
+  --color-jm-accent-soft:var(--jm-accent-soft);
+  --color-jm-highlight:var(--jm-highlight);
+}
+
 :root{
-  --orange:#f45a17;
+  --orange:var(--jm-accent);
   --orange-soft:#f6d8c4;
-  --ink:#17120e;
+  --ink:var(--jm-ink);
   --stage:#1b1510;
-  --paper:#fffaf3;
+  --paper:var(--jm-bg);
   --white:#fff;
   --green:#278c50;
   --line:rgba(23,18,14,.25);
