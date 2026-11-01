@@ -1,0 +1,18 @@
+{
+  "globals.css": 144,
+  "shared-live/shared-live.css": 22,
+  "shared/catering-sheet.ts": 7,
+  "team/companion-flow.css": 178,
+  "team/connected-role-home.css": 12,
+  "team/employee-shift.css": 68,
+  "team/food-workflows.css": 50,
+  "team/food.css": 5,
+  "team/inviting-theme.css": 140,
+  "team/jmax-shell.css": 110,
+  "team/operational-growth.css": 19,
+  "team/operations.css": 16,
+  "team/role-home.css": 77,
+  "team/schedule-mobile.css": 63,
+  "team/workspace.css": 279,
+  "workflow.css": 4
+}

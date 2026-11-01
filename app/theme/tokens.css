@@ -1,0 +1,63 @@
+/* JMAX design tokens (JMAX UI Library build spec, phase 1).
+   Every --jm-* value below is the colour Companion shows TODAY, so nothing on screen changes.
+   The older variables (--orange, --ink, --paper, --jmax-accent, --jmax-soft, --rh-*, --employee-ink)
+   are now aliases of these tokens. Each block mirrors the selector that set the old variable, in the
+   same cascade order, so every scope resolves to the same colour as before. Phase 4 replaces these
+   values with the Option B ones from @jmax/ui; screens should use --jm-* (Tailwind jm-*) from now on. */
+
+/* Original orange look (globals.css :root). */
+:root{
+  --jm-accent:#f45a17;
+  --jm-ink:#17120e;
+  --jm-bg:#fffaf3;
+}
+
+/* Shared companion surfaces (team/workspace.css .shared-ui). */
+.shared-ui{
+  --jm-bg:#f7f8fa;
+  --jm-ink:#202735;
+}
+
+/* Employee week sheet (team/employee-shift.css). */
+.shared-dialog.employee-shift-dialog{
+  --jm-ink-strong:#163b43;
+}
+
+/* Role homes (team/role-home.css .rh-review). */
+.rh-review{
+  --jm-ink:#19362f;
+  --jm-ink-2:#65736c;
+  --jm-line:#dfe5de;
+  --jm-accent:#214e40;
+  --jm-bg:#f5f6f0;
+  --jm-highlight:#d6af57;
+}
+
+/* Combined work-center shell (team/jmax-shell.css). Overridden below by the blue palette. */
+.shared-ui.jmax-combined{
+  --jm-ink:#292d28;
+  --jm-bg:#f6f5ef;
+  --jm-accent:#365d46;
+  --jm-accent-soft:#e8eee4;
+}
+.jmax-combined[data-location-theme=rudds]{--jm-accent:#985027;--jm-accent-soft:#f8ebdf}
+.jmax-combined[data-location-theme=papa]{--jm-accent:#356344;--jm-accent-soft:#f0eadf}
+.jmax-combined[data-location-theme=comm]{--jm-accent:#834565;--jm-accent-soft:#f3e8ee}
+
+/* JayMax blue palette (team/inviting-theme.css), the look Option B grows from. */
+.shared-ui.jmax-combined{
+  --jm-ink:#142943;
+  --jm-bg:#f6f9fe;
+  --jm-accent:#1258b9;
+  --jm-accent-soft:#e9f2ff;
+}
+.shared-ui.jmax-combined[data-location-theme]{--jm-accent:#1258b9;--jm-accent-soft:#e9f2ff}
+.jmax-combined .rh-review{
+  --jm-ink:#142943;
+  --jm-ink-2:#5a6b83;
+  --jm-line:#dce5f1;
+  --jm-accent:#1258b9;
+  --jm-bg:#f6f9fe;
+  --jm-highlight:#3274d0;
+}
+.jmax-combined .shared-dialog.employee-shift-dialog{--jm-ink-strong:#18365c}

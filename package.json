@@ -14,6 +14,7 @@
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate",
     "check:types": "tsc --noEmit --incremental false",
+    "check:colors": "node scripts/check-raw-colors.mjs",
     "test:workflows": "node scripts/prepare-tests.mjs && node --test tests/workflows.test.mjs",
     "dev:local": "vite --host 127.0.0.1",
     "build:local": "vinext build",

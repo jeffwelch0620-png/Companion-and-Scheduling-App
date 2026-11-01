@@ -42,10 +42,10 @@
 }
 
 /* Local combined preview: Jay's work-center shell around the scoped modules. */
-.shared-ui.jmax-combined{--ink:#292d28;--paper:#f6f5ef;--line:#e1e3da;--orange:#365d46;--jmax-accent:#365d46;--jmax-soft:#e8eee4;background:#eeeee6;color:var(--ink)}
-.jmax-combined[data-location-theme=rudds]{--jmax-accent:#985027;--jmax-soft:#f8ebdf}
-.jmax-combined[data-location-theme=papa]{--jmax-accent:#356344;--jmax-soft:#f0eadf}
-.jmax-combined[data-location-theme=comm]{--jmax-accent:#834565;--jmax-soft:#f3e8ee}
+.shared-ui.jmax-combined{--ink:var(--jm-ink);--paper:var(--jm-bg);--line:#e1e3da;--orange:var(--jm-accent);--jmax-accent:var(--jm-accent);--jmax-soft:var(--jm-accent-soft);background:#eeeee6;color:var(--ink)}
+.jmax-combined[data-location-theme=rudds]{--jmax-accent:var(--jm-accent);--jmax-soft:var(--jm-accent-soft)}
+.jmax-combined[data-location-theme=papa]{--jmax-accent:var(--jm-accent);--jmax-soft:var(--jm-accent-soft)}
+.jmax-combined[data-location-theme=comm]{--jmax-accent:var(--jm-accent);--jmax-soft:var(--jm-accent-soft)}
 .shared-ui.shared-flow.jmax-combined .shared-shell{border-inline:0;background:var(--paper)}
 .shared-ui.shared-flow.jmax-combined .shared-shell>header{background:#242d27;color:#fff;border-bottom:3px solid var(--jmax-accent);padding:11px 22px;min-height:76px;gap:22px}
 .shared-ui.jmax-combined .shared-brand{min-width:183px;gap:10px;color:#faf8ed}

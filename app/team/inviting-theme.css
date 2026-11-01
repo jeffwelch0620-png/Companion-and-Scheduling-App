@@ -1,6 +1,6 @@
 /* JayMax bird palette. Supplied artwork is preserved in a CSS sprite sheet. */
-.shared-ui.jmax-combined{--ink:#142943;--paper:#f6f9fe;--line:#dce5f1;--orange:#1258b9;--jmax-accent:#1258b9;--jmax-soft:#e9f2ff;--jmax-muted:#5a6b83;--jmax-navy:#071e46;--jmax-gradient:linear-gradient(112deg,#0871c9 0%,#1258b9 46%,#071e46 100%);background:#edf3fb;color:var(--ink)}
-.shared-ui.jmax-combined[data-location-theme]{--jmax-accent:#1258b9;--jmax-soft:#e9f2ff}
+.shared-ui.jmax-combined{--ink:var(--jm-ink);--paper:var(--jm-bg);--line:#dce5f1;--orange:var(--jm-accent);--jmax-accent:var(--jm-accent);--jmax-soft:var(--jm-accent-soft);--jmax-muted:#5a6b83;--jmax-navy:#071e46;--jmax-gradient:linear-gradient(112deg,#0871c9 0%,#1258b9 46%,#071e46 100%);background:#edf3fb;color:var(--ink)}
+.shared-ui.jmax-combined[data-location-theme]{--jmax-accent:var(--jm-accent);--jmax-soft:var(--jm-accent-soft)}
 .shared-ui.shared-flow.jmax-combined .shared-shell>header{position:relative;background:#fff;color:var(--ink);border-bottom:0;box-shadow:0 3px 18px #07275b0a;padding-bottom:17px}
 .shared-ui.jmax-combined .shared-shell>header::after{content:'';position:absolute;bottom:0;left:0;right:0;height:5px;background:linear-gradient(90deg,#00a6ff 0%,#0761cf 45%,#071e46 100%)}
 .shared-ui.jmax-combined .shared-brand{color:var(--jmax-navy);min-width:183px;gap:10px}
@@ -66,7 +66,7 @@
 .jmax-combined .shared-kicker,.jmax-combined .shared-list em{color:#1258b9}
 .jmax-combined .jmax-center-links,.jmax-combined .jmax-center[data-active=true] .jmax-center-mark{border-color:#d5e0ef}
 .shared-ui.jmax-combined .food-import{border-color:#1258b9}
-.jmax-combined .rh-review{--rh-ink:#142943;--rh-muted:#5a6b83;--rh-line:#dce5f1;--rh-green:#1258b9;--rh-cream:#f6f9fe;--rh-gold:#3274d0}
+.jmax-combined .rh-review{--rh-ink:var(--jm-ink);--rh-muted:var(--jm-ink-2);--rh-line:var(--jm-line);--rh-green:var(--jm-accent);--rh-cream:var(--jm-bg);--rh-gold:var(--jm-highlight)}
 .jmax-combined .rh-connected-locations button{color:#1258b9;border-color:#d5e0ef}
 .jmax-combined .rh-connected-locations button[aria-pressed=true]{background:#1258b9;color:#fff}
 .jmax-combined .module-home-return{background:#edf4ff;border-color:#d5e0ef}
@@ -79,7 +79,7 @@
 .jmax-combined .day-shift-meta>span{color:#f0f7ff}
 .jmax-combined .training-next-label,.jmax-combined .training-next-action small,.jmax-combined .training-next-action>span:last-child{color:#f0f7ff}
 .shared-ui.shared-flow.jmax-combined .day-shift-ask{background:#ffffff0a;color:#fff;border-color:#ffffff24}
-.jmax-combined .shared-dialog.employee-shift-dialog{--employee-ink:#18365c;background:#f6f9fe}
+.jmax-combined .shared-dialog.employee-shift-dialog{--employee-ink:var(--jm-ink-strong);background:#f6f9fe}
 .jmax-combined .shared-dialog.employee-shift-dialog>.shared-dialog-heading{background:#f6f9fef5;border-color:#dce5f1}
 .jmax-combined .employee-sheet-identity>span{background:#1258b9;color:#fff}
 .jmax-combined .employee-sheet-identity h2,.jmax-combined .employee-week-heading strong,.jmax-combined .shift-work-link strong{color:#18365c}
