@@ -1,3 +1,4 @@
+@import "../theme/scopes/inviting-theme.css";
 /* JayMax bird palette. Supplied artwork is preserved in a CSS sprite sheet. */
 .shared-ui.jmax-combined{--ink:var(--jm-ink);--paper:var(--jm-bg);--line:#dce5f1;--orange:var(--jm-accent);--jmax-accent:var(--jm-accent);--jmax-soft:var(--jm-accent-soft);--jmax-muted:#5a6b83;--jmax-navy:#071e46;--jmax-gradient:linear-gradient(112deg,#0871c9 0%,#1258b9 46%,#071e46 100%);background:#edf3fb;color:var(--ink)}
 .shared-ui.jmax-combined[data-location-theme]{--jmax-accent:var(--jm-accent);--jmax-soft:var(--jm-accent-soft)}

@@ -1,0 +1,18 @@
+/* --jm-* values for team/inviting-theme.css (JayMax blue palette, the look Option B grows from).
+   Loaded with that file. */
+.shared-ui.jmax-combined{
+  --jm-ink:#142943;
+  --jm-bg:#f6f9fe;
+  --jm-accent:#1258b9;
+  --jm-accent-soft:#e9f2ff;
+}
+.shared-ui.jmax-combined[data-location-theme]{--jm-accent:#1258b9;--jm-accent-soft:#e9f2ff}
+.jmax-combined .rh-review{
+  --jm-ink:#142943;
+  --jm-ink-2:#5a6b83;
+  --jm-line:#dce5f1;
+  --jm-accent:#1258b9;
+  --jm-bg:#f6f9fe;
+  --jm-highlight:#3274d0;
+}
+.jmax-combined .shared-dialog.employee-shift-dialog{--jm-ink-strong:#18365c}

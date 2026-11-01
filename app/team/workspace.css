@@ -1,3 +1,4 @@
+@import "../theme/scopes/workspace.css";
 .shared-ui{font:400 16px/1.5 Inter,Arial,sans-serif;letter-spacing:normal;color:var(--ink);background:var(--paper)}
 .shared-ui *{box-sizing:border-box}.shared-shell{height:100dvh;max-width:980px;margin:auto;display:flex;flex-direction:column;background:var(--paper);border-inline:1px solid var(--line)}
 .shared-shell>header{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:16px 24px;border-bottom:1px solid var(--line)}
