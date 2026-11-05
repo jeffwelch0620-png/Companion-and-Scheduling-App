@@ -1,0 +1,52 @@
+{
+  "_about": "Lane rules for this repo, checked on every pull request by tools/lanes/lane_guard.py (rules: jmax-workspace docs/handoffs/jay-rudd/RULES.md §3b). Jay's and Rudd's code lane is screens only (Jeff 2026-11-04): screen components (.tsx) and styles under app/, and tests. Every .ts module under app/ (including app/shared/, which holds sign-in, sessions and access), the API routes, the root layout, the sign-in and setup screens (app/login/, app/setup/, the shared-store sign-in and employee device sign-in setup), the theme, the database, migrations, worker and automation stay with the main build. Only branches matching side_prefix are limited. The examples are checked by tools/lanes/test_lane_guard.py.",
+  "never_merge": "^archive/",
+  "side_prefix": "^side-(jay|rudd)-",
+  "side_branch": "^side-(?P<person>jay|rudd)-(?P<issue>[0-9]+)-[a-z0-9][a-z0-9-]*$",
+  "side_may_change": [
+    "app/**/*.tsx",
+    "app/**/*.css",
+    "tests/**"
+  ],
+  "side_may_not_change": [
+    "app/api/**",
+    "app/theme/**",
+    "app/globals.css",
+    "app/layout.tsx",
+    "app/login/**",
+    "app/setup/**",
+    "app/shared-live/shared-live-entry.tsx",
+    "app/team/employee-device-setup.tsx"
+  ],
+  "examples": {
+    "allowed": [
+      "app/team/workspace.tsx",
+      "app/role-homes/page.tsx",
+      "app/page.tsx",
+      "app/workflow.css",
+      "tests/access-workspace.test.mjs"
+    ],
+    "blocked": [
+      "app/shared/employee-login.ts",
+      "app/shared/employee-session.ts",
+      "app/shared/access-service.ts",
+      "app/workflow-model.ts",
+      "app/chatgpt-auth.ts",
+      "app/api/employee-login/route.ts",
+      "app/route.ts",
+      "app/layout.tsx",
+      "app/login/page.tsx",
+      "app/login/sign-in.tsx",
+      "app/setup/page.tsx",
+      "app/setup/setup.tsx",
+      "app/shared-live/shared-live-entry.tsx",
+      "app/team/employee-device-setup.tsx",
+      "app/globals.css",
+      "app/theme/tokens.css",
+      "db/schema.ts",
+      "drizzle/0001_init.sql",
+      ".github/lanes.json",
+      "package.json"
+    ]
+  }
+}
