@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@jmax/ui/tailwind-v4.css";
 @import "./theme/tokens.css";
 @source not "../development";
 

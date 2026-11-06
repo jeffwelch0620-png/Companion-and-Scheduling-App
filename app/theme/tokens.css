@@ -8,6 +8,8 @@
 
 /* Original orange look (globals.css :root). */
 :root{
+  /* @jmax/ui sets color-scheme:light in its token layer; keep the browser default until phase 4. */
+  color-scheme:normal;
   --jm-accent:#f45a17;
   --jm-ink:#17120e;
   --jm-bg:#fffaf3;

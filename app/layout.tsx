@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+// @jmax/ui (phase 3): its tokens sit in a cascade layer, so Companion's own phase 1 values still win
+// and nothing changes on screen until phase 4. Its component styles only apply to jm- classes.
+import "@jmax/ui/styles.css";
 import "./globals.css";
 import "./workflow.css";
 
