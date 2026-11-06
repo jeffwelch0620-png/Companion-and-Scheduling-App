@@ -220,13 +220,19 @@ test('PR28 corrective baseline upgrades to PR29 without rewriting or losing its 
  const files=await verifyMigrationManifest(),name=connection.database+'_policy_upgrade';assert.ok(name.length<=63);
  const server=new pg.Client({...connection,database:'postgres',user:'candidate_owner'});await server.connect();
  try{assert.equal((await server.query('SELECT 1 FROM pg_database WHERE datname=$1',[name])).rowCount,0);await server.query(`CREATE DATABASE "${name}" OWNER candidate_owner`);}finally{await server.end();}
- const c=new pg.Client({...connection,database:name,user:'candidate_owner'});await c.connect();
+ // The side database is dropped afterwards, pass or fail, so a repeat run on a kept server starts clean.
  try{
-  await c.query(`GRANT CREATE ON DATABASE "${name}" TO candidate_schema_owner`);await c.query('GRANT USAGE,CREATE ON SCHEMA public TO candidate_schema_owner');await c.query('SET ROLE candidate_schema_owner');
-  for(const file of files.filter(f=>Number(f.slice(0,3))<=39&&!f.startsWith('038_')))await c.query(await readFile(new URL(file,import.meta.url),'utf8'));
-  for(const file of files.filter(f=>f.startsWith('038_')||f.startsWith('040_')))await c.query(await readFile(new URL(file,import.meta.url),'utf8'));
-  for(const file of files.filter(f=>Number(f.slice(0,3))>40))await c.query(await readFile(new URL(file,import.meta.url),'utf8'));
-  assert.equal(await functionSnapshot(c),await readFile(new URL('schema-snapshot.sql',import.meta.url),'utf8'));
-  assert.equal((await c.query("SELECT count(*)::int n FROM pg_trigger WHERE tgrelid='candidate_operations.shift_references'::regclass AND tgname='ab_check_person_shift_update'")).rows[0].n,1);
- }finally{await c.end();}
+  const c=new pg.Client({...connection,database:name,user:'candidate_owner'});await c.connect();
+  try{
+   await c.query(`GRANT CREATE ON DATABASE "${name}" TO candidate_schema_owner`);await c.query('GRANT USAGE,CREATE ON SCHEMA public TO candidate_schema_owner');await c.query('SET ROLE candidate_schema_owner');
+   for(const file of files.filter(f=>Number(f.slice(0,3))<=39&&!f.startsWith('038_')))await c.query(await readFile(new URL(file,import.meta.url),'utf8'));
+   for(const file of files.filter(f=>f.startsWith('038_')||f.startsWith('040_')))await c.query(await readFile(new URL(file,import.meta.url),'utf8'));
+   for(const file of files.filter(f=>Number(f.slice(0,3))>40))await c.query(await readFile(new URL(file,import.meta.url),'utf8'));
+   assert.equal(await functionSnapshot(c),await readFile(new URL('schema-snapshot.sql',import.meta.url),'utf8'));
+   assert.equal((await c.query("SELECT count(*)::int n FROM pg_trigger WHERE tgrelid='candidate_operations.shift_references'::regclass AND tgname='ab_check_person_shift_update'")).rows[0].n,1);
+  }finally{await c.end();}
+ }finally{
+  const cleanup=new pg.Client({...connection,database:'postgres',user:'candidate_owner'});await cleanup.connect();
+  try{await cleanup.query(`DROP DATABASE IF EXISTS "${name}"`);}finally{await cleanup.end();}
+ }
 });

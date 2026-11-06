@@ -57,6 +57,12 @@ jobs:
         run: npm run schema:check --prefix development/postgres-candidate
       - name: Run PostgreSQL and offline-queue regression checks
         run: npm test --prefix development/postgres-candidate
+      - name: Repeat the upgrade tests on the same server (kept-database check)
+        working-directory: development/postgres-candidate
+        run: |
+          node --test --test-concurrency=1 scheduling-followup.test.mjs scheduling-safeguards.test.mjs
+          left=$(psql -h 127.0.0.1 -p 55461 -U postgres -d postgres -Atc "SELECT count(*) FROM pg_database WHERE datname IN ('${CANDIDATE_TEST_DATABASE}_policy_upgrade','${CANDIDATE_TEST_DATABASE}_upgrade','${CANDIDATE_TEST_DATABASE}_bad_upgrade')")
+          test "$left" = 0
       - name: Validate candidate TypeScript
         run: npm run check:types --prefix development/postgres-candidate
       - name: Build original-form previews
