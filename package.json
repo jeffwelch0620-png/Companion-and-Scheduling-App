@@ -52,6 +52,30 @@
     "vite": "8.1.6",
     "wrangler": "4.92.0"
   },
+  "overrides": {
+    "undici": "7.30.2",
+    "ws": "8.22.2",
+    "sharp": "0.35.5",
+    "js-yaml": "4.3.2",
+    "browserslist": "4.28.9",
+    "baseline-browser-mapping": "2.11.35",
+    "satori": "0.33.5",
+    "wrangler": {
+      "esbuild": "0.28.2"
+    },
+    "vite": {
+      "esbuild": "0.28.2"
+    },
+    "tsx": {
+      "esbuild": "0.28.2"
+    },
+    "@esbuild-kit/core-utils": {
+      "esbuild": "0.25.12"
+    },
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "11.0.5"
+    }
+  },
   "type": "module",
   "displayName": "JMAX Operations Companion"
 }
