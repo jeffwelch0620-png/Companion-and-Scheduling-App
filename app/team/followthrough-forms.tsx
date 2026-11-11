@@ -32,7 +32,12 @@ function Due({w,initial}:{w:Workspace;initial?:string}){
 }
 const due=(f:FormData,w:Workspace)=>localInstant(val(f,'dueDate'),val(f,'dueTime'),w.location.timezone,val(f,'repeated'));
 function History({r,w}:{r:WorkRecord;w:Workspace}){return 'history' in r.data&&r.data.history?.length?<details><summary>History</summary><ol className="shared-history">{r.data.history.map((h,i)=><li key={i}><strong>{h.action} · {personName(w,h.actorId,'Previous member')}</strong><span className="shared-message">{h.note}</span><small>{displayTime(h.at,w.location.timezone)}</small></li>)}</ol></details>:null}
-function LeadershipSelect({w,name,own=false,initial,area=w.me.area,excludeIds=[],unexpired=false}:{w:Workspace;name:string;own?:boolean;initial?:string;area?:string;excludeIds?:string[];unexpired?:boolean}){return <select name={name} defaultValue={initial??''} required><option value="">Choose a scheduled leader</option>{w.records.filter((r):r is RecordOf<'leadership'>=>r.kind==='leadership'&&r.locationId===w.location.id&&r.data.active&&r.area===area&&(own?r.ownerId===w.me.id:r.ownerId!==w.me.id)&&!excludeIds.includes(r.ownerId)&&(!unexpired||Date.parse(r.data.end)>Date.now())&&w.members.some(m=>m.id===r.ownerId&&!m.scheduleOnly&&manages(m,r.area,'tasks.manage'))).map(r=><option value={r.id} key={r.id}>{personName(w,r.ownerId)} · {displayTime(r.data.start,w.location.timezone)}</option>)}</select>}
+function LeadershipSelect({w,name,own=false,initial,area=w.me.area,excludeIds=[],unexpired=false}:{w:Workspace;name:string;own?:boolean;initial?:string;area?:string;excludeIds?:string[];unexpired?:boolean}){
+  // Re-read on every render on purpose: the workspace's minute timer re-renders this picker, which drops
+  // assignments as they expire (a time fixed at mount would keep offering expired ones).
+  // eslint-disable-next-line react-hooks/purity
+  const now=Date.now();
+  return <select name={name} defaultValue={initial??''} required><option value="">Choose a scheduled leader</option>{w.records.filter((r):r is RecordOf<'leadership'>=>r.kind==='leadership'&&r.locationId===w.location.id&&r.data.active&&r.area===area&&(own?r.ownerId===w.me.id:r.ownerId!==w.me.id)&&!excludeIds.includes(r.ownerId)&&(!unexpired||Date.parse(r.data.end)>now)&&w.members.some(m=>m.id===r.ownerId&&!m.scheduleOnly&&manages(m,r.area,'tasks.manage'))).map(r=><option value={r.id} key={r.id}>{personName(w,r.ownerId)} · {displayTime(r.data.start,w.location.timezone)}</option>)}</select>}
 
 export function FollowForm({kind,w,send,onError,record}:{kind:FollowKind;record?:WorkRecord}&Props) {
   const [taskKind,setTaskKind]=useState('task');

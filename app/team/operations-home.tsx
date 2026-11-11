@@ -3,7 +3,7 @@ import {type Workspace,has,personName} from '../shared/types';
 import {displayTime} from '../shared/local-time';
 import {operationsHome,availableModules} from '../shared/operations-home';
 import {FollowupSummary} from './followup-desk';
-import {useEffect,useState} from 'react';
+import {useState} from 'react';
 import {buildShiftBrief} from '../shared/shift-brief';
 import {canManageClosing} from '../shared/closing-access';
 
@@ -62,8 +62,8 @@ export function OperationsRail({w,tab,onNavigate}:{w:Workspace;tab:string;onNavi
  const modules=availableModules(w.me);
  const groups=[...new Set(modules.map(m=>m.group))];
  const activeGroup=modules.find(m=>m.tab===tab)?.group;
- const [expanded,setExpanded]=useState(activeGroup??'Home');
- useEffect(()=>{if(activeGroup)setExpanded(activeGroup)},[activeGroup]);
+ const [expanded,setExpanded]=useState(activeGroup??'Home'),[shownGroup,setShownGroup]=useState(activeGroup);
+ if(activeGroup!==shownGroup){setShownGroup(activeGroup);if(activeGroup)setExpanded(activeGroup);}
  const names:Record<string,string>={'Toast':'Sales','Safety and compliance':'Safety & compliance'};
  const marks:Record<string,string>={Home:'01',Labor:'02',Food:'03',Toast:'04','Safety and compliance':'05',Operations:'06',Maintenance:'07',Guests:'08',Marketing:'09',People:'10','Owner tools':'·'};
  return <aside className="jmax-rail" aria-label="JMAX work centers">
