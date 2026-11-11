@@ -4,7 +4,8 @@ import type { Workspace } from '../shared/types';
 import {object} from '../shared/validation';
 type Preview={pending:boolean;sourceId:string;revision:number;weekStart:string;weekEnd:string;people:number;shifts:number;newPeople:number;minutes:number;conflicts:string[]};
 export function ScheduleTransfer({w,onChanged}:{w:Workspace;onChanged:(start:string)=>Promise<void>}){
- const scope=w.location.id,scopeRef=useRef(scope);scopeRef.current=scope;
+ const scope=w.location.id,scopeRef=useRef(scope);
+ useEffect(()=>{scopeRef.current=scope},[scope]);
  const [state,setState]=useState<{scope:string;view:Preview|null;error:string;busy:boolean}>({scope,view:null,error:'',busy:false});
  const generation=useRef(0),alive=useRef(false),request=useRef<AbortController|null>(null);
  const current=state.scope===scope?state:null,view=current?.view??null,error=current?.error??'',busy=current?.busy??true;
