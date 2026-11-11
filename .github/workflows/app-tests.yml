@@ -1,0 +1,35 @@
+name: App tests
+
+# Companion's shared-workspace and workflow tests on Linux, so they guard every pull request.
+# They can't run cleanly on Windows: Miniflare closes the connection after each local database call,
+# and Windows holds every closed port for two minutes, so a full run uses up its local ports.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shared:
+    name: Shared workspace and workflow tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Shared workspace tests
+        run: npm run test:shared
+      - name: Workflow tests
+        run: npm run test:workflows
