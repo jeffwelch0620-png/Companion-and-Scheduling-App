@@ -1,10 +1,12 @@
 'use client';
+import {useState} from 'react';
 import type {AccessAccount,AccessCommand} from '../shared/access-types';
 
 export function AdministratorRequestPanel({account,send}:{account:AccessAccount;send:(action:AccessCommand['action'],input:Record<string,unknown>,account:AccessAccount)=>Promise<unknown>}){
  const request=account.administratorRequest;
+ const [shownAt]=useState(()=>Date.now());
  if(!request||request.status==='approved'||(request.kind==='recovery'&&request.status==='cancelled'))return null;
- const expired=Date.parse(request.expiresAt)<=Date.now(),canApprove=request.status==='requested'&&!expired;
+ const expired=Date.parse(request.expiresAt)<=shownAt,canApprove=request.status==='requested'&&!expired;
  const command=(action:AccessCommand['action'],input:Record<string,unknown>)=>send(action,{...input,administratorRequestId:request.requestId},account);
  return <section className="shared-card"><h3>{request.kind==='recovery'?'Owner account recovery':'Administrator invitation'}</h3>
  {request.kind==='invitation'&&<p>Administrator access stays off until this person signs in and an existing administrator approves their account.</p>}
