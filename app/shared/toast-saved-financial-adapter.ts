@@ -43,14 +43,19 @@ function calculateSales(rows:unknown[],date:string){
   // refund transaction (as JMAX's sales builder does, jmax-workspace sql/toast/08). When no item carries that
   // detail, or one refund transaction spans several payments, the split is unknown: the sales feed is withheld
   // rather than counting refunded tax as sales.
-  const refundTax=new Map<string,number>(),refundPayments=new Map<string,number>();
+  // A refunded item that names the transaction but not its tax leaves that transaction's split unknown;
+  // an explicit 0 is a tax-free refund.
+  const refundTax=new Map<string,number>(),refundPayments=new Map<string,number>(),unknownTax=new Set<string>();
   const txnOf=(value:unknown)=>{if(value===null || value===undefined)return null;const g=object(value).guid;return typeof g==='string' && g.length>0?g:null;};
   function refundLines(value:unknown){
     for(const raw of array(value??[])){
       const s=object(raw);
       if(s.refundDetails!==null && s.refundDetails!==undefined){
         const d=object(s.refundDetails),txn=txnOf(d.refundTransaction);
-        if(txn)refundTax.set(txn,(refundTax.get(txn)??0)+(d.taxRefundAmount===null || d.taxRefundAmount===undefined?0:cents(d.taxRefundAmount)));
+        if(txn){
+          if(d.taxRefundAmount===null || d.taxRefundAmount===undefined)unknownTax.add(txn);
+          else refundTax.set(txn,(refundTax.get(txn)??0)+cents(d.taxRefundAmount));
+        }
       }
       refundLines(s.modifiers);
     }
@@ -85,7 +90,7 @@ function calculateSales(rows:unknown[],date:string){
           const amount=cents(refund.refundAmount),txn=txnOf(refund.refundTransaction);
           let tax=0;
           if(amount!==0){
-            requireThat(txn!==null && refundPayments.get(txn)===1 && refundTax.has(txn),'Refund tax split unverified.');
+            requireThat(txn!==null && refundPayments.get(txn)===1 && refundTax.has(txn) && !unknownTax.has(txn),'Refund tax split unverified.');
             tax=refundTax.get(txn)!;requireThat(tax<=amount,'Refund tax exceeds refund.');
           }
           total-=amount-tax;

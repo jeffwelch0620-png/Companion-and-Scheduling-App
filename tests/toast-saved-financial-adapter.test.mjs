@@ -56,6 +56,12 @@ test('a refund comes off sales without its tax; an unknown tax split withholds s
   assert.equal(adapt(i).day.netSales.value,6130);
   // No item says how much of the refund was tax: withheld, never tax counted as sales.
   i=input();delete i.sales.payload[0].checks[0].selections[0].refundDetails;assert.equal(adapt(i).day.netSales.value,null);
+  // The item names the refund but not its tax (missing or null): withheld. An explicit 0 is a tax-free refund.
+  for(const tax of [undefined,null]){
+    i=input();const d=i.sales.payload[0].checks[0].selections[0].refundDetails;if(tax===undefined)delete d.taxRefundAmount;else d.taxRefundAmount=tax;
+    assert.equal(adapt(i).day.netSales.value,null);
+  }
+  i=input();i.sales.payload[0].checks[0].selections[0].refundDetails.taxRefundAmount=0;assert.equal(adapt(i).day.netSales.value,6100);
   // One refund transaction across two payments: the tax can't be split between them.
   i=input();const check=i.sales.payload[0].checks[0];check.payments.push({...check.payments[0],guid:'payment-2'});assert.equal(adapt(i).day.netSales.value,null);
   // A refund with no transaction reference is withheld; a $0 refund needs no tax detail.
