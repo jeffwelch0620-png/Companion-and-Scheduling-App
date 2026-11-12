@@ -39,6 +39,38 @@ function calculateSales(rows:unknown[],date:string){
     for(const modifier of array(s.modifiers))selection(modifier,true);
     return 0;
   }
+  // Toast's payment refundAmount includes tax. The tax part is the refunded items' taxRefundAmount for the same
+  // refund transaction (as JMAX's sales builder does, jmax-workspace sql/toast/08). When no item carries that
+  // detail, or one refund transaction spans several payments, the split is unknown: the sales feed is withheld
+  // rather than counting refunded tax as sales.
+  // A refunded item that names the transaction but not its tax leaves that transaction's split unknown;
+  // an explicit 0 is a tax-free refund.
+  const refundTax=new Map<string,number>(),refundPayments=new Map<string,number>(),unknownTax=new Set<string>();
+  const txnOf=(value:unknown)=>{if(value===null || value===undefined)return null;const g=object(value).guid;return typeof g==='string' && g.length>0?g:null;};
+  function refundLines(value:unknown){
+    for(const raw of array(value??[])){
+      const s=object(raw);
+      if(s.refundDetails!==null && s.refundDetails!==undefined){
+        const d=object(s.refundDetails),txn=txnOf(d.refundTransaction);
+        if(txn){
+          if(d.taxRefundAmount===null || d.taxRefundAmount===undefined)unknownTax.add(txn);
+          else refundTax.set(txn,(refundTax.get(txn)??0)+cents(d.taxRefundAmount));
+        }
+      }
+      refundLines(s.modifiers);
+    }
+  }
+  for(const raw of rows){
+    const o=object(raw);if(o.voided===true || o.deleted===true || o.excessFood===true)continue;
+    for(const rawCheck of array(o.checks??[])){
+      const c=object(rawCheck);if(c.voided===true || c.deleted===true)continue;
+      refundLines(c.selections);
+      for(const rawPayment of array(c.payments??[])){
+        const p=object(rawPayment);if(p.refund===null || p.refund===undefined)continue;
+        const txn=txnOf(object(p.refund).refundTransaction);if(txn)refundPayments.set(txn,(refundPayments.get(txn)??0)+1);
+      }
+    }
+  }
   for(const raw of rows){
     const o=object(raw);unique(o,orders);sourceDate(o.businessDate,date);
     if(bool(o.voided) || bool(o.deleted) || bool(o.excessFood))continue;
@@ -54,7 +86,14 @@ function calculateSales(rows:unknown[],date:string){
         const p=object(rawPayment);unique(p,payments);requireThat(['NONE','PARTIAL','FULL'].includes(p.refundStatus as string),'Unverified refund status.');
         if(p.refundStatus!=='NONE'){
           const refund=object(p.refund);sourceDate(refund.refundBusinessDate,date);
-          total-=cents(refund.refundAmount); // Never subtract tipRefundAmount.
+          // Never subtract tipRefundAmount; take the refunded tax out of the refund before it comes off sales.
+          const amount=cents(refund.refundAmount),txn=txnOf(refund.refundTransaction);
+          let tax=0;
+          if(amount!==0){
+            requireThat(txn!==null && refundPayments.get(txn)===1 && refundTax.has(txn) && !unknownTax.has(txn),'Refund tax split unverified.');
+            tax=refundTax.get(txn)!;requireThat(tax<=amount,'Refund tax exceeds refund.');
+          }
+          total-=amount-tax;
         }else requireThat(p.refund===null || p.refund===undefined,'Conflicting refund fields.');
       }
       sales+=total;
