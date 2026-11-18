@@ -29,7 +29,7 @@
     "@jmax/ui": "file:vendor/jmax-ui-0.1.0.tgz",
     "drizzle-orm": "0.45.2",
     "lucide-react": "0.516.0",
-    "next": "16.4.1",
+    "next": "16.4.6",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
